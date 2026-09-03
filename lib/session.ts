@@ -540,7 +540,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
     getState: snapshot,
     subscribe(fn: Listener) {
       listeners.add(fn);
-      return () => listeners.delete(fn);
+      return () => {
+      listeners.delete(fn);
+    };
     },
     setSearch(query: string) {
       state.search = query;

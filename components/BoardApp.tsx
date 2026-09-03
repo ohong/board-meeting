@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createMeetingSession, type MeetingSession, type MeetingState } from "@/lib/session";
 import { createMockRuntime } from "@/lib/runtime/mock";
 import { createBrowserRuntime } from "@/lib/runtime/browser";
@@ -10,51 +10,56 @@ import { BoardMeeting } from "./BoardMeeting";
 import { Readout } from "./Readout";
 import { WebMcpBridge } from "./WebMcp";
 
+function bootSession(live: boolean) {
+  return createMeetingSession({
+    runtime: live ? createBrowserRuntime() : createMockRuntime(),
+    autoContinue: true,
+  });
+}
+
 export function BoardApp() {
-  const sessionRef = useRef<MeetingSession | null>(null);
-  const [state, setState] = useState<MeetingState | null>(null);
-  const [setup, setSetup] = useState<string | null>(null);
+  const sessionRef = useRef<MeetingSession>(bootSession(false));
+  const [session, setSession] = useState<MeetingSession>(sessionRef.current);
+  const [state, setState] = useState<MeetingState>(() => sessionRef.current.getState());
+  const [setup, setSetup] = useState<string | null>(sessionRef.current.getState().setupMessage);
+
+  useEffect(() => {
+    const unsub = session.subscribe(() => setState(session.getState()));
+    return () => {
+      unsub();
+    };
+  }, [session]);
 
   useEffect(() => {
     let cancelled = false;
-    let unsub = () => {};
-    async function boot() {
-      let live = false;
-      let message: string | null = null;
+    async function maybeGoLive() {
       try {
         const res = await fetch("/api/runtime-status");
         const data = (await res.json()) as { live: boolean; message: string };
-        live = data.live;
-        message = data.message;
+        if (cancelled) return;
+        setSetup(data.message);
+        const current = sessionRef.current.getState();
+        if (data.live && current.phase === "select" && current.selected.length === 0) {
+          const live = bootSession(true);
+          sessionRef.current = live;
+          setSession(live);
+          setState(live.getState());
+        }
       } catch {
-        message =
-          "OPENAI_API_KEY is not set. The board is running a deterministic mock so you can test the room, orchestration, and WebMCP.";
+        if (!cancelled) {
+          setSetup(
+            "OPENAI_API_KEY is not set. The board is running a deterministic mock so you can test the room, orchestration, and WebMCP.",
+          );
+        }
       }
-      if (cancelled) return;
-      setSetup(message);
-      const runtime = live ? createBrowserRuntime() : createMockRuntime();
-      const session = createMeetingSession({ runtime, autoContinue: true });
-      sessionRef.current = session;
-      unsub = session.subscribe(() => setState(session.getState()));
-      setState(session.getState());
     }
-    void boot();
+    void maybeGoLive();
     return () => {
       cancelled = true;
-      unsub();
     };
   }, []);
 
-  const session = sessionRef.current;
-  const view = useMemo(() => state, [state]);
-
-  if (!session || !view) {
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <p className="text-[var(--muted)] tracking-[0.22em] uppercase text-xs">The table is being set</p>
-      </div>
-    );
-  }
+  const view = state;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -67,7 +72,7 @@ export function BoardApp() {
       {view.phase === "brief" ? <BriefBoard session={session} state={view} /> : null}
       {view.phase === "meeting" ? <BoardMeeting session={session} state={view} /> : null}
       {view.phase === "readout" ? <Readout session={session} state={view} /> : null}
-      <WebMcpBridge session={session} />
+      <WebMcpBridge key={view.runtimeId} session={session} />
     </div>
   );
 }

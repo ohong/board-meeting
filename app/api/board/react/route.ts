@@ -1,6 +1,6 @@
 import { generateText, Output } from "ai";
 import { getPersona } from "@/lib/server/personas";
-import { fastBoardModel, lowReasoning, missingApiKeyResponse } from "@/lib/server/models";
+import { fastBoardModel, lowReasoning, missingApiKeyResponse, rejectCrossOrigin } from "@/lib/server/models";
 import { memberPrompt, apiError } from "@/lib/server/prompts";
 import { reactSchema, reactResultSchema } from "@/lib/server/schemas";
 
@@ -9,6 +9,7 @@ export const maxDuration = 60;
 const neutral = { reaction: null, urgency: 0, wantsToRebut: false } as const;
 
 export async function POST(request: Request) {
+  const denied = rejectCrossOrigin(request); if (denied) return denied;
   const missing = missingApiKeyResponse(); if (missing) return missing;
   try {
     const input = reactSchema.parse(await request.json());

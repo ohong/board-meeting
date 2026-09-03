@@ -1,6 +1,6 @@
 import { streamText } from "ai";
 import { getPersona } from "@/lib/server/personas";
-import { boardModel, lowReasoning, missingApiKeyResponse } from "@/lib/server/models";
+import { boardModel, lowReasoning, missingApiKeyResponse, rejectCrossOrigin } from "@/lib/server/models";
 import { memberPrompt, directiveText, apiError } from "@/lib/server/prompts";
 import { turnSchema } from "@/lib/server/schemas";
 
@@ -9,12 +9,13 @@ export const maxDuration = 60;
 const DEFAULT_META = '<<<META>>>{"positionUpdate":null,"addressedId":null,"askedChair":false}';
 
 export async function POST(request: Request) {
+  const denied = rejectCrossOrigin(request); if (denied) return denied;
   const missing = missingApiKeyResponse(); if (missing) return missing;
   try {
     const input = turnSchema.parse(await request.json());
     const persona = await getPersona(input.slug);
     if (!persona) return Response.json({ error: `Unknown persona: ${input.slug}` }, { status: 404 });
-    const result = streamText({ model: boardModel(), system: persona.instructions, prompt: `${memberPrompt(input, directiveText(input.directive, input.newContext))}\n\nEnd with one line exactly: <<<META>>>{"positionUpdate":string|null,"addressedId":string|null,"askedChair":boolean}`, maxOutputTokens: 220, providerOptions: lowReasoning, abortSignal: request.signal });
+    const result = streamText({ model: boardModel(), system: persona.instructions, prompt: `${memberPrompt(input, directiveText(input.directive, input.newContext))}\n\nEnd with one line exactly: <<<META>>>{"positionUpdate":string|null,"addressedId":string|null,"askedChair":boolean}`, maxOutputTokens: 170, providerOptions: lowReasoning, abortSignal: request.signal });
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({ async start(controller) {
       let full = "";

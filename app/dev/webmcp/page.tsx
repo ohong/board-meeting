@@ -24,8 +24,8 @@ import { InvitePanel } from "@/components/webmcp/invite-panel";
 const DEFAULT_INPUTS: Record<WebMcpToolName, string> = {
   inspect_board_meeting: `{ "transcript_limit": 6, "transcript_offset": 0, "include_briefing": true }`,
   join_board_meeting: `{ "display_name": "Harness Agent" }`,
-  contribute_to_board_meeting: `{ "text": "Context the board does not have: seven of our last ten enterprise wins entered through a free workspace shared by an existing user." }`,
-  address_board_member: `{ "member": "Daniel", "text": "Does the enterprise-referral evidence change your view of the free tier?" }`,
+  contribute_to_board_meeting: `{ "text": "Context the board does not have: our five largest customers each expanded only after a second team was invited into their workspace; median time from first invite to paid was 41 days." }`,
+  address_board_member: `{ "member": "Daniel", "text": "Does the invite-to-paid evidence change your view of the free tier?" }`,
   request_board_synthesis: `{ "wait_seconds": 0 }`,
   get_board_meeting_readout: `{ "section": "all" }`,
 };

@@ -85,7 +85,7 @@ describe("review fixes", () => {
     const s = live();
     s.sendChairMessage("Some context");
     s.joinGuest("Codex");
-    s.guestContribute("Seven of ten wins came through free.");
+    s.guestContribute("Our largest customers expanded after a second team was invited in.");
     const names = s.transcriptLines().map((l) => l.speakerName);
     expect(names).toContain("Chair (founder)");
     expect(names).toContain("Codex (external agent)");

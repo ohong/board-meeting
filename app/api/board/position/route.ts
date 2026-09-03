@@ -1,6 +1,6 @@
 import { generateText, Output } from "ai";
 import { getPersona } from "@/lib/server/personas";
-import { boardModel, lowReasoning, missingApiKeyResponse } from "@/lib/server/models";
+import { boardModel, lowReasoning, missingApiKeyResponse, rejectCrossOrigin } from "@/lib/server/models";
 import { memberPrompt, apiError } from "@/lib/server/prompts";
 import { memberContextSchema, openingPositionSchema } from "@/lib/server/schemas";
 
@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const denied = rejectCrossOrigin(request); if (denied) return denied;
   const missing = missingApiKeyResponse(); if (missing) return missing;
   try {
     const input = memberContextSchema.parse(await request.json());

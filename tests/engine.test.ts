@@ -8,7 +8,7 @@ const engines: MeetingEngine[] = [];
 afterEach(() => { engines.splice(0).forEach((e) => e.dispose()); });
 
 function setup(failure?: NonNullable<Parameters<typeof createMockRuntime>[0]>["failOnce"]) {
-  const session = new MeetingSession(); DEMO_TRIO.forEach((p) => session.toggleMember(p)); session.setBriefing("Should we eliminate free? Enterprise referrals may be material.");
+  const session = new MeetingSession(); DEMO_TRIO.forEach((p) => session.toggleMember(p)); session.setBriefing("Should we eliminate free? Invited teams may be material.");
   const engine = createEngine(session, createMockRuntime({ delayScale: 0.002, failOnce: failure })); engines.push(engine); session.startMeeting(); return session;
 }
 
@@ -25,9 +25,9 @@ describe("meeting engine", () => {
     session.sendChairMessage("@Lulu how do we explain this without losing trust?");
     await until(() => memberMessages(session).some((e) => e.kind === "message" && e.speakerId === "lulu-cheng-meservey" && e.addressedTo === "chair"));
     expect(session.joinGuest("Codex").ok).toBe(true);
-    session.guestContribute("Seven of ten enterprise wins came through free referrals and represent 22% of ARR.");
+    session.guestContribute("Context the board does not have: our five largest customers by ARR each expanded only after a second team was invited into their workspace, and the median time from first invite to paid was 41 days.");
     await until(() => session.getState().guest?.status === "joined");
-    session.guestAddress("Daniel Ek", "Does the enterprise-referral evidence change your view?");
+    session.guestAddress("Daniel Ek", "Does the invite-to-paid evidence change your view of the free tier?");
     await until(() => memberMessages(session).some((e) => e.kind === "message" && e.speakerId === "daniel-ek" && e.addressedTo === "guest"));
     const synthesis = session.requestSynthesis("guest"); expect(synthesis.ok).toBe(true);
     await until(() => session.getState().transcript.some((e) => e.kind === "synthesis" && !e.streaming && /Agreement:/.test(e.text)));

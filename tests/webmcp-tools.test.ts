@@ -167,7 +167,7 @@ describe("WebMCP board tools", () => {
     await call(tools, "join_board_meeting", { display_name: "Harness Agent" });
     const before = session.getState().transcript.length;
     const result = await call(tools, "contribute_to_board_meeting", {
-      text: "Seven of our last ten enterprise wins entered through a free workspace.",
+      text: "Context the board does not have: our five largest customers by ARR each expanded only after a second team was invited into their workspace, and the median time from first invite to paid was 41 days.",
     });
     expect(result.ok).toBe(true);
     expect(typeof result.entryId).toBe("string");
@@ -195,7 +195,7 @@ describe("WebMCP board tools", () => {
     await call(tools, "join_board_meeting", { display_name: "Harness Agent" });
     const result = await call(tools, "address_board_member", {
       member: "Daniel",
-      text: "Does the enterprise-referral evidence change your view?",
+      text: "Does the invite-to-paid evidence change your view of the free tier?",
     });
     expect(result.ok).toBe(true);
     expect(result.memberId).toBe("daniel-ek");

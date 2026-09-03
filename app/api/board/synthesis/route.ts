@@ -1,11 +1,12 @@
 import { streamText } from "ai";
-import { readoutModel, lowReasoning, missingApiKeyResponse } from "@/lib/server/models";
+import { readoutModel, lowReasoning, missingApiKeyResponse, rejectCrossOrigin } from "@/lib/server/models";
 import { synthesisPrompt, SECRETARY_SYSTEM, apiError } from "@/lib/server/prompts";
 import { synthesisSchema } from "@/lib/server/schemas";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: Request) {
+  const denied = rejectCrossOrigin(request); if (denied) return denied;
   const missing = missingApiKeyResponse(); if (missing) return missing;
   try {
     const input = synthesisSchema.parse(await request.json());

@@ -267,7 +267,8 @@
 .seat[data-guest="asking"] .letter-mark {
   box-shadow: 0 0 0 2px var(--guest), 0 0 26px oklch(78% 0.1 190 / 0.35), 0 6px 14px oklch(8% 0.02 55 / 0.55);
 }
-.seat[data-guest="joining"] {
+.seat[data-guest="joining"],
+.seat[data-guest="joined"] {
   animation: guest-arrive 700ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 

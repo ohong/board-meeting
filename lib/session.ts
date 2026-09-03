@@ -34,6 +34,8 @@ export type SessionOptions = {
   now?: () => number;
   /** Beat between turns, so the room reads as a conversation rather than a dump. */
   turnGapMs?: number;
+  /** How long the guest seat shows "Joining" before it settles. Zero in tests. */
+  guestJoinMs?: number;
   sleep?: (ms: number) => Promise<void>;
 };
 
@@ -111,6 +113,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
   const autoContinue = options.autoContinue ?? false;
   const now = options.now ?? (() => Date.now());
   const turnGapMs = options.turnGapMs ?? 0;
+  const guestJoinMs = options.guestJoinMs ?? 0;
   const sleep = options.sleep ?? defaultSleep;
   const listeners = new Set<Listener>();
 
@@ -597,18 +600,28 @@ export function createMeetingSession(options: SessionOptions = {}) {
       };
     }
 
+    // The seat is claimed at once — anything the agent does next is valid immediately — but
+    // the room gets a beat to show the arrival rather than blinking straight to seated.
     state.guest = { name: display, status: "joining" };
-    emit();
-    state.guest = { name: display, status: "joined" };
-    systemEvent(`${display} joined the meeting through this page's site tools and took the guest seat.`);
     noteAgentActivity(`${display} joined the guest seat`);
     emit();
+
+    const settle = () => {
+      if (state.guest.name !== display) return;
+      state.guest = { name: display, status: "joined" };
+      systemEvent(`${display} joined the meeting through this page's site tools and took the guest seat.`);
+      emit();
+    };
+    if (guestJoinMs) setTimeout(settle, guestJoinMs);
+    else settle();
+
     return {
       ok: true,
       message: `Seated as ${display}. You can contribute context, address an adviser by name, and request a synthesis. Only the human chair can end the meeting.`,
     };
   }
 
+  /** The guest may act from the moment it claims the seat, including while it is settling. */
   function requireGuest(): { ok: false; message: string } | { ok: true; name: string } {
     if (!state.guest.name) {
       return { ok: false, message: "Join the meeting first with join_board_meeting." };

@@ -22,6 +22,7 @@ export function BoardApp() {
       runtime: createDeferredRuntime((status) => setSetupMessage(status.message)),
       autoContinue: true,
       turnGapMs: 700,
+      guestJoinMs: 450,
     }),
   );
 

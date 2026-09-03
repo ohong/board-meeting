@@ -294,3 +294,35 @@ describe("the guest agent and a live turn", () => {
     expect(askedDuringOpening.message).toMatch(/independent positions/i);
   });
 });
+
+describe("the guest seat's arrival", () => {
+  it("claims the seat immediately and settles after the room has shown the arrival", async () => {
+    const session = newSession({ guestJoinMs: 30 });
+    seatDemoBoard(session);
+    await session.startMeeting();
+
+    const result = session.join("Codex");
+    expect(result.ok).toBe(true);
+    // Visibly arriving, and already able to act — the agent is not made to wait on an animation.
+    expect(session.getState().guest).toEqual({ name: "Codex", status: "joining" });
+    expect((await session.contribute("Context that matters.")).ok).toBe(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(session.getState().guest).toEqual({ name: "Codex", status: "joined" });
+    expect(
+      session.getState().transcript.filter((event) => event.kind === "system" && event.text.includes("Codex")),
+    ).toHaveLength(1);
+  });
+
+  it("does not announce an arrival into a meeting that has since been reset", async () => {
+    const session = newSession({ guestJoinMs: 30 });
+    seatDemoBoard(session);
+    await session.startMeeting();
+    session.join("Codex");
+    session.reset();
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(session.getState().guest).toEqual({ name: null, status: "empty" });
+    expect(session.getState().transcript).toEqual([]);
+  });
+});

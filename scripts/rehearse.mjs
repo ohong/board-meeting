@@ -79,7 +79,7 @@ for (let run = 1; run <= RUNS; run += 1) {
 
   const joined = JSON.parse(await page.evaluate(() => window.__call("join_board_meeting", { name: "Codex" })));
   check("guest joined under its own name", joined.ok === true);
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(1000);
   check("guest seat activated", (await page.locator("text=Joined via WebMCP").count()) === 1);
 
   const contributed = JSON.parse(await page.evaluate((t) => window.__call("contribute_to_board_meeting", { text: t }), CODEX_CONTEXT));

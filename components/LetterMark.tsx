@@ -1,31 +1,23 @@
 export function LetterMark({
   initials,
   size = "lg",
-  dashed = false,
+  variant = "member",
 }: {
   initials: string;
   size?: "sm" | "md" | "lg";
-  dashed?: boolean;
+  variant?: "member" | "guest" | "vacant";
 }) {
-  if (dashed) {
-    return (
-      <div
-        className={`letter-mark ${size}`}
-        style={{
-          background: "transparent",
-          border: "1px dashed oklch(78% 0.08 80 / 0.45)",
-          boxShadow: "0 0 0 2px var(--bg), 0 0 0 3px oklch(78% 0.08 80 / 0.35)",
-          color: "var(--brass)",
-        }}
-        aria-hidden
-      >
-        {initials}
-      </div>
-    );
-  }
+  const variantClass = variant === "member" ? "" : ` ${variant}`;
   return (
-    <div className={`letter-mark ${size}`} aria-hidden>
+    <div className={`letter-mark ${size}${variantClass}`} aria-hidden>
       {initials}
     </div>
   );
+}
+
+export function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }

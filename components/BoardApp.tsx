@@ -31,10 +31,14 @@ export function BoardApp() {
 
   const onSupportChange = useCallback((supported: boolean) => setWebmcpSupported(supported), []);
 
+  // The meeting is a fixed-viewport room: the minutes scroll inside their own column so the
+  // table never slides off the top of the page. The other steps scroll normally.
+  const fills = state.phase === "meeting";
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={fills ? "h-screen overflow-hidden flex flex-col" : "min-h-screen flex flex-col"}>
       {setupMessage ? (
-        <div className="px-6 py-2 text-center text-[11.5px] leading-relaxed text-[var(--brass)] border-b border-[var(--hairline)] bg-[oklch(18%_0.02_55)]">
+        <div className="shrink-0 px-6 py-2 text-center text-[11.5px] leading-relaxed text-[var(--brass)] border-b border-[var(--hairline)] bg-[oklch(18%_0.02_55)]">
           {setupMessage}
         </div>
       ) : null}

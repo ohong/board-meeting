@@ -25,7 +25,7 @@ export function InvitePanel({
   const [copied, setCopied] = useState(false);
 
   return (
-    <aside className="absolute right-6 top-16 z-20 w-[440px] panel p-5 shadow-2xl">
+    <aside className="panel p-5 overflow-y-auto min-h-0">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="eyebrow">WebMCP</div>

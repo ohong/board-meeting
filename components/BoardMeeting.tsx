@@ -84,28 +84,50 @@ export function BoardMeeting({
         <p className="mx-7 mb-2 text-[11.5px] text-[var(--concern)]">{state.lastError}</p>
       ) : null}
 
-      <div className="flex-1 grid grid-cols-[minmax(0,1fr)_420px] min-h-0 px-6 pb-5 gap-5">
-        <section className="relative min-h-0">
-          <BoardTable
-            members={state.members}
-            guest={state.guest}
-            chairLabel={chairLabel}
-            onMention={(name) => setDraft((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}@${name} `)}
-          />
+      <div
+        className="flex-1 grid min-h-0 px-6 pb-5 gap-5"
+        style={{
+          // The invite panel takes a column rather than covering the minutes, so the guest
+          // agent's contributions stay visible while it works.
+          gridTemplateColumns: inviteOpen
+            ? "minmax(0,1fr) minmax(360px,400px) 380px"
+            : "minmax(0,1fr) 420px",
+        }}
+      >
+        <section className="relative min-h-0 flex flex-col gap-4">
+          <div className="relative flex-1 min-h-0">
+            <div className="absolute inset-0 m-auto w-full h-full max-w-[880px] max-h-[600px]">
+              <BoardTable
+                members={state.members}
+                guest={state.guest}
+                chairLabel={chairLabel}
+                onMention={(name) =>
+                  setDraft((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}@${name} `)
+                }
+              />
+            </div>
+          </div>
 
-          {floorCard ? (
-            <aside className="floor-card absolute left-1/2 -translate-x-1/2 top-[46%] -translate-y-1/2 w-[min(400px,44%)] p-4 -rotate-[0.6deg] pointer-events-none">
-              <p className="serif text-[15px] leading-[1.4]">{floorCard.text}</p>
-              <cite className="block mt-2 not-italic text-[10px] tracking-[0.16em] uppercase text-[var(--paper-faint)]">
-                {floorCard.speakerName}
-                {floorCard.addressedTo ? ` → ${floorCard.addressedTo}` : ""}
-              </cite>
-            </aside>
-          ) : null}
+          {/* The floor: whoever holds it, in their own words, on the table's paper. */}
+          <div className="shrink-0 h-[132px] flex items-center justify-center px-6">
+            {floorCard ? (
+              <aside className="floor-card w-full max-w-[720px] px-6 py-4 -rotate-[0.4deg]">
+                <p className="serif text-[15.5px] leading-[1.45] line-clamp-3">{floorCard.text}</p>
+                <cite className="block mt-2 not-italic text-[10px] tracking-[0.16em] uppercase text-[var(--paper-faint)]">
+                  {floorCard.speakerName}
+                  {floorCard.addressedTo ? ` → ${floorCard.addressedTo}` : ""}
+                </cite>
+              </aside>
+            ) : (
+              <p className="text-[12px] text-[var(--faint)] italic">
+                The advisers are forming their own views before anyone speaks.
+              </p>
+            )}
+          </div>
 
           {state.readoutRetrievedBy ? (
-            <div className="absolute left-6 bottom-2 text-[11px] text-[var(--guest)]">
-              {state.readoutRetrievedBy} retrieved the final readout.
+            <div className="absolute left-2 bottom-0 text-[11px] text-[var(--guest)]">
+              {state.readoutRetrievedBy} retrieved the final readout through WebMCP.
             </div>
           ) : null}
         </section>
@@ -127,16 +149,17 @@ export function BoardMeeting({
             onComposingChange={(composing) => session.setComposing(composing)}
           />
         </aside>
+
+        {inviteOpen ? (
+          <InvitePanel
+            prompt={invitation}
+            supported={webmcpSupported}
+            activity={state.agentActivity}
+            onClose={() => setInvitePinned(false)}
+          />
+        ) : null}
       </div>
 
-      {inviteOpen ? (
-        <InvitePanel
-          prompt={invitation}
-          supported={webmcpSupported}
-          activity={state.agentActivity}
-          onClose={() => setInvitePinned(false)}
-        />
-      ) : null}
     </div>
   );
 }

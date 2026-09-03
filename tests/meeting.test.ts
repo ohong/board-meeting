@@ -225,3 +225,46 @@ describe("session lifecycle", () => {
     expect(state.agentActivity).toEqual([]);
   });
 });
+
+describe("passing", () => {
+  it("lets an adviser pass rather than fill airtime, and stops the room when all do", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.runDiscussion(20);
+
+    const state = session.getState();
+    // Two scripted rounds each, then nothing to add — no filler on the record.
+    expect(state.members.every((member) => member.spokenCount === 2)).toBe(true);
+    expect(state.transcript.some((event) => event.streaming)).toBe(false);
+    expect(state.transcript.filter((event) => event.kind === "message")).toHaveLength(6);
+    expect(state.lastError).toBeNull();
+
+    // A pass is not a failure: nobody is stuck speaking or reconnecting.
+    expect(state.members.every((member) => member.status === "ready")).toBe(true);
+    expect(await session.takeOneTurn()).toBe(false);
+  });
+
+  it("brings a passed adviser back when the chair or the guest adds something new", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.runDiscussion(20);
+    expect(await session.takeOneTurn()).toBe(false);
+
+    session.join("Codex");
+    await session.contribute("Seven of our last ten enterprise wins came in through a shared free workspace.");
+    expect(await session.takeOneTurn()).toBe(true);
+  });
+
+  it("answers a direct mention even from an adviser who had nothing left to add", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.runDiscussion(20);
+
+    await session.sendUserMessage("@Lulu what is the sentence we should send on Monday?");
+    const last = session.getState().transcript.filter((event) => event.kind === "message").at(-1);
+    expect(last?.speakerId).toBe("lulu-cheng-meservey");
+  });
+});

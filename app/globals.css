@@ -53,51 +53,59 @@
   --font-ledger: var(--font-newsreader);
 }
 
-* {
-  box-sizing: border-box;
+/*
+ * Element defaults live in @layer base and the shared classes below in @layer components,
+ * so a Tailwind utility on an element always wins. Unlayered rules would beat every
+ * utility regardless of specificity, which silently swallows things like text colour on a
+ * <button>.
+ */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  body {
+    font-family: var(--font-instrument), "Instrument Sans", system-ui, sans-serif;
+    background-image:
+      radial-gradient(120% 70% at 50% -10%, oklch(26% 0.035 60 / 0.9), transparent 60%),
+      radial-gradient(80% 50% at 50% 110%, oklch(20% 0.03 55 / 0.8), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3,
+  .serif {
+    font-family: var(--font-fraunces), Fraunces, Georgia, serif;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  textarea,
+  input {
+    font-family: inherit;
+  }
+
+  ::selection {
+    background: oklch(80% 0.09 82 / 0.3);
+  }
 }
 
-html,
-body {
-  min-height: 100%;
-  background: var(--bg);
-  color: var(--ink);
-}
-
-body {
-  font-family: var(--font-instrument), "Instrument Sans", system-ui, sans-serif;
-  background-image:
-    radial-gradient(120% 70% at 50% -10%, oklch(26% 0.035 60 / 0.9), transparent 60%),
-    radial-gradient(80% 50% at 50% 110%, oklch(20% 0.03 55 / 0.8), transparent 70%);
-  background-attachment: fixed;
-}
-
-h1,
-h2,
-h3,
-.serif {
-  font-family: var(--font-fraunces), Fraunces, Georgia, serif;
-}
-
-button {
-  cursor: pointer;
-  font-family: inherit;
-  color: inherit;
-}
-button:disabled {
-  cursor: not-allowed;
-}
-
-textarea,
-input {
-  font-family: inherit;
-}
-
-::selection {
-  background: oklch(80% 0.09 82 / 0.3);
-}
-
-/* ---------------------------------------------------------------- primitives */
+@layer components {
 
 .eyebrow {
   font-size: 10.5px;
@@ -298,10 +306,10 @@ input {
 .table-surface {
   position: absolute;
   left: 50%;
-  top: 52%;
+  top: 50%;
   transform: translate(-50%, -50%);
-  width: 68%;
-  height: 52%;
+  width: 66%;
+  height: 46%;
   border-radius: 50%;
   background:
     radial-gradient(ellipse at 50% 22%, oklch(40% 0.055 60), var(--walnut) 52%, var(--walnut-dark) 100%);
@@ -380,6 +388,8 @@ input {
 .rule {
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--hairline-strong), transparent);
+}
+
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -31,6 +31,8 @@ export type CatalogMember = {
   name: string;
   aliases: string[];
   role: string;
+  /** Short organisation name, engraved on the nameplate at the table. */
+  house: string;
   initials: string;
   /** Surfaced first in the roster so the demo trio is easy to find without a hidden list. */
   featured?: boolean;

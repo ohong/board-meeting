@@ -108,6 +108,7 @@ export function createLiveRuntime(): BoardRuntime {
       let buffered = "";
       let controlDone = false;
       let emitted = "";
+      let passed = false;
 
       for await (const delta of result.textStream) {
         buffered += delta;
@@ -117,20 +118,22 @@ export function createLiveRuntime(): BoardRuntime {
           if (looksLikeControlLine && newline === -1) continue;
           if (!looksLikeControlLine && buffered.length < 2) continue;
           controlDone = true;
+          if (/^\s*\[\s*pass\s*\]/i.test(buffered)) passed = true;
           const { rest } = parseControlLine(buffered);
           emitted = rest;
-          if (rest) onDelta?.(rest);
+          if (rest && !passed) onDelta?.(rest);
           continue;
         }
         emitted += delta;
-        onDelta?.(delta);
+        if (!passed) onDelta?.(delta);
       }
 
       const { directives, rest } = parseControlLine(buffered);
+      if (passed) return { text: "" };
       // If nothing was emitted mid-stream (a very short reply), hand the caller the text now.
       if (!emitted && rest) onDelta?.(rest);
+      // An empty body is the member passing, which the engine handles; it is not a failure.
       const text = (emitted || rest).trim();
-      if (!text) throw new Error("The turn came back empty.");
       return { text, ...directives } satisfies MemberTurn;
     },
 

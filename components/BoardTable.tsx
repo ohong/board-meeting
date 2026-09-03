@@ -33,7 +33,7 @@ function place(angleDeg: number): { left: string; top: string } {
   const radians = (angleDeg * Math.PI) / 180;
   return {
     left: `${50 + Math.cos(radians) * 40}%`,
-    top: `${52 + Math.sin(radians) * 36}%`,
+    top: `${50 + Math.sin(radians) * 30}%`,
   };
 }
 
@@ -59,7 +59,7 @@ export function BoardTable({
   const angles = adviserAngles(members.length);
 
   return (
-    <div className="relative w-full h-full min-h-[440px]">
+    <div className="relative w-full h-full">
       <div className="table-surface">
         <div className="table-crest">
           In session
@@ -81,7 +81,7 @@ export function BoardTable({
             <LetterMark initials={member.initials} />
           </div>
           <strong className="seat-name">{member.name}</strong>
-          <span className="nameplate">{member.role}</span>
+          <span className="nameplate">{member.house}</span>
           <span className="status-line">
             {member.status === "ready" && member.reaction ? (
               <Reaction kind={member.reaction} />

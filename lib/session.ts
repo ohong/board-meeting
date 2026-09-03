@@ -41,6 +41,7 @@ export type MemberSeat = {
   slug: string;
   name: string;
   role: string;
+  house: string;
   initials: string;
   status: SeatStatus;
   spokenCount: number;
@@ -123,6 +124,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
   let mentionQueue: string[] = [];
   let floorQueue: string[] = [];
   let lastSpeaker: string | null = null;
+  /** Members who said they had nothing to add. Cleared when new context enters the room. */
+  let passed = new Set<string>();
 
   const state: MeetingState = {
     phase: "select",
@@ -280,7 +283,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
 
     const everyoneSpoke = state.members.every((member) => member.spokenCount >= 1);
     const eligible = state.members.filter(
-      (member) => everyoneSpoke || member.spokenCount < 2,
+      (member) => (everyoneSpoke || member.spokenCount < 2) && !passed.has(member.slug),
     );
     if (!eligible.length) return undefined;
 
@@ -334,6 +337,15 @@ export function createMeetingSession(options: SessionOptions = {}) {
             emit();
           },
         );
+
+        // An empty turn means the member had nothing to add. Nothing goes on the record.
+        if (!turn.text.trim()) {
+          dropEvent(live.id);
+          passed.add(slug);
+          setStatus(slug, "ready");
+          emit();
+          return false;
+        }
 
         updateEvent(live.id, {
           text: turn.text,
@@ -404,10 +416,14 @@ export function createMeetingSession(options: SessionOptions = {}) {
 
   async function takeOneTurn(): Promise<boolean> {
     if (ended || state.meetingPhase !== "discussion" || state.composing) return false;
-    const slug = nextSpeaker();
-    if (!slug) return false;
-    const spoke = await speak(slug, "publicTurn");
-    return spoke;
+    // A member may pass. Try the next voice rather than ending the discussion on one silence.
+    for (let attempt = 0; attempt < state.members.length; attempt += 1) {
+      const slug = nextSpeaker();
+      if (!slug) return false;
+      if (await speak(slug, "publicTurn")) return true;
+      if (!passed.has(slug)) return false;
+    }
+    return false;
   }
 
   async function pump(): Promise<void> {
@@ -425,7 +441,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
         autoTurnsUsed += 1;
         if (turnGapMs) await sleep(turnGapMs);
       }
-      if (autoTurnsUsed >= AUTO_TURN_BUDGET && state.meetingPhase === "discussion") {
+      if (state.meetingPhase === "discussion" && !ended && !state.composing) {
         state.awaitingChair = true;
         emit();
       }
@@ -436,6 +452,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
 
   /** Something new entered the room, so the board has a reason to keep going. */
   function wake(extraTurns = 3) {
+    // New context is a reason to speak again, even for someone who had nothing to add before.
+    passed = new Set();
     state.awaitingChair = false;
     autoTurnsUsed = Math.max(0, Math.min(autoTurnsUsed, AUTO_TURN_BUDGET - extraTurns));
     if (autoContinue) void pump();
@@ -455,6 +473,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     mentionQueue = [];
     floorQueue = [];
     lastSpeaker = null;
+    passed = new Set();
 
     state.phase = "meeting";
     state.meetingPhase = "opening";
@@ -464,6 +483,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
         slug,
         name: member.name,
         role: member.role,
+        house: member.house,
         initials: member.initials,
         status: "thinking" as SeatStatus,
         spokenCount: 0,
@@ -520,6 +540,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       const mentioned = extractMention(trimmed, state.selected);
       if (mentioned) {
         mentionQueue = [mentioned, ...mentionQueue.filter((slug) => slug !== mentioned)];
+        passed.delete(mentioned);
       }
       state.awaitingChair = false;
       emit();
@@ -653,6 +674,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
         addressedTo: member.name,
       });
       mentionQueue = [member.slug, ...mentionQueue.filter((slug) => slug !== member.slug)];
+      passed.delete(member.slug);
       noteAgentActivity(`${guest.name} put a question to ${member.name}`);
       emit();
 
@@ -793,6 +815,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     mentionQueue = [];
     floorQueue = [];
     lastSpeaker = null;
+    passed = new Set();
     Object.assign(state, {
       phase: "select" as Phase,
       meetingPhase: "idle" as MeetingPhase,

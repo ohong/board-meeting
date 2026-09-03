@@ -64,6 +64,25 @@ const DEMO_FIRST_TURNS: Record<string, MemberTurn> = {
   },
 };
 
+const DEMO_SECOND_TURNS: Record<string, MemberTurn> = {
+  "daniel-ek": {
+    text: "David, I will give you the support number. Thirty-eight percent of tickets from people who pay nothing is indefensible. But you are pricing the funnel at zero, and it produced a third of the customers you want to protect. Narrow it to invite-only and you keep the loop and lose the crowd.",
+    addressedTo: "David Heinemeier Hansson",
+    reaction: "concern",
+  },
+  "david-heinemeier-hansson": {
+    text: "Invite-only free is still free with paperwork. Someone has to build it, gate it, and support it, and you are eighteen people. Lulu is right that the sentence matters, and the honest sentence is simple: we were wrong to give away something we could not stand behind. Ship the trial.",
+    addressedTo: "Lulu Cheng Meservey",
+    reaction: "disagree",
+    wantsToRespond: "Lulu Cheng Meservey",
+  },
+  "lulu-cheng-meservey": {
+    text: "Then say exactly that, and say it to the 6,000 before it leaks from the 420. Give ninety days, not fourteen, to anyone with real work in a workspace. The people you grandfather are the ones who tell the story for you. Cheap here costs more than the support line ever did.",
+    addressedTo: "You",
+    reaction: "agree",
+  },
+};
+
 const DEMO_DIRECT_ANSWERS: Record<string, MemberTurn> = {
   "lulu-cheng-meservey": {
     text: "You explain it as a promise, not a punishment. Tell them plainly you are done pretending a workspace you cannot support is generosity. Give a clean trial, grandfather the people who already built a home there, and ask your best customers to invite others into something you will actually stand behind.",
@@ -83,8 +102,38 @@ const DEMO_CLOSINGS: Record<string, string> = {
     "Whatever you decide, write the sentence first and send it to your best customer before you send it to everyone. If you cannot say it to her face, you are not ready to ship it.",
 };
 
+const DEMO_CONTEXT_TURNS: Record<string, MemberTurn> = {
+  "daniel-ek": {
+    text: "That changes the shape of this. Seven of ten enterprise wins entering through a shared workspace is not a rounding error, it is the top of your enterprise funnel, and it is worth 22% of ARR. Do not close the door you came in through. Gate it, instrument it, keep it.",
+    reaction: "concern",
+    wantsToRespond: "David Heinemeier Hansson",
+  },
+  "david-heinemeier-hansson": {
+    text: "Fine, that number is real and I will take it. Then keep exactly that: an invited workspace, from an existing customer, and nothing else. What dies is the open door for six thousand strangers. That is still killing the free tier, Daniel. You are just describing referrals.",
+    addressedTo: "Daniel Ek",
+    reaction: "agree",
+  },
+  "lulu-cheng-meservey": {
+    text: "And that is your announcement, handed to you. You are not removing a free tier, you are turning it into an invitation. One is a withdrawal, the other is a promotion. Same billing change, completely different Monday. Say it that way and nobody writes the padlock headline.",
+    addressedTo: "You",
+    reaction: "agree",
+  },
+};
+
 function isDemoDecision(briefing: string): boolean {
   return briefing.toLowerCase().includes("free tier");
+}
+
+/**
+ * Whether the chair or the guest agent has put something into the room since this member
+ * last spoke. New context is a reason to speak again; its absence is a reason to pass.
+ */
+function hasNewContext(input: RuntimeTurnInput): boolean {
+  const messages = input.transcript.filter((event) => event.kind === "message");
+  const lastOwn = messages.map((event) => event.speakerId).lastIndexOf(input.memberId);
+  return messages
+    .slice(lastOwn + 1)
+    .some((event) => event.speakerId === "chair" || event.speakerId === "guest");
 }
 
 function genericTurn(input: RuntimeTurnInput): MemberTurn {
@@ -147,6 +196,13 @@ export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
         turn = DEMO_DIRECT_ANSWERS[input.memberId];
       } else if (!input.prompt && count === 0 && demo && DEMO_FIRST_TURNS[input.memberId]) {
         turn = DEMO_FIRST_TURNS[input.memberId];
+      } else if (!input.prompt && count === 1 && demo && DEMO_SECOND_TURNS[input.memberId]) {
+        turn = DEMO_SECOND_TURNS[input.memberId];
+      } else if (!input.prompt && count >= 2 && hasNewContext(input) && demo) {
+        turn = DEMO_CONTEXT_TURNS[input.memberId] ?? genericTurn(input);
+      } else if (!input.prompt && count >= 2 && !hasNewContext(input)) {
+        // Nothing left to add without repeating itself, so it passes, as a member may.
+        turn = { text: "" };
       } else {
         turn = genericTurn(input);
       }

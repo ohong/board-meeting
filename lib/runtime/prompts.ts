@@ -22,7 +22,10 @@ Line 2 onward: what you say out loud at the table.
 - "reaction" is your honest reaction to the previous speaker. Use "none" if you had none.
 - "next" is the one person you most want to answer you. Use "-" if you are not calling
   anyone out. Never name yourself.
-- The spoken part is plain prose. No brackets, no markdown, no stage directions.`;
+- The spoken part is plain prose. No brackets, no markdown, no stage directions.
+
+If you have already spoken and genuinely have nothing to add that this room has not heard,
+reply with exactly [pass] and nothing else. Passing is respectable. Filling airtime is not.`;
 
 const REACTIONS: ReactionKind[] = ["agree", "concern", "disagree", "want_to_respond"];
 

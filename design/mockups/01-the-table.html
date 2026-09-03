@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The Table — The Best Board Meeting You’ve Ever Had</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,460;9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: oklch(17% 0.025 55);
+      --surface: oklch(21% 0.028 55);
+      --ink: oklch(93% 0.02 85);
+      --muted: oklch(72% 0.03 75);
+      --brass: oklch(78% 0.08 80);
+      --brass-dim: oklch(62% 0.06 75);
+      --walnut: oklch(30% 0.055 55);
+      --cream: oklch(94% 0.02 90);
+      --live: oklch(74% 0.11 145);
+      --chrome: oklch(14% 0.02 55);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 1440px; height: 900px; overflow: hidden; background: var(--chrome); }
+    body { font-family: "Instrument Sans", sans-serif; color: var(--ink); }
+    .browser { width: 1440px; height: 900px; display: flex; flex-direction: column; }
+    .chrome {
+      height: 44px; display: flex; align-items: center; gap: 14px;
+      padding: 0 16px; background: var(--chrome); flex-shrink: 0;
+    }
+    .dots { display: flex; gap: 7px; }
+    .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; background: oklch(38% 0.02 55); }
+    .url {
+      flex: 1; height: 26px; border-radius: 6px; background: oklch(20% 0.02 55);
+      color: var(--muted); font-size: 12px; display: flex; align-items: center; padding: 0 12px; letter-spacing: 0.01em;
+    }
+    .app { flex: 1; background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+    header {
+      display: flex; align-items: center; gap: 24px; padding: 18px 32px 10px;
+    }
+    .mark { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--brass); font-weight: 500; }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-left: auto; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+    header menu { display: flex; gap: 8px; list-style: none; }
+    header button {
+      font: 500 13px/1 "Instrument Sans", sans-serif; border: 0; cursor: default;
+      padding: 8px 14px; border-radius: 4px;
+    }
+    .ghost { background: transparent; color: var(--muted); }
+    .call { background: var(--brass); color: oklch(18% 0.03 55); }
+    .chamber { flex: 1; position: relative; margin: 8px 48px 0; }
+    .table {
+      position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+      width: 620px; height: 340px; border-radius: 50%;
+      background: var(--walnut);
+      box-shadow: inset 0 0 0 1px oklch(50% 0.06 70 / 0.45), 0 18px 40px oklch(10% 0.02 55 / 0.5);
+    }
+    .table::after {
+      content: ""; position: absolute; inset: 28px;
+      border-radius: 50%; box-shadow: inset 0 0 0 1px oklch(78% 0.08 80 / 0.18);
+    }
+    .seat { position: absolute; width: 148px; text-align: center; }
+    .seat img, .ghost-face {
+      width: 72px; height: 72px; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 8px;
+      box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px oklch(55% 0.04 70 / 0.5);
+    }
+    .ghost-face {
+      box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px oklch(78% 0.08 80 / 0.35);
+      background: repeating-linear-gradient(-45deg, transparent, transparent 5px, oklch(78% 0.08 80 / 0.12) 5px, oklch(78% 0.08 80 / 0.12) 6px);
+      border: 1px dashed oklch(78% 0.08 80 / 0.45);
+    }
+    .seat strong { display: block; font-size: 13px; font-weight: 600; }
+    .seat em { display: block; font-style: normal; font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .seat.speaking img { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--brass); }
+    .seat.speaking .plate {
+      background: var(--brass); color: oklch(18% 0.03 55); display: inline-block;
+      padding: 3px 8px; border-radius: 2px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 6px; font-weight: 600;
+    }
+    .speech {
+      position: absolute; width: 240px;
+      background: var(--cream); color: oklch(22% 0.03 50); padding: 14px 16px 12px;
+      border-radius: 2px; box-shadow: 0 12px 28px oklch(10% 0.02 55 / 0.4);
+    }
+    .speech p { font-family: Fraunces, serif; font-size: 16px; line-height: 1.35; font-weight: 460; }
+    .speech cite { display: block; margin-top: 8px; font-style: normal; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(45% 0.04 55); }
+    .you {
+      position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+      text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    footer {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding: 0 40px 28px; gap: 32px;
+    }
+    .brief {
+      background: var(--cream); color: oklch(22% 0.03 50); padding: 16px 20px 14px; width: 420px;
+      box-shadow: 0 10px 24px oklch(10% 0.02 55 / 0.35); transform: rotate(-1.1deg);
+    }
+    .brief h1 { font-family: Fraunces, serif; font-size: 28px; font-weight: 600; line-height: 1.1; }
+    .brief p { margin-top: 6px; font-size: 13px; color: oklch(40% 0.03 55); }
+    .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding-bottom: 6px; }
+    .actions button {
+      font: 600 14px/1 "Instrument Sans", sans-serif; border: 0; background: var(--brass);
+      color: oklch(18% 0.03 55); padding: 12px 18px; border-radius: 4px;
+    }
+    .actions span { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="browser">
+    <div class="chrome">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="url">theboard.app/meeting/raise-now</div>
+    </div>
+    <div class="app">
+      <header>
+        <div class="mark">The Board</div>
+        <div class="status"><i class="dot"></i> Discussion · 18 min · Independent views closed</div>
+        <menu>
+          <li><button class="ghost">Minutes</button></li>
+          <li><button class="call">Call on</button></li>
+          <li><button class="ghost">End</button></li>
+        </menu>
+      </header>
+      <div class="chamber">
+        <div class="table"></div>
+        <figure class="seat" style="left: 22%; top: 6%;">
+          <img src="portraits/priya.jpg" alt="" />
+          <figcaption><strong>Priya Rao</strong><em>Strategy</em></figcaption>
+        </figure>
+        <figure class="seat" style="left: 44.5%; top: 0;">
+          <img src="portraits/marcus.jpg" alt="" />
+          <figcaption><strong>Marcus Hale</strong><em>Capital</em></figcaption>
+        </figure>
+        <figure class="seat" style="left: 67%; top: 6%;">
+          <img src="portraits/elena.jpg" alt="" />
+          <figcaption><strong>Elena Soto</strong><em>Growth</em></figcaption>
+        </figure>
+        <figure class="seat" style="left: 8%; top: 38%;">
+          <img src="portraits/lila.jpg" alt="" />
+          <figcaption><strong>Lila Voss</strong><em>Operations</em></figcaption>
+        </figure>
+        <figure class="seat empty" style="left: 14%; top: 68%;">
+          <div class="ghost-face"></div>
+          <figcaption><strong>Your agent</strong><em>Empty seat</em></figcaption>
+        </figure>
+        <figure class="seat speaking" style="left: 78%; top: 36%;">
+          <img src="portraits/theo.jpg" alt="" />
+          <figcaption><strong>Theo Park</strong><em>Legal</em><span class="plate">Speaking</span></figcaption>
+        </figure>
+        <aside class="speech" style="right: 4%; top: 62%;">
+          <p>The window is a trap door. Raise on projected metrics and this round owns the company.</p>
+          <cite>Theo Park, interrupting Priya</cite>
+        </aside>
+        <div class="you">You · Chair</div>
+      </div>
+      <footer>
+        <div class="brief">
+          <h1>Raise now or wait?</h1>
+          <p>11 months runway. Term sheet expires Friday.</p>
+        </div>
+        <div class="actions">
+          <span>Call on a member, or let the table continue</span>
+          <button>Call on Priya Rao</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

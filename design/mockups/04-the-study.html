@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The Study — The Best Board Meeting You’ve Ever Had</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,460;0,9..144,600;1,9..144,460&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green: oklch(24% 0.038 155);
+      --green-2: oklch(28% 0.04 155);
+      --ink: oklch(93% 0.02 100);
+      --muted: oklch(74% 0.03 145);
+      --brass: oklch(78% 0.08 85);
+      --paper: oklch(95% 0.02 90);
+      --leather: oklch(32% 0.04 55);
+      --chrome: oklch(20% 0.03 155);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 1440px; height: 900px; overflow: hidden; background: var(--chrome); }
+    body { font-family: Figtree, sans-serif; color: var(--ink); }
+    .browser { width: 1440px; height: 900px; display: flex; flex-direction: column; }
+    .chrome {
+      height: 44px; display: flex; align-items: center; gap: 14px;
+      padding: 0 16px; background: var(--chrome); flex-shrink: 0;
+    }
+    .dots { display: flex; gap: 7px; }
+    .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; background: oklch(36% 0.03 155); }
+    .url {
+      flex: 1; height: 26px; border-radius: 6px; background: oklch(26% 0.035 155);
+      color: var(--muted); font-size: 12px; display: flex; align-items: center; padding: 0 12px;
+    }
+    .app { flex: 1; background: var(--green); display: flex; flex-direction: column; min-height: 0; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px 8px;
+    }
+    .mark { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--brass); }
+    header h1 { font-family: Fraunces, serif; font-size: 30px; font-weight: 600; }
+    header p { font-size: 13px; color: var(--muted); }
+    .room {
+      flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr; gap: 20px; padding: 16px 40px 12px;
+    }
+    .person {
+      background: var(--green-2); padding: 18px 18px 16px;
+      display: flex; flex-direction: column; min-height: 0;
+    }
+    .person header { padding: 0; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; justify-content: flex-start; }
+    .person img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+    .person strong { display: block; font-size: 15px; }
+    .person em { font-style: normal; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .quote {
+      background: var(--paper); color: oklch(24% 0.03 55); padding: 14px 16px;
+      font-family: Fraunces, serif; font-size: 18px; line-height: 1.35; font-weight: 460;
+      flex: 1;
+    }
+    .quote cite { display: block; margin-top: 10px; font-family: Figtree, sans-serif; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: oklch(42% 0.03 55); }
+    .person.speaking { box-shadow: inset 0 0 0 1px var(--brass); }
+    .person.speaking em { color: var(--brass); }
+    .person.empty {
+      background: transparent; box-shadow: inset 0 0 0 1px oklch(78% 0.08 85 / 0.35);
+      justify-content: center; align-items: center; text-align: center; color: var(--muted);
+    }
+    .person.empty strong { font-size: 16px; color: var(--ink); margin-top: 8px; }
+    footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 40px 24px;
+    }
+    .brief { font-size: 13px; color: var(--muted); }
+    .brief b { color: var(--ink); font-weight: 600; }
+    footer button {
+      font: 600 14px/1 Figtree, sans-serif; border: 0; background: var(--brass);
+      color: oklch(20% 0.03 80); padding: 12px 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="browser">
+    <div class="chrome">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="url">theboard.app/study/raise-now</div>
+    </div>
+    <div class="app">
+      <header>
+        <div>
+          <div class="mark">Private session · You are chair</div>
+          <h1>Raise now or wait?</h1>
+        </div>
+        <p>Discussion · 18 min · 4 of 5 seated</p>
+      </header>
+      <div class="room">
+        <article class="person">
+          <header>
+            <img src="portraits/priya.jpg" alt="" />
+            <div><strong>Priya Rao</strong><em>Leaning back · Strategy</em></div>
+          </header>
+          <div class="quote">Wait. Q4 will tell you if this is a business or a story.<cite>Independent view, unchanged</cite></div>
+        </article>
+        <article class="person">
+          <header>
+            <img src="portraits/marcus.jpg" alt="" />
+            <div><strong>Marcus Hale</strong><em>Forward · Capital</em></div>
+          </header>
+          <div class="quote">Raise. Dilution today is cheaper than a bridge in March.<cite>Persuading Lila</cite></div>
+        </article>
+        <article class="person">
+          <header>
+            <img src="portraits/elena.jpg" alt="" />
+            <div><strong>Elena Soto</strong><em>Listening · Growth</em></div>
+          </header>
+          <div class="quote">Growth is mixed. Six weeks. Then we know.<cite>Has not dissented</cite></div>
+        </article>
+        <article class="person">
+          <header>
+            <img src="portraits/lila.jpg" alt="" />
+            <div><strong>Lila Voss</strong><em>Arms folded · Operations</em></div>
+          </header>
+          <div class="quote">We cannot run a fundraise and a product freeze. Pick one.<cite>Unmoved</cite></div>
+        </article>
+        <article class="person empty">
+          <div class="mark">Empty chair</div>
+          <strong>Your agent</strong>
+          <p>Seat your own counsel when you want a sixth voice in the room.</p>
+        </article>
+        <article class="person speaking">
+          <header>
+            <img src="portraits/theo.jpg" alt="" />
+            <div><strong>Theo Park</strong><em>Interrupting · Legal</em></div>
+          </header>
+          <div class="quote">The window is a trap door. Raise on projected metrics and this round owns the company.<cite>Speaking now</cite></div>
+        </article>
+      </div>
+      <footer>
+        <div class="brief"><b>11 months runway.</b> Term sheet expires Friday.</div>
+        <button>Call on Priya Rao</button>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

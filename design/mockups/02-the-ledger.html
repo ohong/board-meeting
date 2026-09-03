@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The Ledger — The Best Board Meeting You’ve Ever Had</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: oklch(96% 0.015 85);
+      --ink: oklch(22% 0.03 50);
+      --muted: oklch(45% 0.03 55);
+      --rule: oklch(84% 0.02 75);
+      --dissent: oklch(46% 0.16 25);
+      --live: oklch(42% 0.11 145);
+      --chrome: oklch(92% 0.015 85);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 1440px; height: 900px; overflow: hidden; background: var(--chrome); }
+    body { font-family: Newsreader, serif; color: var(--ink); background: var(--paper); }
+    .browser { width: 1440px; height: 900px; display: flex; flex-direction: column; }
+    .chrome {
+      height: 44px; display: flex; align-items: center; gap: 14px;
+      padding: 0 16px; background: var(--chrome); border-bottom: 1px solid var(--rule); flex-shrink: 0;
+    }
+    .dots { display: flex; gap: 7px; }
+    .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; background: oklch(78% 0.02 75); }
+    .url {
+      flex: 1; height: 26px; border-radius: 6px; background: oklch(98% 0.01 85);
+      color: var(--muted); font-family: "Instrument Sans", sans-serif; font-size: 12px;
+      display: flex; align-items: center; padding: 0 12px;
+    }
+    .app { flex: 1; padding: 28px 56px 24px; display: flex; flex-direction: column; min-height: 0; }
+    .masthead { text-align: center; border-bottom: 1px solid var(--ink); padding-bottom: 14px; }
+    .kicker {
+      font-family: "Instrument Sans", sans-serif; font-size: 11px; letter-spacing: 0.28em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .masthead h1 {
+      font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin-top: 6px;
+    }
+    .meta {
+      display: flex; justify-content: space-between; margin-top: 10px;
+      font-family: "Instrument Sans", sans-serif; font-size: 12px; color: var(--muted);
+    }
+    .meta b { color: var(--live); font-weight: 600; }
+    .sheet { flex: 1; display: grid; grid-template-columns: 200px 1fr 248px; gap: 36px; min-height: 0; padding-top: 22px; }
+    .members { border-right: 1px solid var(--rule); padding-right: 18px; }
+    .members h2, .dissent h2 {
+      font-family: "Instrument Sans", sans-serif; font-size: 11px; letter-spacing: 0.18em;
+      text-transform: uppercase; margin-bottom: 14px; color: var(--muted);
+    }
+    .member { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .member img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; filter: grayscale(0.35) contrast(1.05); }
+    .member strong { display: block; font-size: 15px; font-weight: 600; }
+    .member span { font-family: "Instrument Sans", sans-serif; font-size: 11px; color: var(--muted); }
+    .member.live strong::after {
+      content: " speaking"; font-family: "Instrument Sans", sans-serif; font-size: 10px;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--dissent); font-weight: 600;
+    }
+    .empty { opacity: 0.55; }
+    .empty .ph {
+      width: 40px; height: 40px; border-radius: 50%; border: 1px dashed var(--muted);
+    }
+    .minutes h2 {
+      font-size: 42px; font-weight: 700; line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 6px;
+    }
+    .minutes .deck { font-size: 18px; color: var(--muted); margin-bottom: 22px; }
+    .entry { margin-bottom: 16px; font-size: 17px; line-height: 1.45; }
+    .entry time {
+      font-family: "Instrument Sans", sans-serif; font-size: 11px; color: var(--muted);
+      letter-spacing: 0.06em; display: block; margin-bottom: 4px;
+    }
+    .interrupt {
+      font-style: italic; font-weight: 600; font-size: 22px; line-height: 1.3;
+      border-left: 2px solid var(--dissent); padding-left: 16px; margin: 18px 0;
+    }
+    .note {
+      font-family: "Instrument Sans", sans-serif; font-size: 13px; color: var(--dissent); margin-top: 6px;
+    }
+    .dissent { border-left: 1px solid var(--dissent); padding-left: 18px; }
+    .dissent h2 { color: var(--dissent); }
+    .dissent blockquote {
+      font-size: 15px; line-height: 1.4; margin-bottom: 16px; color: var(--dissent);
+    }
+    .dissent cite { display: block; font-style: normal; font-size: 12px; margin-top: 4px; color: var(--ink); }
+    footer {
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--ink); padding-top: 12px; margin-top: 8px;
+      font-family: "Instrument Sans", sans-serif; font-size: 13px;
+    }
+    footer button {
+      font: 600 13px/1 "Instrument Sans", sans-serif; border: 1px solid var(--ink);
+      background: var(--ink); color: var(--paper); padding: 10px 16px;
+    }
+    footer .quiet { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="browser">
+    <div class="chrome">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="url">theboard.app/minutes/raise-now</div>
+    </div>
+    <div class="app">
+      <header class="masthead">
+        <div class="kicker">A personal board, in session</div>
+        <h1>The Best Board Meeting You’ve Ever Had</h1>
+        <div class="meta">
+          <span>Session 14 · 3 September 2026</span>
+          <span><b>● Live</b> · Discussion, 18 min · 4 of 5 seated</span>
+          <span>You are chair</span>
+        </div>
+      </header>
+      <div class="sheet">
+        <aside class="members">
+          <h2>The table</h2>
+          <div class="member"><img src="portraits/priya.jpg" alt="" /><div><strong>Priya Rao</strong><span>Strategy</span></div></div>
+          <div class="member"><img src="portraits/marcus.jpg" alt="" /><div><strong>Marcus Hale</strong><span>Capital</span></div></div>
+          <div class="member"><img src="portraits/lila.jpg" alt="" /><div><strong>Lila Voss</strong><span>Operations</span></div></div>
+          <div class="member"><img src="portraits/elena.jpg" alt="" /><div><strong>Elena Soto</strong><span>Growth</span></div></div>
+          <div class="member live"><img src="portraits/theo.jpg" alt="" /><div><strong>Theo Park</strong><span>Legal</span></div></div>
+          <div class="member empty"><div class="ph"></div><div><strong>Your agent</strong><span>Empty seat</span></div></div>
+        </aside>
+        <main class="minutes">
+          <h2>Raise now or wait?</h2>
+          <p class="deck">11 months runway. Term sheet expires Friday.</p>
+          <div class="entry"><time>14:22</time> Priya Rao: Wait. Q4 will tell you if this is a business or a story. Raising into a maybe is how you sell the company by accident.</div>
+          <div class="entry"><time>14:24</time> Marcus Hale: Raise. Dilution today is cheaper than a bridge in March. The market is not waiting for your cleanliness.</div>
+          <p class="interrupt">Theo Park interrupts — “The window is a trap door. Raise on projected metrics and this round owns the company.”</p>
+          <p class="note">Priya had not finished. Dissent recorded against raising this week.</p>
+          <div class="entry"><time>14:31</time> Lila Voss: We cannot run a fundraise and a product freeze. Pick one. Ops will break before the board does.</div>
+          <div class="entry"><time>14:33</time> You: Can you live with the terms if they don’t improve?</div>
+        </main>
+        <aside class="dissent">
+          <h2>Dissent</h2>
+          <blockquote>“Raising now signals weakness. Wait for Q4 or dilute on fire-sale terms.”<cite>— Priya Rao</cite></blockquote>
+          <blockquote>“This round’s lead is shaky. The sheet has ratchets that will eat you.”<cite>— Theo Park</cite></blockquote>
+          <blockquote>Elena Soto has not dissented. She asked for six weeks of growth evidence.</blockquote>
+        </aside>
+      </div>
+      <footer>
+        <span class="quiet">Call on a member, or let the minutes continue</span>
+        <button>Call on Priya Rao</button>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

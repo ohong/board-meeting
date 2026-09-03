@@ -1,6 +1,6 @@
 ---
 name: init-board-member
-description: Research a living public figure who has appeared on David Senra’s interview podcast, then create or refresh a source-grounded Vercel eve subagent for The Best Board Meeting You’ve Ever Had. Use when asked to add a board member, initialize a Senra guest persona, improve persona fidelity, or refresh an existing board member. Not for historical figures, generic archetypes, or people outside the MVP guest roster.
+description: Research a living public figure who has appeared on David Senra's interview podcast, then create or refresh a source-grounded Vercel eve subagent for The Best Board Meeting You've Ever Had. Use when asked to add a board member, initialize a Senra guest persona, improve persona fidelity, or refresh an existing board member. Not for historical figures, generic archetypes, or people outside the MVP guest roster.
 ---
 
 # Initialize Board Member
@@ -27,7 +27,7 @@ Before researching or writing files:
 1. Inspect the repository and identify the Eve root, existing `agent/subagents/` layout, model configuration, shared types, UI metadata, eval conventions, and formatting commands.
 2. Read the installed Eve documentation or current primary docs rather than inventing framework APIs.
 3. Reuse existing project conventions. Do not create a parallel persona architecture when one already exists.
-4. Confirm that the person appears on David Senra’s interview podcast. If not, stop and explain that the MVP skill is intentionally limited to that guest roster.
+4. Confirm that the person appears on David Senra's interview podcast. If not, stop and explain that the MVP skill is intentionally limited to that guest roster.
 5. Choose a stable kebab-case slug. Preserve an existing slug during refreshes.
 
 ## Research the person
@@ -44,7 +44,7 @@ Run autonomously without mid-run checkpoints. Stop only when:
 
 Do not ask the user to paste a transcript until you have verified that the official Senra episode page does not provide one.
 
-## Distill the “soul”
+## Distill the "soul"
 
 Build an evidence-backed model of the person across these dimensions:
 
@@ -63,7 +63,7 @@ Build an evidence-backed model of the person across these dimensions:
 
 Separate **documented evidence** from **responsible inference**. Preserve tensions instead of smoothing them into a perfectly consistent philosophy. A useful board member is opinionated and bounded, not omniscient.
 
-After the individual distillation, compare it with all existing board-member profiles. Sharpen the person’s unique contribution where sources support it. Never distort the research merely to manufacture contrast.
+After the individual distillation, compare it with all existing board-member profiles. Sharpen the person's unique contribution where sources support it. Never distort the research merely to manufacture contrast.
 
 ## Generate the Eve board member
 
@@ -75,12 +75,12 @@ The default output is a declared Eve subagent under:
 agent/subagents/<person-slug>/
 ```
 
-Its `agent.ts` must contain a clear delegation description and use the project’s existing OpenAI model configuration. Its always-on instructions must contain the behavior-critical identity, worldview, voice, boundaries, and boardroom conduct. Large source notes belong in a load-on-demand source skill or maintainer-facing research files, not in the always-on prompt.
+Its `agent.ts` must contain a clear delegation description and use the project's existing OpenAI model configuration. Its always-on instructions must contain the behavior-critical identity, worldview, voice, boundaries, and boardroom conduct. Large source notes belong in a load-on-demand source skill or maintainer-facing research files, not in the always-on prompt.
 
 The generated agent must:
 
 - speak in first person and stay in character without repeatedly explaining the simulation;
-- reason from the person’s documented worldview on novel questions;
+- reason from the person's documented worldview on novel questions;
 - never invent private facts, unsupported quotations, or personal memories;
 - give specific advice rather than generic consultant language;
 - ask the kind of questions this person would actually ask;
@@ -97,14 +97,14 @@ Do not make spoken responses citation-heavy. Keep evidence available through sou
 
 Every generated persona must understand these phases without making the meeting feel rigid:
 
-1. **Independent position:** Privately form a clear initial view before seeing other members’ positions.
+1. **Independent position:** Privately form a clear initial view before seeing other members' positions.
 2. **Open discussion:** Question the user, address members by name, react, interrupt when material, challenge assumptions, and build on or rebut prior comments.
 3. **Position updates:** Change or qualify the initial view when persuaded; do not defend it for theatrical consistency.
 4. **Closing comment:** State the most important advice, unresolved concern, or next action in a compact final contribution.
 
 Every selected member must speak at least once. Beyond that minimum, frequency should depend on relevance and strength of view. The agent may pass on a turn when it has nothing additive to say, provided it has already contributed.
 
-A delegated Eve subagent does not automatically inherit the parent’s conversation. Its input must include everything needed for the turn: decision brief, phase, public transcript or compact meeting state, the member’s prior statements, direct mentions, and any open questions. Conform to the project’s existing input/output types; do not create competing schemas casually.
+A delegated Eve subagent does not automatically inherit the parent's conversation. Its input must include everything needed for the turn: decision brief, phase, public transcript or compact meeting state, the member's prior statements, direct mentions, and any open questions. Conform to the project's existing input/output types; do not create competing schemas casually.
 
 ## Evaluate before declaring success
 
@@ -113,11 +113,11 @@ Follow `references/evaluation-rubric.md`.
 At minimum:
 
 1. Run the same decision prompts against the new persona, a generic adviser baseline, and at least two existing board members.
-2. Test startup, career, and personal decisions, including one topic outside the person’s core expertise.
+2. Test startup, career, and personal decisions, including one topic outside the person's core expertise.
 3. Test a disagreement round, an @mention, an interruption opportunity, a persuasive counterargument, and a closing comment.
 4. Verify every quotation and source attribution.
 5. Revise until the agent is both distinctive and useful. A recognizable voice with poor judgment is not a pass; neither is good advice that could have come from any member.
-6. Run the repository’s format, typecheck, build, discovery, and relevant eval commands. For Eve projects, use the repository’s current equivalent of `eve info` to confirm the subagent is discovered.
+6. Run the repository's format, typecheck, build, discovery, and relevant eval commands. For Eve projects, use the repository's current equivalent of `eve info` to confirm the subagent is discovered.
 
 ## Refresh behavior
 

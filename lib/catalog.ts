@@ -1,6 +1,21 @@
 import type { CatalogMember } from "./types";
 
+/**
+ * The roster is the set of guests published on David Senra's guest list on this date. It is
+ * a build-time constant; the app never fetches the roster at runtime.
+ */
 export const CATALOG_FROZEN_ON = "2026-09-03";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** Formatted without Intl so the server and client render the same string. */
+export function frozenOnLabel(iso: string): string {
+  const [year, month, day] = iso.split("-");
+  return `${Number(day)} ${MONTHS[Number(month) - 1]} ${year}`;
+}
 
 export const CATALOG: CatalogMember[] = [
   {

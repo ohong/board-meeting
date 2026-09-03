@@ -27,7 +27,7 @@ Line 2 onward: what you say out loud at the table.
 If you have already spoken and genuinely have nothing to add that this room has not heard,
 reply with exactly [pass] and nothing else. Passing is respectable. Filling airtime is not.`;
 
-const REACTIONS: ReactionKind[] = ["agree", "concern", "disagree", "want_to_respond"];
+const REACTIONS: ReactionKind[] = ["agree", "concern", "disagree"];
 
 /**
  * Splits a member's raw output into directives and the spoken text.
@@ -60,7 +60,7 @@ export function parseControlLine(raw: string): { directives: TurnDirectives; res
 const TRANSCRIPT_WINDOW = 30;
 
 export function renderTranscript(events: TranscriptEvent[]): string {
-  const visible = events.filter((e) => e.kind !== "reaction" && !e.failed).slice(-TRANSCRIPT_WINDOW);
+  const visible = events.filter((event) => !event.failed).slice(-TRANSCRIPT_WINDOW);
   if (!visible.length) return "(nothing has been said yet)";
   return visible
     .map((event) => {
@@ -159,8 +159,8 @@ ${input.briefing}
 
 COMPLETE PUBLIC TRANSCRIPT
 ${input.transcript
-  .filter((e) => e.kind !== "reaction" && !e.failed)
-  .map((e) => (e.kind === "system" ? `— ${e.text}` : `${e.speakerName}: ${e.text}`))
+  .filter((event) => !event.failed)
+  .map((event) => (event.kind === "system" ? `— ${event.text}` : `${event.speakerName}: ${event.text}`))
   .join("\n")}
 
 CLOSING COMMENTS

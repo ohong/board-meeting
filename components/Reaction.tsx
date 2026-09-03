@@ -4,14 +4,12 @@ const LABELS: Record<ReactionKind, string> = {
   agree: "agrees",
   concern: "concern",
   disagree: "disagrees",
-  want_to_respond: "wants in",
 };
 
 const GLYPHS: Record<ReactionKind, string> = {
   agree: "✓",
   concern: "!",
   disagree: "✕",
-  want_to_respond: "↑",
 };
 
 export function Reaction({ kind }: { kind: ReactionKind }) {

@@ -1,5 +1,5 @@
 import { CATALOG, getMember, matchMemberByName, searchCatalog } from "./catalog";
-import { EXAMPLE_DECISION, EXAMPLE_QUESTION, invitationPrompt } from "./example";
+import { EXAMPLE_DECISION, invitationPrompt } from "./example";
 import { extractMention } from "./mentions";
 import { createMockRuntime } from "./runtime/mock";
 import { decisionLine, fallbackReadout } from "./runtime/fallbacks";
@@ -76,7 +76,6 @@ export type MeetingState = {
   /** True once the room has used its turn budget and is waiting on the chair. */
   awaitingChair: boolean;
   readout: ExecutiveReadout | null;
-  setupMessage: string | null;
   lastError: string | null;
   /** What the external agent has done, so its participation is visible without devtools. */
   agentActivity: AgentActivity[];
@@ -141,7 +140,6 @@ export function createMeetingSession(options: SessionOptions = {}) {
     composing: false,
     awaitingChair: false,
     readout: null,
-    setupMessage: null,
     lastError: null,
     agentActivity: [],
     readoutRetrievedBy: null,
@@ -574,7 +572,6 @@ export function createMeetingSession(options: SessionOptions = {}) {
       })),
       guest: { name: state.guest.name, status: state.guest.status },
       transcript: state.transcript
-        .filter((event) => event.kind !== "reaction")
         .map((event) => ({
           speaker: event.kind === "system" ? "Meeting record" : event.speakerName,
           ...(event.addressedTo ? { to: event.addressedTo } : {}),
@@ -882,10 +879,6 @@ export function createMeetingSession(options: SessionOptions = {}) {
       state.briefing = EXAMPLE_DECISION;
       emit();
     },
-    setSetupMessage(message: string | null) {
-      state.setupMessage = message;
-      emit();
-    },
     canStart,
 
     // the meeting
@@ -918,7 +911,6 @@ export function createMeetingSession(options: SessionOptions = {}) {
 
     // demo copy
     invitationPrompt: () => invitationPrompt(state.members.map((member) => member.name)),
-    exampleQuestion: EXAMPLE_QUESTION,
     decisionTitle: () => decisionLine(state.briefing),
   };
 }

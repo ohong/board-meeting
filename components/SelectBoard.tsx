@@ -1,6 +1,7 @@
 "use client";
 
 import { LetterMark } from "./LetterMark";
+import { CATALOG_FROZEN_ON, frozenOnLabel } from "@/lib/catalog";
 import { MIN_BOARD, MAX_BOARD, type MeetingSession, type MeetingState } from "@/lib/session";
 
 export function SelectBoard({ session, state }: { session: MeetingSession; state: MeetingState }) {
@@ -20,6 +21,9 @@ export function SelectBoard({ session, state }: { session: MeetingSession; state
             Seat three to six advisers, bring them one consequential decision, and let them argue it
             out in front of you. Every seat is a separate agent with its own sources and its own
             mind — not one model wearing six name badges.
+          </p>
+          <p className="mt-3 text-[11.5px] text-[var(--faint)]">
+            Roster frozen {frozenOnLabel(CATALOG_FROZEN_ON)}. Every adviser is a guest from David Senra&rsquo;s interview podcast.
           </p>
         </div>
 

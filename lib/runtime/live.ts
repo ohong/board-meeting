@@ -1,7 +1,7 @@
 import { streamText, generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { memberSystemPrompt, modelFor, secretarySystemPrompt } from "../personas";
-import { fallbackReadout, localOpeningPosition } from "./fallbacks";
+import { localOpeningPosition } from "./fallbacks";
 import { consumeTurnStream } from "./turn-stream";
 import {
   closingCommentPrompt,
@@ -155,5 +155,3 @@ export function createLiveRuntime(): BoardRuntime {
     },
   };
 }
-
-export { fallbackReadout };

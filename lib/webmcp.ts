@@ -32,7 +32,7 @@ function arg(args: Record<string, unknown>, key: string): string {
  * is the deprecated alias still present in some builds. Both are checked so the demo works
  * in whichever the presenter's browser exposes.
  */
-export function getModelContext(): ModelContext | undefined {
+function getModelContext(): ModelContext | undefined {
   if (typeof document === "undefined") return undefined;
   const fromDocument = (document as Document & { modelContext?: ModelContext }).modelContext;
   const fromNavigator =

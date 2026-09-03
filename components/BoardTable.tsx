@@ -6,12 +6,10 @@ import type { GuestSeat, MemberSeat } from "@/lib/session";
 import type { SeatStatus } from "@/lib/types";
 
 const SEAT_STATUS: Record<SeatStatus, string> = {
-  idle: "",
   thinking: "Forming a view",
   ready: "",
   speaking: "Speaking",
   wants_to_respond: "Wants the floor",
-  reacting: "Reacting",
   reconnecting: "Reconnecting",
 };
 

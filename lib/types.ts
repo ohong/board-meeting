@@ -8,12 +8,10 @@ export type MeetingPhase =
   | "closed";
 
 export type SeatStatus =
-  | "idle"
   | "thinking"
   | "ready"
   | "speaking"
   | "wants_to_respond"
-  | "reacting"
   | "reconnecting";
 
 export type GuestStatus =
@@ -24,7 +22,7 @@ export type GuestStatus =
   | "contributing"
   | "asking";
 
-export type ReactionKind = "agree" | "concern" | "disagree" | "want_to_respond";
+export type ReactionKind = "agree" | "concern" | "disagree";
 
 export type CatalogMember = {
   slug: string;
@@ -38,7 +36,7 @@ export type CatalogMember = {
   featured?: boolean;
 };
 
-export type TranscriptKind = "message" | "system" | "reaction";
+export type TranscriptKind = "message" | "system";
 
 export type TranscriptEvent = {
   id: string;

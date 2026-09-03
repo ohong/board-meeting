@@ -17,10 +17,6 @@ export function getPersona(slug: string): PersonaPackage {
   return persona;
 }
 
-export function hasPersona(slug: string): boolean {
-  return slug in PERSONA_PACKAGES;
-}
-
 /**
  * The system prompt for one board member: their own package plus the shared conduct that
  * makes the room a board meeting rather than a group chat. The secretary is deliberately

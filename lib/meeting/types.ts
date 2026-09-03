@@ -334,7 +334,7 @@ export interface ReactResult {
   wantsToRebut: boolean;
 }
 
-export interface ClosingInput extends MemberContext {}
+export type ClosingInput = MemberContext;
 
 export interface SynthesisInput {
   briefing: string;

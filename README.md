@@ -1,23 +1,71 @@
-# The Best Board Meeting You’ve Ever Had
+# The Best Board Meeting You've Ever Had
 
-## Motivation
+Convene a personal board of three to six AI advisers modeled on David Senra's podcast guests, brief them on one consequential decision, chair a live meeting around a virtual table, and leave with an executive readout. Through **WebMCP**, your own agent (Codex in the ChatGPT desktop browser, or any agent in a WebMCP-capable browser) can take a seat at the same table: inspect the meeting, join under its own name, contribute context, question a board member, request a synthesis, and retrieve the final readout.
 
-The quality of a consequential decision often depends less on how much information you have than on who is in the room. Great founders and executives benefit from candid advisers who see different risks, challenge assumptions, and bring hard-won pattern recognition. Most people cannot convene the particular founders, investors, and operators whose judgment they most admire.
-
-General-purpose AI makes advice abundant, but it usually collapses every perspective into one polished, agreeable answer. “LLM council” approaches improve on this by consulting multiple base models. A real board is different: it is composed of distinct people, each with a worldview, body of experience, domain expertise, temperament, strengths, blind spots, and way of challenging a decision.
-
-**The Best Board Meeting You’ve Ever Had** gives anyone access to that kind of room.
+Built for the [OpenAI WebMCP Challenge](https://webmcp.devpost.com/). MIT licensed.
 
 ## How it works
 
-During onboarding, the user selects three to six board members from a starter library of notable founders, investors, and operators interviewed by David Senra. Each member is a genuinely separate AI agent, built with Vercel’s eve framework and initialized from the person’s podcast transcript plus deeper research into their public work. The goal is not a costume or generic role prompt, but a durable “soul” that captures how that person thinks, speaks, questions assumptions, and contributes under pressure.
+1. **Choose your board.** A searchable catalog of advisers. Each is a separate agent package distilled from the guest's Senra interview transcript and primary sources (see `agent/subagents/`).
+2. **Brief your board.** One free-form briefing. "Use example decision" loads the demo: should a B2B collaboration app kill its free tier?
+3. **Board meeting.** Every member forms a private opening position in parallel, then the room opens. Members rebut one another, react on their seats, ask the chair questions, and change position when persuaded. The chair calls on anyone with `@Name`.
+4. **Invite your agent.** Copy the invitation into your agent. It discovers the page's six site tools and joins the guest seat; everything it does is visible in the room.
+5. **End meeting.** Closing comments are collected and a secretary agent writes the readout: recommendation (with dissent preserved), options, tradeoffs, assumptions, open questions, next actions, closing comments. Your agent can retrieve the same readout.
 
-The user enters a consequential decision and as much context as they want, including links. They enter a skeuomorphic boardroom as the chair. Before discussion begins, every agent forms an independent position. The meeting then becomes a free-flowing group conversation: members ask the user questions, address one another, react, interrupt when warranted, disagree, persuade, and sometimes change their minds. The user can call on anyone directly with an @mention, while every member contributes at least once.
+Nothing is persisted. Refreshing the page starts a new session.
 
-At the end, the app produces an executive readout: the board’s recommendation—or an honest account of where it remains divided—along with the options considered, tradeoffs, assumptions, open questions, next actions, and closing comments from each member.
+## WebMCP site tools
 
-Through WebMCP, the user’s personal agent or chief of staff can take a seat without a bespoke integration. It can inspect the live meeting, bring relevant context, participate in the discussion, question board members, request synthesis, and retrieve the final readout.
+Registered from the top-level page in [`components/webmcp/webmcp-tools.tsx`](components/webmcp/webmcp-tools.tsx) with `document.modelContext.registerTool(...)` (with a `navigator.modelContext` fallback), unregistered via `AbortSignal`, and routed to the same `MeetingSession` actions the human UI uses:
 
-## Benefits
+| Tool | Effect |
+|---|---|
+| `inspect_board_meeting` | Read-only: briefing, phase, board, participants, bounded recent transcript window (paged with `transcript_offset`), readout readiness. |
+| `join_board_meeting` | Take the single guest seat under the agent's own `display_name`. |
+| `contribute_to_board_meeting` | Add context to the shared transcript; the board responds in later turns. |
+| `address_board_member` | Put a question to a named member, who answers on the next turn. |
+| `request_board_synthesis` | Secretary posts an interim agreement / disagreement / unresolved-question synthesis (optionally `wait_seconds` to receive the text). |
+| `get_board_meeting_readout` | Returns the readout after the human ends the meeting; before that, a clear `NOT_READY` status. |
 
-The product gives users access to advisers they could never ordinarily convene, replaces a single AI opinion with productive disagreement among distinctive experts, creates a more rigorous decision process, and leaves behind a useful record rather than a disappearing chat. It turns advice from a solitary prompt into a memorable, participatory board meeting.
+Every result is a compact JSON object under 1,450 characters; errors are returned as data (`{ ok: false, error: { code, message } }`) so the agent can self-correct. There is deliberately no tool to end the meeting: only the human chair can.
+
+## Running locally
+
+```bash
+bun install
+cp .env.example .env.local   # add OPENAI_API_KEY
+bun run dev                  # http://localhost:3000
+```
+
+- `?runtime=mock` on the URL runs a deterministic scripted board with no model calls.
+- `/dev/fixtures?fixture=discussion` renders UI fixtures for each phase; `/dev/webmcp` is a harness that invokes the tool handlers directly.
+- `bun run typecheck`, `bun run test` (vitest: session, engine with mock runtime, WebMCP tools), `bun run lint`.
+
+### Testing the WebMCP tools
+
+- **Chrome 149+**: enable `chrome://flags/#enable-webmcp-testing`, open the app, then DevTools → Application → WebMCP lists the six tools and lets you invoke them manually.
+- **ChatGPT desktop app**: Settings → Browser → Permissions → Enable site tools (GPT-5.6 Sol or Terra). Open the app with `@Browser <url>`, click "Invite your agent", and paste the invitation into the chat.
+
+## Architecture
+
+- **Next.js 16 App Router, TypeScript, Tailwind v4.** State lives only in the page: `lib/meeting/session.ts` is the single deterministic store (phases, selection limits, transcript ordering, queueing, chair-only authorization). `lib/meeting/engine.ts` runs the meeting loop.
+- **Separate agents per seat.** Each turn is an isolated invocation with that member's `instructions.md` as the system prompt, its private opening position, its own prior statements, and the public transcript. Members never see one another's private positions.
+- **Speaker selection** is deterministic over model-reported signals: after each turn, the other members each report a reaction and an urgency to speak (`/api/board/react`, one batched request). Priority: a direct @mention or guest address, then a material rebuttal (shown as an interruption), then members who have not spoken, then urgency. Nobody speaks a third time before everyone has spoken once, and nobody takes two consecutive turns unless called on.
+- **Models.** OpenAI via the Vercel AI SDK (`ai`, `@ai-sdk/openai`): `gpt-5.6-terra` for member turns, `gpt-5.6-luna` for reactions, `gpt-5.6-sol` for the readout. Override with `BOARD_MODEL`, `BOARD_FAST_MODEL`, `BOARD_READOUT_MODEL`.
+- **Persona packages** live in `agent/subagents/<slug>/` using Vercel eve's declared-subagent layout (`agent.ts` + `instructions.md`) plus `persona.json` for the catalog and a `research/` ledger. The app reads them from disk at runtime; the same tree is discoverable by `eve`. See [`docs/persona-package.md`](docs/persona-package.md).
+
+### A note on eve
+
+The product spec called for Vercel eve as the agent framework. eve (v0.51, beta) has no in-process runtime: agents run in a separate server with durable sessions, which is the wrong shape for many short, parallel, isolated invocations streamed into one page. The app therefore uses the AI SDK directly and keeps the persona packages eve-compatible so the board members remain discoverable as eve subagents.
+
+## Deploying
+
+Standard Vercel deployment. Set `OPENAI_API_KEY` in the project environment. `next.config.ts` includes `agent/**` in output file tracing so persona packages ship with the serverless functions.
+
+## Limitations and provenance
+
+- Advisers are simulations distilled from public interviews and writing. They are not endorsements by, or statements of, the people represented. Portraits are the show's published guest portraits.
+- Eleven advisers are available at launch; the demo trio (Daniel Ek, David Heinemeier Hansson, Lulu Cheng Meservey) received the deepest research.
+- One external agent per meeting, desktop layout, no persistence.
+
+See [`docs/mvp-specs.md`](docs/mvp-specs.md) for the full product specification and [`docs/submission.md`](docs/submission.md) for the demo script.

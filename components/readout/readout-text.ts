@@ -2,10 +2,8 @@
  * Plain-text rendering of the executive readout, used by the human "Copy readout"
  * action. The WebMCP workstream may import `readoutToText` from here.
  *
- * NOTE: `components/webmcp/readout-format.ts` currently carries a byte-identical
- * copy of this formatter (it shipped before this module existed). Keep the two in
- * sync, or collapse them once both workstreams have landed — spec §15.2 requires
- * the human and the agent to copy the same document.
+ * NOTE: `components/webmcp/readout-format.ts` re-exports this function so the WebMCP
+ * readout tool returns exactly the text the human Copy action produces (spec §15.2).
  */
 
 import type { Readout } from "@/lib/meeting/types";

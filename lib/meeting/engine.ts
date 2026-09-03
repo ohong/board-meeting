@@ -115,6 +115,8 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
     let eligible = members.filter((m) => directMention || !someUnspoken || m.turns < 2);
     if (!eligible.length) eligible = members;
     if (!directMention && justUnavailable && eligible.length > 1) eligible = eligible.filter((m) => m.id !== justUnavailable);
+    // Nobody takes two consecutive turns unless directly called on.
+    if (!directMention && lastSpeaker && eligible.length > 1) eligible = eligible.filter((m) => m.id !== lastSpeaker);
     if (deterministicFallback) {
       deterministicFallback = false;
       const unspoken = eligible.filter((m) => m.turns === 0).sort(seatSort)[0];
@@ -123,10 +125,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
     }
     const rebut = eligible.filter((m) => rebutters.has(m.id)).sort(seatSort)[0]; if (rebut) return rebut.id;
     const unspoken = eligible.filter((m) => m.turns === 0);
-    if (unspoken.length) {
-      const dhh = unspoken.find((m) => m.id === "david-heinemeier-hansson");
-      return (dhh ?? unspoken.sort(seatSort)[0]).id;
-    }
+    if (unspoken.length) return unspoken.sort(seatSort)[0].id;
     const urgency = [...eligible].sort((a, b) => b.urgency - a.urgency || a.seat - b.seat);
     if (urgency[0]?.urgency > 0) return urgency[0].id;
     for (let offset = 1; offset <= members.length; offset += 1) { const index = (roundRobin + offset) % members.length; const found = eligible.find((m) => m.id === members[index].id); if (found) { roundRobin = index; return found.id; } }

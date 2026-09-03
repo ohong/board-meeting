@@ -31,7 +31,7 @@ export const CATALOG: CatalogMember[] = [
   { slug: "torsten-reil", name: "Torsten Reil", aliases: ["Reil", "Helsing"], role: "Co-founder & Co-CEO, Helsing", initials: "TR" },
   { slug: "sam-altman", name: "Sam Altman", aliases: ["Altman", "OpenAI"], role: "Co-founder & CEO, OpenAI", initials: "SA" },
   { slug: "travis-kalanick", name: "Travis Kalanick", aliases: ["Kalanick", "Uber", "Atoms"], role: "Founder, Uber & Atoms", initials: "TK" },
-  { slug: "michael-ovitz", name: "Michael Ovitz", aliases: ["Ovitz", "CAA"], role: "Co-founder, CAA", initials: "MO" },
+  { slug: "michael-ovitz", name: "Michael Ovitz", aliases: ["Ovitz", "CAA", "Creative Artists Agency"], role: "Co-founder, CAA", initials: "MO" },
   { slug: "micky-malka", name: "Micky Malka", aliases: ["Malka", "Ribbit"], role: "Founder, Ribbit Capital", initials: "MM" },
   { slug: "jeff-zalaznick", name: "Jeff Zalaznick", aliases: ["Zalaznick", "Carbone"], role: "Co-founder, Major Food Group", initials: "JZ" },
   { slug: "eric-glyman", name: "Eric Glyman", aliases: ["Glyman", "Ramp"], role: "Co-founder & Co-CEO, Ramp", initials: "EG" },

@@ -162,7 +162,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
     if (session.getState().phase !== "discussion") return;
     const hasDirect = session.getState().queue.some((q) => !!q.mention);
     if (!hasDirect && succeeded) await reactionsAfter(memberId, entry.id);
-    const delay = session.getState().queue.length ? 0 : (session.members().reduce((sum, m) => sum + m.turns, 0) >= 12 ? 3_000 : 1_200) * pacingScale;
+    const delay = session.getState().queue.length ? 0 : (session.members().reduce((sum, m) => sum + m.turns, 0) >= 12 ? 2_000 : 700) * pacingScale;
     kick(delay);
   }
 
@@ -186,7 +186,10 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
 
   async function end() {
     if (timer) clearTimeout(timer); timer = null; streamController?.abort();
+    const endedAt = session.getState().endedAt;
     if (activeTurn) await activeTurn.catch(() => {});
+    // A reset (or a second end) during that wait invalidates this run.
+    if (disposed || session.getState().phase !== "closing" || session.getState().endedAt !== endedAt) return;
     generation.abort(); generation = new AbortController(); const signal = generation.signal;
     const members = session.members();
     const comments = await Promise.all(members.map(async (member): Promise<ClosingComment> => {
@@ -198,7 +201,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
     let readout: Readout | null = null;
     for (let attempt = 0; attempt < 2 && !signal.aborted; attempt += 1) { try { readout = await runtime.readout(input, signal); break; } catch {} }
     if (!readout) readout = fallbackReadout(input);
-    if (!signal.aborted && !disposed) { session.engineSetReadout(readout, "ready"); session.engineAddEvent("meeting-ended", "The meeting ended and the executive readout is ready."); }
+    if (!signal.aborted && !disposed && session.getState().phase === "closing" && session.getState().endedAt === endedAt) { session.engineSetReadout(readout, "ready"); session.engineAddEvent("meeting-ended", "The meeting ended and the executive readout is ready."); }
   }
 
   function contextFor(memberId: string): MemberContext {

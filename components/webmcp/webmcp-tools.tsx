@@ -32,26 +32,43 @@ import {
 } from "@/lib/meeting/types";
 import {
   READOUT_SECTIONS,
-  readoutFromSections,
+  readoutSectionItems,
   readoutSectionToText,
-  readoutSummary,
   readoutToText,
   type ReadoutSection,
 } from "./readout-format";
 
 /**
- * Order in which readout sections are dropped when the whole document will not fit
- * one tool result. The recommendation (with its dissent) is never dropped.
+ * Compact first-call readout shapes. EVERY section is always present; overflow is
+ * handled by clipping items (and, at the harshest steps, showing one per list) —
+ * never by dropping a section, so "retrieve the memo" never reads back a fragment.
  */
-const READOUT_DROP_ORDER: ReadoutSection[] = [
-  "assumptions",
+interface ReadoutCompactShape {
+  decisionCap: number;
+  summaryCap: number;
+  detailCap: number;
+  itemCap: number;
+  items: number;
+  closingItems: number;
+}
+
+const READOUT_COMPACT_SHAPES: ReadoutCompactShape[] = [
+  { decisionCap: 200, summaryCap: 400, detailCap: 160, itemCap: 90, items: 2, closingItems: 6 },
+  { decisionCap: 180, summaryCap: 360, detailCap: 140, itemCap: 78, items: 2, closingItems: 6 },
+  { decisionCap: 160, summaryCap: 320, detailCap: 120, itemCap: 66, items: 2, closingItems: 5 },
+  { decisionCap: 160, summaryCap: 280, detailCap: 110, itemCap: 90, items: 1, closingItems: 4 },
+  { decisionCap: 140, summaryCap: 220, detailCap: 90, itemCap: 70, items: 1, closingItems: 3 },
+  { decisionCap: 120, summaryCap: 180, detailCap: 70, itemCap: 55, items: 1, closingItems: 2 },
+];
+
+const READOUT_LIST_SECTIONS = [
   "options",
   "tradeoffs",
-  "closing_comments",
+  "assumptions",
   "open_questions",
   "next_actions",
-  "decision",
-];
+  "closing_comments",
+] as const satisfies readonly ReadoutSection[];
 
 // ---------------------------------------------------------------------------
 // Output budget (Chrome's provisional tool-output budget is 1.5K characters).
@@ -618,7 +635,7 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
     name: "get_board_meeting_readout",
     title: "Get the final board readout",
     description:
-      "Retrieve the final executive readout of this board meeting: the decision, the board's recommendation with any dissent preserved, the options considered, tradeoffs, assumptions, open questions, next actions, and each member's closing comment. The readout exists only after the human chair ends the meeting, so call it then; before that it reports clearly that it is not ready yet. If the full text is truncated, call again with a single section. This tool only reads.",
+      "Read the final executive readout of this board meeting: the decision, the recommendation with any dissent preserved, options, tradeoffs, assumptions, open questions, next actions, and each member's closing comment. It exists only after the human chair ends the meeting, so call it then; before that it reports clearly that it is not ready yet. The first call returns every section, compacted if the memo is long; call again with section=<name> for that section's full text.",
     inputSchema: {
       type: "object",
       properties: {
@@ -662,38 +679,46 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
         };
       }
 
-      // Serve the exact document the human copies whenever it fits; otherwise drop
-      // the least decision-critical sections first and name what was left out.
+      // Serve the exact document the human copies whenever it fits in one result.
+      const readout = result.readout;
       const full = {
         ok: true,
-        divided: result.readout.recommendation.divided,
-        text: readoutToText(result.readout),
+        divided: readout.recommendation.divided,
+        text: readoutToText(readout),
       };
       if (jsonLength(full) <= MAX_OUTPUT_CHARACTERS) return full;
 
-      const omitted: ReadoutSection[] = [];
-      for (const section of READOUT_DROP_ORDER) {
-        omitted.push(section);
-        const kept = READOUT_SECTIONS.filter((s) => !omitted.includes(s));
-        const partial = {
+      // Otherwise every section is still present, just compact. Sections are never
+      // dropped; only item text is clipped, down to one item per list.
+      const buildCompact = (shape: ReadoutCompactShape) => {
+        const payload: Record<string, unknown> = {
           ok: true,
-          truncated: true,
-          divided: result.readout.recommendation.divided,
-          text: readoutFromSections(result.readout, kept),
-          omitted_sections: [...omitted],
-          hint: "Call again with section=<name> for the full text of an omitted section.",
+          compact: true,
+          decision: truncate(readout.decision, shape.decisionCap),
+          recommendation: {
+            summary: truncate(readout.recommendation.summary, shape.summaryCap),
+            divided: readout.recommendation.divided,
+            detail: truncate(readout.recommendation.detail, shape.detailCap),
+          },
         };
-        if (jsonLength(partial) <= MAX_OUTPUT_CHARACTERS) return partial;
-      }
-
-      return {
-        ok: true,
-        truncated: true,
-        divided: result.readout.recommendation.divided,
-        summary: truncate(readoutSummary(result.readout), 700),
-        sections: [...READOUT_SECTIONS],
-        hint: "Call again with section=<name> for the full text of a section.",
+        for (const section of READOUT_LIST_SECTIONS) {
+          const all = readoutSectionItems(readout, section);
+          const max = section === "closing_comments" ? shape.closingItems : shape.items;
+          payload[section] = {
+            total: all.length,
+            items: all.slice(0, max).map((item) => truncate(item, shape.itemCap)),
+          };
+        }
+        payload.hint = "Call again with section=<name> for the full text";
+        return payload;
       };
+
+      let compact = buildCompact(READOUT_COMPACT_SHAPES[0]);
+      for (const shape of READOUT_COMPACT_SHAPES) {
+        compact = buildCompact(shape);
+        if (jsonLength(compact) <= MAX_OUTPUT_CHARACTERS) return compact;
+      }
+      return compact;
     }),
   };
 

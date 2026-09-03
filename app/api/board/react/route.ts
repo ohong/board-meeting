@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const results = await Promise.all(input.members.map(async ({ slug, context }) => {
       try {
         const persona = await getPersona(slug); if (!persona) return { slug, ...neutral };
-        const result = await generateText({ model: fastBoardModel(), system: persona.instructions, prompt: memberPrompt(context, `React silently to ${input.lastSpeakerName}: ${input.lastText}\nSet urgency 0–10 and wantsToRebut only for a material disagreement.`), output: Output.object({ schema: reactResultSchema }), providerOptions: lowReasoning, abortSignal: request.signal });
+        const result = await generateText({ model: fastBoardModel(), system: persona.instructions, prompt: memberPrompt(context, `PRIVATE REACTION (not spoken)\n${input.lastSpeakerName} just said: "${input.lastText}"\nAs yourself, report how you react. reaction: pick "agree", "disagree", "concern", or "curious"; use null only if you genuinely have no reaction. urgency: 8–10 if you have something you must say right now, 4–7 if you would add something, 0–3 if you would let others talk. wantsToRebut: true only when you disagree with a specific claim just made and would push back on it by name.`), output: Output.object({ schema: reactResultSchema }), providerOptions: lowReasoning, abortSignal: request.signal });
         return { slug, ...result.output };
       } catch { return { slug, ...neutral }; }
     }));

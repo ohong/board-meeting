@@ -5,7 +5,7 @@ import {
   MAX_OUTPUT_CHARACTERS,
   type BoardToolMap,
 } from "@/components/webmcp/webmcp-tools";
-import { readoutFromSections } from "@/components/webmcp/readout-format";
+import { readoutFromSections, READOUT_SECTIONS } from "@/components/webmcp/readout-format";
 import { readoutToText } from "@/components/readout/readout-text";
 import { FIXTURES, FIXTURE_PERSONAS, FIXTURE_READOUT } from "@/lib/meeting/fixtures";
 import { MeetingSession } from "@/lib/meeting/session";
@@ -249,7 +249,7 @@ describe("WebMCP board tools", () => {
 
     const result = await call(tools, "get_board_meeting_readout");
     expect(result.ok).toBe(true);
-    const body = String(result.text ?? result.summary ?? "");
+    const body = String(result.text ?? result.decision ?? "");
     expect(body.length).toBeGreaterThan(0);
     expect(session.getState().readoutRetrievedByGuestAt).not.toBeNull();
     const events = session
@@ -262,6 +262,32 @@ describe("WebMCP board tools", () => {
       .getState()
       .transcript.filter((e) => e.kind === "event" && e.event === "readout-retrieved");
     expect(eventsAfter.length).toBe(1);
+  });
+
+  it("returns every readout section on the first call, compacted, inside the budget", async () => {
+    const { tools } = toolsFor(FIXTURES.readout());
+    const result = await call(tools, "get_board_meeting_readout");
+    expect(result.ok).toBe(true);
+    expect(result.compact).toBe(true);
+
+    // All eight sections are present; none is ever dropped.
+    for (const section of READOUT_SECTIONS) {
+      expect(result, `missing readout section "${section}"`).toHaveProperty(section);
+    }
+    const recommendation = result.recommendation as { summary: string; divided: boolean; detail: string };
+    expect(recommendation.summary).toBe(FIXTURE_READOUT.recommendation.summary);
+    expect(recommendation.divided).toBe(true);
+    expect(recommendation.detail.length).toBeLessThanOrEqual(160);
+
+    for (const section of ["options", "tradeoffs", "assumptions", "open_questions", "next_actions", "closing_comments"] as const) {
+      const list = result[section] as { total: number; items: string[] };
+      expect(list.total).toBeGreaterThan(0);
+      expect(list.items.length).toBeGreaterThan(0);
+      expect(list.items.length).toBeLessThanOrEqual(list.total);
+      for (const item of list.items) expect(item.length).toBeLessThanOrEqual(90);
+    }
+    expect(String(result.hint)).toBe("Call again with section=<name> for the full text");
+    expect((JSON.stringify(result) ?? "").length).toBeLessThanOrEqual(MAX_OUTPUT_CHARACTERS);
   });
 
   it("serves the same readout text the human copy action produces", () => {

@@ -103,16 +103,29 @@ export function readoutFromSections(
   return sections.map((section) => readoutSectionToText(readout, section)).join("\n\n");
 }
 
-/** Short summary used when the full readout does not fit in one tool result. */
-export function readoutSummary(readout: Readout): string {
-  const parts = [
-    readout.recommendation.divided
-      ? `Board divided. ${readout.recommendation.summary.trim()}`
-      : readout.recommendation.summary.trim(),
-  ];
-  const firstAction = readout.nextActions[0]?.trim();
-  if (firstAction) parts.push(`First next action: ${firstAction}`);
-  const firstQuestion = readout.openQuestions[0]?.trim();
-  if (firstQuestion) parts.push(`Top open question: ${firstQuestion}`);
-  return parts.join(" ");
+/** The raw list behind a list-shaped section, for the compact readout view. */
+export function readoutSectionItems(readout: Readout, section: ReadoutSection): string[] {
+  switch (section) {
+    case "options":
+      return readout.options;
+    case "tradeoffs":
+      return readout.tradeoffs;
+    case "assumptions":
+      return readout.assumptions;
+    case "open_questions":
+      return readout.openQuestions;
+    case "next_actions":
+      return readout.nextActions;
+    case "closing_comments":
+      return readout.closingComments.map((c) => `${c.memberName}: ${firstSentence(c.text)}`);
+    default:
+      return [];
+  }
+}
+
+/** First sentence of a closing comment, so the compact view keeps the punchline. */
+export function firstSentence(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^.*?[.!?](?=\s|$)/);
+  return (match ? match[0] : trimmed).trim();
 }

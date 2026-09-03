@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIXTURE_PERSONAS } from "@/lib/meeting/fixtures";
+import { DEMO_TRIO, FIXTURE_PERSONAS } from "@/lib/meeting/fixtures";
 import { MeetingSession } from "@/lib/meeting/session";
 
 function activeSession(count = 3) {
@@ -48,5 +48,46 @@ describe("MeetingSession contracts", () => {
     expect(session.getReadout()).toMatchObject({ ok: false, error: { code: "NOT_READY" } });
     session.joinGuest("Codex");
     expect(session.guestAddress("Nobody", "Question?")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+});
+
+describe("review fixes", () => {
+  function live() {
+    const s = new MeetingSession();
+    DEMO_TRIO.forEach((p) => s.toggleMember(p));
+    s.setBriefing("Should we eliminate free?");
+    s.startMeeting();
+    s.engineSetPhase("discussion");
+    return s;
+  }
+
+  it("rejects guest names that impersonate the chair, system, or a member", () => {
+    const s = live();
+    for (const name of ["You", "system", "Secretary", "Daniel Ek", "DHH", "lulu"]) {
+      const r = s.joinGuest(name);
+      expect(r.ok, name).toBe(false);
+    }
+    expect(s.joinGuest("Codex").ok).toBe(true);
+  });
+
+  it("marks a still-streaming synthesis as cancelled when the chair ends the meeting", () => {
+    const s = live();
+    expect(s.joinGuest("Codex").ok).toBe(true);
+    const r = s.requestSynthesis("guest");
+    expect(r.ok).toBe(true);
+    s.endMeeting();
+    const entry = s.getState().transcript.find((e) => e.kind === "synthesis");
+    expect(entry && entry.kind === "synthesis" && !entry.streaming && entry.failed).toBe(true);
+    expect(s.getState().queue).toEqual([]);
+  });
+
+  it("labels guest and chair lines for the model transcript", () => {
+    const s = live();
+    s.sendChairMessage("Some context");
+    s.joinGuest("Codex");
+    s.guestContribute("Seven of ten wins came through free.");
+    const names = s.transcriptLines().map((l) => l.speakerName);
+    expect(names).toContain("Chair (founder)");
+    expect(names).toContain("Codex (external agent)");
   });
 });

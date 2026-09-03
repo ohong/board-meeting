@@ -34,7 +34,7 @@ Convene a board of AI advisers modeled on David Senra's guests, chair a live mee
 ## Testing instructions (private field)
 
 1. Open the live URL in the ChatGPT desktop app's built-in browser (Settings → Browser → Permissions → Enable site tools; model GPT-5.6 Sol or Terra) or in Chrome 149+ with `chrome://flags/#enable-webmcp-testing` enabled.
-2. Select Daniel Ek, David Heinemeier Hansson, and Lulu Cheng Meservey (or any 3–6). Click "Use example decision", then "Start Board Meeting".
+2. Select David Heinemeier Hansson, Daniel Ek, and Lulu Cheng Meservey (or any 3–6). Selection order sets seat order, and the first seat opens the discussion. Click "Use example decision", then "Start Board Meeting".
 3. Watch the three seats form independent positions, then discuss. Type `@Lulu how would you explain this change to users?` to call on a member.
 4. Click "Invite your agent", copy the invitation, and paste it into the agent. In the ChatGPT desktop app, open the page with `@Browser <url>` first. The agent will call `inspect_board_meeting`, `join_board_meeting`, `contribute_to_board_meeting`, `address_board_member`, and `request_board_synthesis`; each is visible in the room.
 5. Click "End Meeting". The readout appears; the agent can call `get_board_meeting_readout` to retrieve it (before that it returns `NOT_READY`).
@@ -48,13 +48,20 @@ Convene a board of AI advisers modeled on David Senra's guests, chair a live mee
 | 0:00 | Selection screen, search "Ek", "DHH", "Lulu"; select. | "Most founders never get the board they'd want. This lets you convene one." |
 | 0:15 | Briefing: click "Use example decision", skim, "Start Board Meeting". | "Should we kill our free tier? Here's the real context." |
 | 0:25 | Seats pulse "Thinking…", flip to Ready. | "Each adviser forms an independent view before hearing anyone else. No groupthink." |
-| 0:40 | Discussion streams; DHH opens, Daniel rebuts (interruption marker), reactions on seats. | "Separate agents, real disagreement." Then type `@Lulu how do we explain a free-tier change without losing user trust?` Lulu answers directly. |
+| 0:40 | Discussion streams; the first-selected member opens (select DHH first if you want "kill it" to open the room), a peer rebuts (interruption marker), reactions on seats. | "Separate agents, real disagreement." Then type `@Lulu how do we explain a free-tier change without losing user trust?` Lulu answers directly. |
 | 1:15 | Click "Invite your agent", copy, paste into Codex (ChatGPT desktop browser, already on the page). | "My own agent knows something the board doesn't." Codex inspects, joins (seat materializes), contributes the enterprise-referral context, asks Daniel, Daniel answers, Codex requests a synthesis. |
 | 1:45 | Click "End Meeting". Readout appears. Codex calls `get_board_meeting_readout`; the page shows "Retrieved by … via WebMCP". | "The human ends the meeting; the agent carries away the same memo." |
 
 Codex-only private context to seed in the Codex conversation BEFORE recording (the app must not contain it):
 
 > Seven of our last ten enterprise wins first entered through a free workspace shared by an existing user. Those accounts now represent 22% of ARR.
+
+## Verification log (2026-09-03)
+
+- Mock golden path in Chrome 151 with `#enable-webmcp-testing`: all six tools discovered via `document.modelContext.getTools()` and executed via `executeTool`; guest seat, contribution, addressed answer, synthesis, and readout retrieval all visible in the room.
+- Live golden path (gpt-5.6-terra / luna / sol): opening positions in parallel (~5–7 s), member turns 2–3 s each, reaction pass 1–3 s, Daniel Ek answered Codex using the enterprise-referral context, synthesis attributed views by name, readout retrieved through the tool after End Meeting.
+- Note for Chrome's `executeTool`: it accepts the input as a JSON string (a plain object was rejected with "Failed to parse input arguments"). Agents (ChatGPT/Codex) handle this themselves.
+- `next build` passes; `bun run test` 28 tests; lint clean.
 
 ## Known limitations to state honestly
 

@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const input = closingCommentSchema.parse(await request.json()); const persona = await getPersona(input.slug);
     if (!persona) return Response.json({ error: `Unknown persona: ${input.slug}` }, { status: 404 });
-    const result = await generateText({ model: boardModel(), system: persona.instructions, prompt: memberPrompt(input, "Give one closing comment of at most 60 words: your most important recommendation, concern, or next action."), maxOutputTokens: 100, providerOptions: lowReasoning, abortSignal: request.signal });
+    const result = await generateText({ model: boardModel(), system: persona.instructions, prompt: memberPrompt(input, "CLOSING COMMENT\nThe chair has ended the meeting. Give one closing comment of at most 45 words, plain prose, in your own voice: your single most important recommendation, unresolved concern, or next action for the chair. Do not summarize the meeting."), maxOutputTokens: 90, providerOptions: lowReasoning, abortSignal: request.signal });
     return Response.json({ text: result.text.trim() });
   } catch (error) { return apiError(error); }
 }

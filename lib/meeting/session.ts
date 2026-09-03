@@ -154,7 +154,7 @@ export class MeetingSession {
         if (!e.text.trim()) continue;
         lines.push({
           speakerId: e.speakerId,
-          speakerName: e.speakerName,
+          speakerName: e.speakerRole === "guest" ? `${e.speakerName} (external agent)` : e.speakerRole === "chair" ? "Chair (founder)" : e.speakerName,
           role: e.speakerRole,
           text: e.text,
           addressedName: e.addressedName,
@@ -336,7 +336,11 @@ export class MeetingSession {
       endedAt: now,
       readoutStatus: "generating",
       transcript: [
-        ...s.transcript,
+        ...s.transcript.map((e) =>
+          e.kind === "synthesis" && e.streaming
+            ? { ...e, streaming: false, failed: true, text: e.text || "Synthesis cancelled: the chair ended the meeting." }
+            : e,
+        ),
         {
           kind: "event",
           id: nextId("ev"),
@@ -400,8 +404,14 @@ export class MeetingSession {
   }
 
   joinGuest(name: string): ActionResult<{ name: string; seat: string }> {
-    const display = (name ?? "").trim().slice(0, 40);
+    const display = (name ?? "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
     if (!display) return err("INVALID_INPUT", "Provide the display name you know yourself by.");
+    const lower = display.toLowerCase();
+    const reserved = ["you", "chair", "the chair", "system", "secretary", "board", "host", "moderator"];
+    const taken = this.members().flatMap((m) => [m.persona.name, m.persona.shortName, m.persona.mention, m.id]).map((n) => n.toLowerCase());
+    if (reserved.includes(lower) || taken.includes(lower)) {
+      return err("INVALID_INPUT", `"${display}" is a name already used in this room. Join under the name you know yourself by (for example your product name).`);
+    }
     if (!this.isLive()) {
       return err("NOT_AVAILABLE", `The meeting is ${this.state.phase}; guests can join only during an active meeting.`);
     }

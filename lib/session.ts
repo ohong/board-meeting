@@ -535,16 +535,18 @@ export function createMeetingSession(options: SessionOptions = {}) {
       return { ok: false, message: "There is no meeting in session." };
     }
 
-    return queued(async () => {
-      addEvent({ kind: "message", speakerId: "chair", speakerName: "You", text: trimmed });
-      const mentioned = extractMention(trimmed, state.selected);
-      if (mentioned) {
-        mentionQueue = [mentioned, ...mentionQueue.filter((slug) => slug !== mentioned)];
-        passed.delete(mentioned);
-      }
-      state.awaitingChair = false;
-      emit();
+    // The chair's words go on the record immediately, even mid-turn. Only the board's
+    // response waits for the member currently speaking to finish.
+    addEvent({ kind: "message", speakerId: "chair", speakerName: "You", text: trimmed });
+    const mentioned = extractMention(trimmed, state.selected);
+    if (mentioned) {
+      mentionQueue = [mentioned, ...mentionQueue.filter((slug) => slug !== mentioned)];
+      passed.delete(mentioned);
+    }
+    state.awaitingChair = false;
+    emit();
 
+    return queued(async () => {
       if (mentioned) {
         await speak(mentioned, "answerDirect", trimmed, "You");
         mentionQueue = mentionQueue.filter((slug) => slug !== mentioned);

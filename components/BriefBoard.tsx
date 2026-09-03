@@ -28,7 +28,7 @@ export function BriefBoard({ session, state }: { session: MeetingSession; state:
           const member = session.catalog.find((entry) => entry.slug === slug)!;
           return (
             <div key={slug} className="flex items-center gap-2.5">
-              <LetterMark initials={member.initials} size="sm" />
+              <LetterMark initials={member.initials} seed={member.slug} size="sm" />
               <div className="leading-tight">
                 <div className="text-[12.5px] font-medium">{member.name}</div>
                 <div className="text-[10.5px] text-[var(--faint)]">{member.role}</div>

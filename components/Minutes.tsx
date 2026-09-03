@@ -36,6 +36,19 @@ export function Minutes({ transcript }: { transcript: TranscriptEvent[] }) {
 
       {transcript.map((event) => {
         if (event.kind === "system") {
+          // The secretary's synthesis is a deliverable, not an aside, so it gets a card.
+          // Everything else the meeting record notes stays a quiet one-line event.
+          if (event.speakerId === "secretary") {
+            return (
+              <div
+                key={event.id}
+                className="minutes-row rounded-[6px] border border-[var(--hairline-strong)] bg-[oklch(24%_0.028_55)] px-4 py-3"
+              >
+                <div className="eyebrow mb-1.5">Interim synthesis</div>
+                <p className="text-[13px] leading-[1.55] text-[var(--ink)]">{event.text}</p>
+              </div>
+            );
+          }
           return (
             <div key={event.id} className="minutes-row flex gap-3 items-start">
               <span className="mt-[7px] h-px w-4 shrink-0 bg-[var(--hairline-strong)]" />

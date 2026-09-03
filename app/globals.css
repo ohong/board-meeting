@@ -173,14 +173,20 @@
 /* ------------------------------------------------------------------- seating */
 
 .letter-mark {
+  /* Overridden per adviser so the table is not six identical discs; see LetterMark.tsx. */
+  --mark-hue: 70;
   border-radius: 50%;
   display: grid;
   place-items: center;
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--cream);
-  background:
-    radial-gradient(circle at 32% 24%, oklch(56% 0.06 72), oklch(30% 0.05 55) 62%, oklch(23% 0.04 50));
+  background: radial-gradient(
+    circle at 32% 24%,
+    oklch(58% 0.065 var(--mark-hue)),
+    oklch(31% 0.05 calc(var(--mark-hue) - 12)) 62%,
+    oklch(23% 0.04 calc(var(--mark-hue) - 18))
+  );
   box-shadow:
     0 0 0 1px oklch(70% 0.05 75 / 0.35),
     0 6px 14px oklch(8% 0.02 55 / 0.55);

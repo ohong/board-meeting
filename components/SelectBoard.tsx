@@ -98,7 +98,7 @@ export function SelectBoard({ session, state }: { session: MeetingSession; state
               }}
             >
               <div className="flex items-center gap-3.5">
-                <LetterMark initials={member.initials} size="md" />
+                <LetterMark initials={member.initials} seed={member.slug} size="md" />
                 <div className="min-w-0">
                   <div className="font-semibold text-[14px] leading-tight">{member.name}</div>
                   <div className="text-[11.5px] text-[var(--muted)] mt-1 leading-snug">{member.role}</div>

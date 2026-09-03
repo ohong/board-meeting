@@ -33,7 +33,7 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
             </h2>
             {state.members.map((member) => (
               <div key={member.slug} className="flex items-center gap-2.5 mb-3.5">
-                <LetterMark initials={member.initials} size="sm" />
+                <LetterMark initials={member.initials} seed={member.slug} size="sm" />
                 <div className="leading-tight">
                   <strong className="block text-[13.5px]">{member.name}</strong>
                   <span className="text-[10.5px] text-[var(--paper-faint)]">{member.role}</span>

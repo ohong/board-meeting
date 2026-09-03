@@ -78,7 +78,7 @@ export function BoardTable({
           title={`${member.name} — ${member.role}. Click to address them.`}
         >
           <div className="mx-auto w-fit">
-            <LetterMark initials={member.initials} />
+            <LetterMark initials={member.initials} seed={member.slug} />
           </div>
           <strong className="seat-name">{member.name}</strong>
           <span className="nameplate">{member.house}</span>

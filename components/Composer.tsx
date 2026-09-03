@@ -72,8 +72,13 @@ export function Composer({
         <textarea
           ref={box}
           value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
-          onFocus={() => onComposingChange(true)}
+          // "Composing" means something is half-written. Clicking into an empty box should
+          // not silence the room until the chair actually has something to say.
+          onChange={(event) => {
+            onDraftChange(event.target.value);
+            onComposingChange(event.target.value.trim().length > 0);
+          }}
+          onFocus={() => onComposingChange(draft.trim().length > 0)}
           onBlur={() => onComposingChange(false)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {

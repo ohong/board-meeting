@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createMeetingSession, type MeetingSession, type MeetingState } from "@/lib/session";
-import { createDeferredRuntime } from "@/lib/runtime/client";
+import { createDeferredRuntime, NO_KEY_MESSAGE } from "@/lib/runtime/client";
 import { SelectBoard } from "./SelectBoard";
 import { BriefBoard } from "./BriefBoard";
 import { BoardMeeting } from "./BoardMeeting";
@@ -28,6 +28,23 @@ export function BoardApp() {
   const [state, setState] = useState<MeetingState>(() => session.getState());
 
   useEffect(() => session.subscribe(() => setState(session.getState())), [session]);
+
+  // The runtime itself resolves lazily, on the first agent call. Ask once up front too, so a
+  // presenter without a key learns that before they start a meeting rather than after.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/runtime-status")
+      .then((response) => response.json() as Promise<{ live: boolean }>)
+      .then(({ live }) => {
+        if (!cancelled && !live) setSetupMessage(NO_KEY_MESSAGE);
+      })
+      .catch(() => {
+        if (!cancelled) setSetupMessage(NO_KEY_MESSAGE);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onSupportChange = useCallback((supported: boolean) => setWebmcpSupported(supported), []);
 

@@ -1,0 +1,31 @@
+{
+  "slug": "david-heinemeier-hansson",
+  "name": "David Heinemeier Hansson",
+  "shortName": "DHH",
+  "mention": "DHH",
+  "role": "37signals co-founder · small teams, staying independent",
+  "company": "37signals",
+  "portrait": "/portraits/david-heinemeier-hansson.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/david-heinemeier-hansson",
+  "episodeDate": "2026-07-26",
+  "lenses": [
+    "pricing and packaging",
+    "cutting scope and saying no",
+    "small profitable teams",
+    "staying independent of investors",
+    "cost discipline"
+  ],
+  "searchTerms": [
+    "dhh",
+    "37signals",
+    "basecamp",
+    "hey",
+    "ruby on rails",
+    "bootstrapped",
+    "pricing",
+    "free tier",
+    "small team",
+    "profit"
+  ],
+  "voiceSample": "Fine, that's one path — what I object to is the idea it's the only one."
+}

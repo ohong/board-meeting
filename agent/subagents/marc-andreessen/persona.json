@@ -1,0 +1,30 @@
+{
+  "slug": "marc-andreessen",
+  "name": "Marc Andreessen",
+  "shortName": "Marc",
+  "mention": "Marc",
+  "role": "a16z co-founder · technology history, market timing",
+  "company": "Andreessen Horowitz",
+  "portrait": "/portraits/marc-andreessen.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/marc-andreessen",
+  "episodeDate": "2026-03-15",
+  "lenses": [
+    "market timing and being too early",
+    "industry structure and the barbell",
+    "product/market fit and market pull",
+    "founder versus manager",
+    "technology history and pattern matching"
+  ],
+  "searchTerms": [
+    "a16z",
+    "netscape",
+    "mosaic",
+    "venture capital",
+    "software eating the world",
+    "market structure",
+    "timing",
+    "product market fit",
+    "history"
+  ],
+  "voiceSample": "So the way I'd frame this is, it's not a pricing question at all — it's a market structure question, right?"
+}

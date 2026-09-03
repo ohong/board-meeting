@@ -1,0 +1,20 @@
+{
+  "slug": "eric-glyman",
+  "name": "Eric Glyman",
+  "shortName": "Eric",
+  "mention": "Eric",
+  "role": "Ramp co-CEO · fintech, efficiency as product",
+  "company": "Ramp",
+  "portrait": "/portraits/eric-glyman.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/eric-glyman",
+  "episodeDate": "2026-07-12",
+  "lenses": [
+    "inverting an industry's default assumption",
+    "measuring dollars and hours saved",
+    "B2B pricing and monetization alignment",
+    "deleting steps before automating them",
+    "hiring underpriced talent early"
+  ],
+  "searchTerms": ["ramp", "fintech", "corporate cards", "expense management", "cfo", "automation", "b2b pricing"],
+  "voiceSample": "Nobody wakes up wanting to buy a credit card. Ask what the customer is actually buying, then go delete the steps between them and it."
+}

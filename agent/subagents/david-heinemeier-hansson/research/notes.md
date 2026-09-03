@@ -95,6 +95,12 @@ claim in either direction — the giver owes nothing and can ignore the feedback
 He is explicit that customers *do* legitimately get influence, in aggregate, because if nobody buys
 what you make the business ends. That is the exchange he calls tolerable and fair.
 
+**Important correction from supplemental research (see §13).** This section reads his free-user
+reasoning off a principle he states about *unpaid feedback on open-source gifts*, and the first draft
+of the persona extended it straight to SaaS free tiers. The documented record points the other way:
+37signals removed Basecamp's free plan in 2015 and DHH has since called that partly hubris. The
+"unpaid claim" idea is real and retained, but it is subordinate to §13.
+
 ## 5. Costs, profit, and the aesthetics of an efficient business
 
 Senra reads him the Carnegie line about prices and profits being cyclical while cost savings are
@@ -263,3 +269,38 @@ that cost the company roughly a third of its staff rather than run a business he
 and did not reverse it under heavy public criticism. That disposition — willing to pay a large
 visible price for a decision he believes is right, and unmoved by an angry audience — is carried into
 the persona without any of the surrounding content.
+
+
+## 13. Free plans: what 37signals actually did (supplemental, decisive)
+
+The transcript never covers this and it is the crux of the demo decision, so it came from primary
+sources logged in `sources.md` §2. Basecamp's free plan is a loop:
+
+- **2004** — Basecamp launches *with* a free one-project plan.
+- **2015** — free is removed in favour of one flat price ($99, any headcount), on the strength of a
+  rigorous six-month A/B test that said flat-and-paid won.
+- **Nov 2019** — Basecamp Personal, a free plan, is introduced.
+- **~2022** — a $15/seat plan appears alongside a $299/month unlimited tier.
+- **Mar 2025** — free is brought back, and DHH publicly calls the 2015 decision partly hubris.
+
+**His stated reasoning for why the 2015 test misled them**, which is the transferable part: the
+experiment was right for six months and wrong for ten years. It could not see the second-order
+effect — fewer signups meant fewer people getting invited into somebody else's Basecamp, so an entire
+cohort grew up never having encountered the product at all. A 90-day conversion rate cannot measure a
+multi-year seeding mechanism. Hence the persona's test: **ask what a free account seeds, not what it
+converts**, and ask over what horizon the number was measured.
+
+**The carve-out that keeps him from being a blanket free-tier defender.** He does not think free is
+always right; he thinks it depends on marginal cost per customer and on whether free accounts seed
+new teams. He has published the figure that each customer cost roughly $30/year in operating costs,
+and HEY — where that cost is real and where the @hey.com namespace is scarce — has never had a free
+tier and, in his view, never should. Basecamp, where a free workspace is cheap and multiplayer,
+is the opposite case. So his question to a founder is per-product: which one are you?
+
+**Adjacent pricing practice, same sources.** Flat and published over per-seat; a deliberate cap on
+what anyone can pay them so they never become a company chasing whales; "would I pull out my own
+credit card at this price?" as the test; and, from 37signals' long-stated practice, warning customers
+well ahead of a price change (~90 days) and grandfathering the ones already there.
+
+**And his own disclaimer**, which belongs in the blind-spots section: he says outright that there is
+very little wisdom in pricing that generalises into rules applying to everyone all the time.

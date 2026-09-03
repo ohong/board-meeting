@@ -1,0 +1,52 @@
+import { describe, expect, it } from "vitest";
+import { FIXTURE_PERSONAS } from "@/lib/meeting/fixtures";
+import { MeetingSession } from "@/lib/meeting/session";
+
+function activeSession(count = 3) {
+  const session = new MeetingSession();
+  FIXTURE_PERSONAS.slice(0, count).forEach((p) => session.toggleMember(p));
+  session.setBriefing("A consequential decision with enough context.");
+  session.startMeeting();
+  return session;
+}
+
+describe("MeetingSession contracts", () => {
+  it("enforces minimum and maximum board size and notices a seventh selection", () => {
+    const session = new MeetingSession();
+    FIXTURE_PERSONAS.slice(0, 2).forEach((p) => session.toggleMember(p));
+    expect(session.goToBriefing()).toMatchObject({ ok: false, error: { code: "LIMIT" } });
+    FIXTURE_PERSONAS.slice(2, 6).forEach((p) => session.toggleMember(p));
+    const seventh = { ...FIXTURE_PERSONAS[0], slug: "seventh", name: "Seventh Member", shortName: "Seventh" };
+    expect(session.toggleMember(seventh)).toMatchObject({ ok: false, error: { code: "LIMIT" } });
+    expect(session.getState().notice?.text).toContain("at most 6");
+  });
+
+  it("parses short and full-name mentions", () => {
+    const session = activeSession();
+    expect(session.parseMention("What do you think, @DHH?")?.id).toBe("david-heinemeier-hansson");
+    expect(session.parseMention("Please answer, @Daniel Ek")?.id).toBe("daniel-ek");
+  });
+
+  it("only exposes finalization through the chair action during a live meeting", () => {
+    const session = new MeetingSession();
+    expect(session.endMeeting()).toMatchObject({ ok: false, error: { code: "NOT_ALLOWED" } });
+    const active = activeSession();
+    expect(active.endMeeting()).toEqual({ ok: true });
+    expect(active.getState().phase).toBe("closing");
+  });
+
+  it("prevents a guest joining before start or twice", () => {
+    const session = new MeetingSession();
+    expect(session.joinGuest("Codex")).toMatchObject({ ok: false, error: { code: "NOT_AVAILABLE" } });
+    const active = activeSession();
+    expect(active.joinGuest("Codex")).toMatchObject({ ok: true });
+    expect(active.joinGuest("Another")).toMatchObject({ ok: false, error: { code: "ALREADY_JOINED" } });
+  });
+
+  it("reports readout not ready before end and rejects unknown guest address targets", () => {
+    const session = activeSession();
+    expect(session.getReadout()).toMatchObject({ ok: false, error: { code: "NOT_READY" } });
+    session.joinGuest("Codex");
+    expect(session.guestAddress("Nobody", "Question?")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+});

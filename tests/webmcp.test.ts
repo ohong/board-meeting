@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { boardTools, registerBoardTools } from "../lib/webmcp";
 import { invitationPrompt } from "../lib/example";
 import { formatReadout } from "../lib/format";
+import { createMockRuntime } from "../lib/runtime/mock";
+import type { BoardRuntime } from "../lib/types";
 import { newSession, seatDemoBoard } from "./helpers";
 
 const TOOL_NAMES = [
@@ -206,5 +208,89 @@ describe("the external agent's sequence", () => {
     const guestIndex = transcriptTexts.indexOf(CODEX_CONTEXT);
     expect(guestIndex).toBeGreaterThan(0);
     expect(guestIndex).toBeLessThan(transcriptTexts.length - 1);
+  });
+});
+
+describe("the guest agent and a live turn", () => {
+  it("queues a contribution that arrives mid-stream and applies it after that turn", async () => {
+    const mock = createMockRuntime();
+    let releaseTurn: (() => void) | null = null;
+    let streamStarted: () => void = () => {};
+    // Resolves the moment the board member begins speaking.
+    const turnStarted = new Promise<void>((resolve) => {
+      streamStarted = resolve;
+    });
+
+    const slowRuntime: BoardRuntime = {
+      ...mock,
+      async publicTurn(input, onDelta) {
+        const turn = await mock.publicTurn(input);
+        onDelta?.(turn.text.slice(0, 20));
+        streamStarted();
+        await new Promise<void>((resolve) => {
+          releaseTurn = resolve;
+        });
+        onDelta?.(turn.text.slice(20));
+        return turn;
+      },
+    };
+
+    const session = newSession({ runtime: slowRuntime });
+    seatDemoBoard(session);
+    await session.startMeeting();
+    session.join("Codex");
+
+    const turn = session.takeOneTurn();
+    await turnStarted;
+
+    // The guest contributes while a member is mid-sentence.
+    const contribution = session.contribute(CODEX_CONTEXT);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const midStream = session.getState().transcript.filter((event) => event.kind === "message");
+    expect(midStream.filter((event) => event.streaming)).toHaveLength(1);
+    expect(midStream.some((event) => event.text === CODEX_CONTEXT)).toBe(false);
+
+    releaseTurn!();
+    await turn;
+    await contribution;
+
+    const after = session.getState().transcript.filter((event) => event.kind === "message");
+    expect(after.some((event) => event.streaming)).toBe(false);
+    // The contribution landed after the completed turn, not interleaved into it.
+    expect(after.at(-1)?.text).toBe(CODEX_CONTEXT);
+    expect(after.at(-2)?.streaming).toBeFalsy();
+  });
+
+  it("seats the guest during opening positions but holds questions until discussion opens", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+
+    let joined: ReturnType<typeof session.join> | null = null;
+    let askedDuringOpening: Awaited<ReturnType<typeof session.address>> | null = null;
+    const unsubscribe = session.subscribe(() => {
+      if (session.getState().meetingPhase === "opening" && !joined) {
+        joined = session.join("Codex");
+      }
+    });
+
+    const starting = session.startMeeting();
+    await starting;
+    unsubscribe();
+
+    expect(joined).toBeTruthy();
+    expect(joined!.ok).toBe(true);
+
+    // Replay the guard directly: during opening, a question is refused with a reason.
+    const fresh = newSession();
+    seatDemoBoard(fresh);
+    fresh.setBriefing(fresh.getState().briefing);
+    const opening = fresh.startMeeting();
+    fresh.join("Codex");
+    askedDuringOpening = await fresh.address("Daniel Ek", "What do you make of this?");
+    await opening;
+
+    expect(askedDuringOpening.ok).toBe(false);
+    expect(askedDuringOpening.message).toMatch(/independent positions/i);
   });
 });

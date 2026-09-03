@@ -2,6 +2,7 @@ import { streamText, generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { memberSystemPrompt, modelFor, secretarySystemPrompt } from "../personas";
 import { fallbackReadout, localOpeningPosition } from "./fallbacks";
+import { consumeTurnStream } from "./turn-stream";
 import {
   closingCommentPrompt,
   openingPositionPrompt,
@@ -13,7 +14,6 @@ import {
 import type {
   BoardRuntime,
   ExecutiveReadout,
-  MemberTurn,
   OpeningPosition,
   ReadoutInput,
   SynthesisInput,
@@ -102,39 +102,7 @@ export function createLiveRuntime(): BoardRuntime {
         prompt: publicTurnPrompt(input),
         maxOutputTokens: 400,
       });
-
-      // The control line arrives first. Hold the stream back until it is complete so the
-      // room never sees the orchestration metadata, then stream the spoken turn.
-      let buffered = "";
-      let controlDone = false;
-      let emitted = "";
-      let passed = false;
-
-      for await (const delta of result.textStream) {
-        buffered += delta;
-        if (!controlDone) {
-          const newline = buffered.indexOf("\n");
-          const looksLikeControlLine = buffered.trimStart().startsWith("[");
-          if (looksLikeControlLine && newline === -1) continue;
-          if (!looksLikeControlLine && buffered.length < 2) continue;
-          controlDone = true;
-          if (/^\s*\[\s*pass\s*\]/i.test(buffered)) passed = true;
-          const { rest } = parseControlLine(buffered);
-          emitted = rest;
-          if (rest && !passed) onDelta?.(rest);
-          continue;
-        }
-        emitted += delta;
-        if (!passed) onDelta?.(delta);
-      }
-
-      const { directives, rest } = parseControlLine(buffered);
-      if (passed) return { text: "" };
-      // If nothing was emitted mid-stream (a very short reply), hand the caller the text now.
-      if (!emitted && rest) onDelta?.(rest);
-      // An empty body is the member passing, which the engine handles; it is not a failure.
-      const text = (emitted || rest).trim();
-      return { text, ...directives } satisfies MemberTurn;
+      return consumeTurnStream(result.textStream, onDelta);
     },
 
     async closingComment(input) {

@@ -29,10 +29,16 @@ reply with exactly [pass] and nothing else. Passing is respectable. Filling airt
 
 const REACTIONS: ReactionKind[] = ["agree", "concern", "disagree", "want_to_respond"];
 
-/** Splits a member's raw output into directives and the spoken text. */
+/**
+ * Splits a member's raw output into directives and the spoken text.
+ *
+ * `rest` keeps its trailing whitespace: this runs against a partially received stream, and
+ * trimming the end would silently glue the last word to the next chunk. Callers trim once
+ * the turn is complete.
+ */
 export function parseControlLine(raw: string): { directives: TurnDirectives; rest: string } {
   const match = /^\s*\[([^\]\n]*)\]\s*\n?/.exec(raw);
-  if (!match) return { directives: {}, rest: raw.trim() };
+  if (!match) return { directives: {}, rest: raw.trimStart() };
 
   const directives: TurnDirectives = {};
   for (const part of match[1].split(";")) {
@@ -47,7 +53,7 @@ export function parseControlLine(raw: string): { directives: TurnDirectives; res
       if (REACTIONS.includes(reaction)) directives.reaction = reaction;
     }
   }
-  return { directives, rest: raw.slice(match[0].length).trim() };
+  return { directives, rest: raw.slice(match[0].length).trimStart() };
 }
 
 /** How much transcript a member sees. Enough for continuity, bounded for latency. */

@@ -1,0 +1,30 @@
+{
+  "slug": "sam-altman",
+  "name": "Sam Altman",
+  "shortName": "Sam",
+  "mention": "Sam",
+  "role": "OpenAI CEO · frontier AI, compute at scale",
+  "company": "OpenAI",
+  "portrait": "/portraits/sam-altman.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/sam-altman",
+  "episodeDate": "2026-08-23",
+  "lenses": [
+    "non-consensus bets",
+    "ruthless focus and killing good ideas",
+    "iterative deployment and real-world feedback",
+    "founder and talent selection",
+    "compute, capital, and scale"
+  ],
+  "searchTerms": [
+    "openai",
+    "chatgpt",
+    "ai",
+    "y combinator",
+    "yc",
+    "compute",
+    "agi",
+    "focus",
+    "non-consensus"
+  ],
+  "voiceSample": "I think you're solving for the wrong thing — what is actually growing here on its own, without you pushing it?"
+}

@@ -1,0 +1,20 @@
+{
+  "slug": "tobi-lutke",
+  "name": "Tobi Lütke",
+  "shortName": "Tobi",
+  "mention": "Tobi",
+  "role": "Shopify CEO · systems thinking, developer-founder",
+  "company": "Shopify",
+  "portrait": "/portraits/tobi-lutke.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/tobi-lutke",
+  "episodeDate": "2026-01-18",
+  "lenses": [
+    "company design as an engineering problem",
+    "differentiation from first axioms",
+    "product craft and detail",
+    "high-agency hiring and incentive design",
+    "tooling, leverage, and AI"
+  ],
+  "searchTerms": ["shopify", "ecommerce", "systems thinking", "trust battery", "tooling", "canada", "merchants"],
+  "voiceSample": "Every company is terrible, including mine — that is good news, it just means tomorrow's version gets to be better."
+}

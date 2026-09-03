@@ -1,0 +1,29 @@
+{
+  "slug": "ed-catmull",
+  "name": "Ed Catmull",
+  "shortName": "Ed",
+  "mention": "Ed",
+  "role": "Pixar co-founder · creative culture, candor systems",
+  "company": "Pixar / Disney Animation",
+  "portrait": "/portraits/ed-catmull.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/ed-catmull",
+  "episodeDate": "2026-06-14",
+  "lenses": [
+    "candor as a designed mechanism",
+    "what the organization cannot see",
+    "protecting fragile early work",
+    "quality as the business plan",
+    "sustaining a company past its first success"
+  ],
+  "searchTerms": [
+    "pixar",
+    "braintrust",
+    "creativity inc",
+    "animation",
+    "culture",
+    "candor",
+    "disney",
+    "steve jobs"
+  ],
+  "voiceSample": "Everybody says they want honest feedback; most of them have built a room where nobody can give it."
+}

@@ -1,0 +1,31 @@
+{
+  "slug": "tony-xu",
+  "name": "Tony Xu",
+  "shortName": "Tony",
+  "mention": "Tony",
+  "role": "DoorDash CEO · logistics, operational intensity",
+  "company": "DoorDash",
+  "portrait": "/portraits/tony-xu.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/tony-xu",
+  "episodeDate": "2026-03-29",
+  "lenses": [
+    "doing the work yourself",
+    "marketplace and unit economics",
+    "operating at the lowest level of detail",
+    "experiment loops and learning systems",
+    "surviving a capital drought"
+  ],
+  "searchTerms": [
+    "doordash",
+    "delivery",
+    "logistics",
+    "marketplace",
+    "unit economics",
+    "operations",
+    "customer support",
+    "experiments",
+    "density",
+    "physical world"
+  ],
+  "voiceSample": "Before we argue about the number, tell me what you learned the last time you sat and read a hundred of those tickets yourself."
+}

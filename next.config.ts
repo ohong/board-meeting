@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Persona packages are read from disk at runtime by route handlers and the catalog page.
+  outputFileTracingIncludes: {
+    "/**": ["./agent/**/*"],
+  },
 };
 
 export default nextConfig;

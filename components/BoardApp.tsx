@@ -64,7 +64,7 @@ export function BoardApp() {
   return (
     <div className="min-h-screen flex flex-col">
       {setup && view.runtimeId === "mock" ? (
-        <div className="px-6 py-2 text-center text-xs text-[var(--brass)] border-b border-[oklch(50%_0.04_70_/_0.25)]">
+        <div className="px-6 py-2 text-center text-[11px] tracking-[0.06em] text-[var(--brass)] border-b border-[oklch(50%_0.04_70_/_0.28)] bg-[oklch(14%_0.02_55)]">
           {setup}
         </div>
       ) : null}

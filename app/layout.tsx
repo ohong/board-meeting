@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import { Fraunces, Instrument_Sans, Newsreader } from "next/font/google";
+import { Instrument_Sans, Newsreader, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const instrument = Instrument_Sans({
@@ -32,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${instrument.variable} ${newsreader.variable} h-full antialiased`}
+      className={`${playfair.variable} ${instrument.variable} ${newsreader.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--ink)]">{children}</body>
     </html>

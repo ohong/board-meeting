@@ -1,6 +1,6 @@
 # Board Meeting MVP demo runbook
 
-This checklist rehearses the exact two-minute path in `mvp-specs.md`. It distinguishes deterministic local evidence from the live OpenAI/Eve gate so a mock pass is never reported as a live pass.
+This checklist rehearses the intended two-minute path in `mvp-specs.md`. It distinguishes deterministic local evidence from the live OpenAI/Eve gate so a mock pass is never reported as a live pass. Current live latency exceeds the specification's presentation targets; use the record below when deciding whether to demo live or use the deterministic rehearsal.
 
 ## Preflight
 
@@ -39,6 +39,10 @@ On 2026-09-03, the final deterministic mock completed five consecutive fresh bro
 
 All five began empty, exposed no pre-end readout, produced the required eight sections, avoided horizontal overflow, and logged no browser errors. The six-seat 1024 × 800 stress pass also kept the expanded brief and guest seat fully inside the room.
 
-The final page registered exactly the six expected tools in Codex's in-app browser. Stateful native invocation must be repeated with the live runtime after the key is installed; tool discovery alone is not recorded as a WebMCP acceptance pass.
+The final page registered exactly the six expected tools in Codex's in-app browser.
 
-Live model timing, persona distinctness, and the five consecutive live rehearsals remain pending until the local API key is available. Record those separately; do not replace the mock measurements above.
+On 2026-09-04, five consecutive full live browser meetings completed with the real OpenAI runtime. Each produced distinct Daniel Ek, David Heinemeier Hansson, and Lulu Cheng Meservey contributions; honored a typed `@Lulu` turn; admitted Codex through WebMCP; incorporated guest evidence; routed a WebMCP question to Daniel; generated an interim synthesis; and returned all eight readout sections with one closing per member. The displayed Copy action and the WebMCP `readoutText` were byte-identical in those runs.
+
+After the routing model was hardened, a final clean live run again completed the opening round and final readout with three closings and `lastError: null`. A 12-call concurrent long-envelope stress check also passed without a routing-contract failure. The server recovered one transient OpenAI `ECONNRESET` internally during the final run without a visible fallback.
+
+The live timing target is not met. Across the five earlier full live rehearsals, first speech arrived in 25–29 seconds and end-to-readout took 43–67 seconds. The final shipping-model smoke was slower: first speech arrived within 45 seconds and end-to-readout took about 90 seconds. Treat this as a known demo-performance caveat, not as evidence for the aspirational 8-second/10-second targets.

@@ -81,7 +81,7 @@ We considered placing fixed delays inside the mock runtime or session defaults. 
 **Status:** accepted
 **Decision maker:** Codex, independently within the approved MVP implementation
 
-Each live capability starts a fresh Eve root session carrying an immutable, encoded route. The root may call only the authored `board_runtime` workflow; that workflow invokes exactly one declared adviser or the unseen secretary in its own child session. The API accepts a result only when the event record proves the one expected workflow call, the exact expected child identity, and a completed value matching the capability's closed schema. Public turns over 90 words fail validation and enter the session engine's existing retry path. Production server-to-Eve calls use same-project Vercel OIDC.
+Each live capability starts a fresh Eve root session carrying an immutable explicit route. The root may call only the authored `board_runtime` workflow; that workflow invokes exactly one declared adviser or the unseen secretary in its own child session. The API accepts a result only when the event record proves the one expected workflow call, the exact expected child identity, and a completed value matching the capability's closed schema. Public turns are deterministically constrained to 90 words before schema validation. Production server-to-Eve calls are prepared to use same-project Vercel OIDC after the currently deferred production identity and abuse-control gate exists.
 
 We considered exposing 36 separate Eve roots and calling OpenAI directly from the application. Separate roots remove one routing hop, but duplicate deployment and authorization policy across the roster. Direct AI SDK calls are simpler, but do not create auditable Eve child sessions and would violate the separate-agent requirement. The single routing root adds one small model-directed tool step, but centralizes policy while retaining independently configured, discoverable adviser contexts.
 
@@ -174,3 +174,39 @@ We considered making the entire agenda folio the toggle and letting it grow over
 The credential-backed member-turn endpoint requires both an exact same-origin `Origin` header and `Sec-Fetch-Site: same-origin`, and a server-controlled runtime gate permits it only in Next development or tests outside Vercel when the request URL is loopback. The development script also binds the listener explicitly to `localhost`, so the browser and Next agree on the origin without exposing a server-funded model route to the LAN. Production and Vercel stay in deterministic mock mode even when a key is present.
 
 We considered treating browser provenance headers or the request hostname as authorization for a public route. Headers can be spoofed, and proxy-derived hostnames are client-influenced. Full user authentication plus abuse controls would support a public live runtime, but both are explicit MVP non-goals. Combining a server-controlled development gate, a loopback request check, and an explicit loopback listener preserves the local challenge demo without pretending request metadata is identity; production live mode is deferred until that real boundary exists.
+
+## 2026-09-03 — Use Eve's static workflow entrypoint
+
+**Status:** accepted
+**Decision maker:** Codex, independently after live-runtime verification
+
+The authored `board_runtime` workflow imports `agent` statically from `eve/workflow`, exactly as Eve's installed workflow guide specifies. Eve 0.51.0's published package points its preferred `eve-source` export at an omitted `src` tree, so the workflow bundler otherwise leaves a CommonJS `require` in its neutral runtime bundle. A narrow TypeScript path mapping resolves that one public import to Eve's shipped distribution entry until the upstream package is corrected. A computed dynamic import avoided the build diagnostic but failed only when the durable workflow executed because that VM had no dynamic-import callback.
+
+We considered importing Eve's distribution path directly from the workflow source. That works around the same package defect, but spreads a version-specific internal path into application code and obscures the documented API. The resolver mapping keeps the authored import stable and centralizes the compatibility shim; its invariant test makes the temporary coupling visible when Eve is upgraded.
+
+## 2026-09-04 — Keep the routing hop auditable and separately bounded
+
+**Status:** accepted
+**Decision maker:** Codex, independently after live-runtime verification
+
+The Eve root uses `gpt-5.6-terra` only to copy one explicit capability, target, and message into the sole authored workflow. The actual advisers and unseen secretary remain separate `gpt-5.6-luna` agents. The application accepts a result only when Eve's event record proves the exact workflow call and child identity. After the audited result, the root emits only the inert `ROUTED` marker so Eve can close normally; the application never relays or interprets it. Local live sessions allow 60 seconds per attempt as a recovery ceiling, while authenticated child speech can stream before the root finishes.
+
+We compared a compact encoded envelope with explicit fields. The encoded form reduced prompt size but occasionally changed by one or more characters during a live tool call and was impossible to audit from logs. Explicit fields are larger, but the root can be held to the caller's exact content and failures are attributable. We also considered a one-use request token backed by process memory; that would be reliable in one local process but would not safely cross the Next and Eve deployment boundary. A stronger dedicated router plus exact field validation was the deploy-safe choice and passed the final 12-call concurrent stress check.
+
+## 2026-09-04 — Isolate concurrent OpenAI requests on HTTP/1.1
+
+**Status:** accepted
+**Decision maker:** Codex, independently after live transport failure analysis
+
+Every authored OpenAI agent shares one provider configured with an `undici` dispatcher that disables HTTP/2. Concurrent meetings still run concurrently; only the transport protocol changes. This prevents one aborted or reset HTTP/2 session from invalidating unrelated in-flight adviser calls. The final clean run recovered one isolated `ECONNRESET` through the provider's normal retry path without surfacing a meeting error.
+
+We considered serializing all model calls. Serialization avoids shared-connection failures but discards the independent parallel opening and closing behavior required by the product. We also considered letting each adviser construct its own default provider. That preserves parallelism but recreates the observed shared HTTP/2 failure mode. A shared HTTP/1.1 dispatcher preserves concurrency and contains connection failures, at the cost of relying on Eve's transitive `undici` dependency until it is promoted to a direct dependency.
+
+## 2026-09-04 — Use structured output only where structure is product data
+
+**Status:** accepted
+**Decision maker:** Codex, independently after repeated live-output verification
+
+Private opening positions and the executive readout remain provider-validated structured values. Public turns, direct answers, closing comments, and interim syntheses are generated as plain speech and wrapped into application schemas at the workflow boundary. Public speech is deterministically constrained to 90 words even when a model ignores the requested limit. The secretary receives the complete transcript for the final readout; adviser turns receive the most recent 24 public events with transport-only ids and timestamps removed.
+
+We considered forcing every capability through provider structured output. That gives a uniform implementation but introduced avoidable structured-output failures for values that are semantically just text. We also considered sending every agent the entire raw transcript. That is faithful but makes routine turns slower and carries irrelevant event metadata. The chosen split keeps data-bearing artifacts strict, speech natural, routine context bounded, and the final record complete.

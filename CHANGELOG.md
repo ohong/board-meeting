@@ -32,3 +32,9 @@
 - Finished the reference-led boardroom polish: contained full-brief inspection, stable streaming scroll, durable-only live announcements, complete participant semantics, local recovery feedback, and no clipped guest seat at 1024 px.
 - Passed five consecutive fresh mock-browser rehearsals across 1024 × 800, 1280 × 800, and 1440 × 900, with no browser errors or horizontal overflow.
 - Kept credential-backed live model calls behind a server-controlled development/test gate, loopback request URLs, and an explicitly `localhost`-bound dev listener; public deployments stay mock-only until they have a real identity and abuse-control boundary.
+- Replaced the board workflow's computed runtime import with Eve's documented static `eve/workflow` import and resolved it to the shipped distribution entry so durable live delegation executes despite Eve 0.51.0's missing published source target.
+- Made the Eve routing contract explicit and fail-closed: one exact capability, target, and message must reach the authored workflow, and the root closes with one inert marker after its audited result.
+- Moved the routing root to `gpt-5.6-terra`, kept all 36 advisers and the unseen secretary on independent `gpt-5.6-luna` agents, and allowed a 60-second recovery ceiling for transient provider variance.
+- Isolated concurrent OpenAI traffic on a shared HTTP/1.1 dispatcher so a failed HTTP/2 session cannot poison unrelated adviser turns.
+- Returned text-only public turns, direct answers, closing comments, and interim syntheses as plain speech, with a deterministic 90-word public boundary; structured output remains limited to private positions and the executive readout.
+- Sent advisers a compact recent transcript while preserving the complete public transcript for the secretary's final readout, and exposed the last recoverable runtime error through the read-only meeting inspector.

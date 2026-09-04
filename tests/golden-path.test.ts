@@ -32,7 +32,11 @@ describe("catalog", () => {
 
 describe("golden path", () => {
   it("runs select, example briefing, start, mentions, webmcp, end, readout, reset", async () => {
-    const session = createMeetingSession({ runtime: createMockRuntime(), autoContinue: false });
+    const session = createMeetingSession({
+      runtime: createMockRuntime(),
+      autoContinue: false,
+      joinDelayMs: 0,
+    });
     expect(session.getState().phase).toBe("select");
 
     demo(session);

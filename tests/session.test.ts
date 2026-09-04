@@ -1,0 +1,320 @@
+import { describe, expect, it } from "vitest";
+import { createMockRuntime } from "../lib/runtime/mock";
+import { createMeetingSession, type MeetingSession } from "../lib/session";
+import type { BoardRuntime, RuntimeTurnInput } from "../lib/types";
+
+function selectDemo(session: MeetingSession) {
+  session.toggleMember("daniel-ek");
+  session.toggleMember("david-heinemeier-hansson");
+  session.toggleMember("lulu-cheng-meservey");
+  session.goToBrief();
+  session.setBriefing("Question: Should we change course?\n\nBriefing: Customer evidence is mixed.");
+}
+
+async function started(runtime: BoardRuntime, options: { joinDelayMs?: number } = {}) {
+  const session = createMeetingSession({ runtime, autoContinue: false, ...options });
+  selectDemo(session);
+  expect((await session.startMeeting()).ok).toBe(true);
+  return session;
+}
+
+function derivedRuntime(overrides: Partial<BoardRuntime> = {}): BoardRuntime {
+  const mock = createMockRuntime();
+  return {
+    ...mock,
+    async formOpeningPosition(input) {
+      return {
+        memberId: input.memberId,
+        recommendation: `Review ${input.briefing}`,
+        reasoning: `Reasoning from ${input.briefing}`,
+        concern: "The evidence is mixed.",
+        question: "What would resolve it?",
+      };
+    },
+    async publicTurn(input) {
+      return { text: `${input.memberName} considered: ${input.briefing}` };
+    },
+    async closingComment(input) {
+      return `${input.memberName} closes from the supplied briefing.`;
+    },
+    ...overrides,
+  };
+}
+
+describe("meeting session serialization and recovery", () => {
+  it("forms private opening positions in parallel", async () => {
+    const base = derivedRuntime();
+    let active = 0;
+    let maxActive = 0;
+    const runtime = derivedRuntime({
+      async formOpeningPosition(input) {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await Promise.resolve();
+        active -= 1;
+        return base.formOpeningPosition(input);
+      },
+    });
+
+    const session = await started(runtime);
+    expect(maxActive).toBe(3);
+    expect(Object.keys(session.getState().positions)).toHaveLength(3);
+  });
+
+  it("does not restart an active meeting when start is requested twice", async () => {
+    const session = createMeetingSession({ runtime: derivedRuntime(), autoContinue: false });
+    selectDemo(session);
+
+    const [first, second] = await Promise.all([session.startMeeting(), session.startMeeting()]);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(false);
+    expect(session.getState().transcript.filter((event) => /views are forming/i.test(event.text))).toHaveLength(1);
+  });
+
+  it("serializes public turns and preserves call order", async () => {
+    const base = derivedRuntime();
+    let active = 0;
+    let maxActive = 0;
+    const releases: Array<() => void> = [];
+    const runtime = derivedRuntime({
+      async publicTurn(input) {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        active -= 1;
+        return base.publicTurn(input);
+      },
+    });
+    const session = await started(runtime, { joinDelayMs: 0 });
+    expect(session.join("Codex").ok).toBe(true);
+
+    const actions = Promise.all([
+      session.pumpOnce(),
+      session.sendUserMessage("@Lulu What should we say?"),
+      session.contribute("One additional piece of context."),
+      session.address("Daniel Ek", "Does the context change your view?"),
+    ]);
+    for (let turn = 0; turn < 3; turn += 1) {
+      while (!releases.length) await Promise.resolve();
+      releases.shift()?.();
+      await Promise.resolve();
+    }
+    await actions;
+
+    expect(maxActive).toBe(1);
+    const messages = session.getState().transcript.filter((event) => event.kind === "message");
+    expect(messages.map((event) => event.speakerId)).toEqual([
+      "daniel-ek",
+      "chair",
+      "lulu-cheng-meservey",
+      "guest",
+      "guest",
+      "daniel-ek",
+    ]);
+    expect(messages.map((event) => event.id)).toEqual([
+      "evt-4",
+      "evt-5",
+      "evt-6",
+      "evt-7",
+      "evt-8",
+      "evt-9",
+    ]);
+  });
+
+  it("retries openings and turns once, then records faithful nonfatal fallbacks", async () => {
+    const base = derivedRuntime();
+    let openingAttempts = 0;
+    let turnAttempts = 0;
+    const runtime = derivedRuntime({
+      async formOpeningPosition(input) {
+        if (input.memberId === "daniel-ek") {
+          openingAttempts += 1;
+          throw new Error("opening unavailable");
+        }
+        return base.formOpeningPosition(input);
+      },
+      async publicTurn(input) {
+        if (input.memberId === "daniel-ek") {
+          turnAttempts += 1;
+          throw new Error("turn unavailable");
+        }
+        return base.publicTurn(input);
+      },
+    });
+    const session = await started(runtime);
+
+    expect(openingAttempts).toBe(2);
+    expect(session.getState().positions["daniel-ek"]?.reasoning).toContain(
+      "Customer evidence is mixed",
+    );
+    expect(await session.pumpOnce()).toBe(true);
+    expect(turnAttempts).toBe(2);
+    expect(session.getState().lastError).toContain("turn unavailable");
+    expect(session.getState().transcript.at(-1)?.text).toMatch(/meeting will continue/i);
+    expect(
+      session
+        .getState()
+        .transcript.some(
+          (event) =>
+            event.kind === "message" &&
+            event.speakerId === "daniel-ek" &&
+            event.text.includes("Recovered from the private opening"),
+        ),
+    ).toBe(true);
+    expect(
+      session.getState().members.find((member) => member.slug === "daniel-ek")?.spokenCount,
+    ).toBe(1);
+    expect(await session.pumpOnce()).toBe(true);
+  });
+
+  it("preserves the every-member-spoke invariant when a final drained turn fails", async () => {
+    const runtime = derivedRuntime({
+      async publicTurn(input) {
+        if (input.memberId === "lulu-cheng-meservey") throw new Error("turn unavailable");
+        return { text: `${input.memberName} spoke before closing.` };
+      },
+    });
+    const session = await started(runtime);
+
+    expect((await session.endMeeting()).ok).toBe(true);
+    const memberMessages = session
+      .getState()
+      .transcript.filter((event) => event.kind === "message" && event.speakerId !== "chair");
+    expect(new Set(memberMessages.map((event) => event.speakerId))).toEqual(
+      new Set(["daniel-ek", "david-heinemeier-hansson", "lulu-cheng-meservey"]),
+    );
+    expect(
+      memberMessages.find((event) => event.speakerId === "lulu-cheng-meservey")?.text,
+    ).toContain("Recovered from the private opening");
+  });
+
+  it("drains every unspoken seat before collecting parallel closing comments", async () => {
+    let activeTurns = 0;
+    let maxTurns = 0;
+    let activeClosings = 0;
+    let maxClosings = 0;
+    const runtime = derivedRuntime({
+      async publicTurn(input) {
+        activeTurns += 1;
+        maxTurns = Math.max(maxTurns, activeTurns);
+        await Promise.resolve();
+        activeTurns -= 1;
+        return { text: `${input.memberName} spoke before closing.` };
+      },
+      async closingComment(input) {
+        activeClosings += 1;
+        maxClosings = Math.max(maxClosings, activeClosings);
+        await Promise.resolve();
+        activeClosings -= 1;
+        return `${input.memberName} closing.`;
+      },
+    });
+    const session = await started(runtime);
+
+    expect((await session.endMeeting()).ok).toBe(true);
+    const speakers = session
+      .getState()
+      .transcript.filter((event) => event.kind === "message")
+      .map((event) => event.speakerId);
+    expect(new Set(speakers)).toEqual(
+      new Set(["daniel-ek", "david-heinemeier-hansson", "lulu-cheng-meservey"]),
+    );
+    expect(maxTurns).toBe(1);
+    expect(maxClosings).toBe(3);
+  });
+
+  it("retries readout once then builds a briefing- and transcript-faithful fallback", async () => {
+    let attempts = 0;
+    const runtime = derivedRuntime({
+      async closingComment(input) {
+        return input.memberId === "david-heinemeier-hansson"
+          ? "I disagree with the other closing position."
+          : `${input.memberName} closes from the supplied briefing.`;
+      },
+      async readout() {
+        attempts += 1;
+        throw new Error("synthesis offline");
+      },
+    });
+    const session = await started(runtime);
+
+    expect((await session.endMeeting()).ok).toBe(true);
+    expect(attempts).toBe(2);
+    const readout = session.getState().readout;
+    expect(readout?.decision).toBe("Should we change course?");
+    expect(readout?.divided).toBe(true);
+    expect(readout?.closingComments).toHaveLength(3);
+    expect(JSON.stringify(readout)).toContain("Customer evidence is mixed");
+    expect(JSON.stringify(readout)).not.toMatch(/6,000|1\.6M|2\.3%/);
+  });
+
+  it("retries interim synthesis once and leaves a clear nonfatal result", async () => {
+    let attempts = 0;
+    const runtime = derivedRuntime({
+      async synthesis() {
+        attempts += 1;
+        throw new Error("summary offline");
+      },
+    });
+    const session = await started(runtime, { joinDelayMs: 0 });
+    session.join("Codex");
+
+    const result = await session.requestSynthesis();
+    expect(result.ok).toBe(false);
+    expect(attempts).toBe(2);
+    expect(result.message).toMatch(/meeting can continue/i);
+    expect(session.getState().transcript.at(-1)?.kind).toBe("system");
+  });
+
+  it("makes joining observable, reserves exactly one guest, and gates guest tools", async () => {
+    let releaseJoin!: () => void;
+    const wait = () => new Promise<void>((resolve) => (releaseJoin = resolve));
+    const session = createMeetingSession({ runtime: derivedRuntime(), wait, joinDelayMs: 800 });
+    selectDemo(session);
+    await session.startMeeting();
+
+    expect(session.join("Codex").ok).toBe(true);
+    expect(session.getState().guest.status).toBe("joining");
+    expect(session.join("Another agent").ok).toBe(false);
+    expect((await session.contribute("Too soon")).ok).toBe(false);
+    releaseJoin();
+    await Promise.resolve();
+    await session.pumpOnce();
+    expect(session.getState().guest.status).toBe("joined");
+    expect((await session.contribute("Now present")).ok).toBe(true);
+    await session.endMeeting();
+    expect((await session.requestSynthesis()).ok).toBe(false);
+  });
+
+  it("invalidates queued work and late opening completions on reset", async () => {
+    let releaseOpening!: () => void;
+    const openingGate = new Promise<void>((resolve) => (releaseOpening = resolve));
+    const base = derivedRuntime();
+    const runtime = derivedRuntime({
+      async formOpeningPosition(input: RuntimeTurnInput) {
+        await openingGate;
+        return base.formOpeningPosition(input);
+      },
+    });
+    const session = createMeetingSession({ runtime, autoContinue: false });
+    selectDemo(session);
+    const starting = session.startMeeting();
+    const queuedMessage = session.sendUserMessage("This must not survive reset.");
+    await Promise.resolve();
+
+    session.reset();
+    releaseOpening();
+    expect((await starting).ok).toBe(false);
+    expect((await queuedMessage).ok).toBe(false);
+    expect(session.getState()).toMatchObject({
+      phase: "select",
+      meetingPhase: "idle",
+      selected: [],
+      members: [],
+      transcript: [],
+      positions: {},
+      readout: null,
+    });
+  });
+});

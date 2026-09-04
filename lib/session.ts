@@ -19,6 +19,8 @@ export type SessionOptions = {
   runtime?: BoardRuntime;
   autoContinue?: boolean;
   now?: () => number;
+  joinDelayMs?: number;
+  wait?: (milliseconds: number) => Promise<void>;
 };
 
 export type MemberSeat = {
@@ -66,18 +68,78 @@ export type InspectResult = {
 
 type Listener = () => void;
 
-function uid(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+type ActionResult = { ok: boolean; message?: string };
+
+function waitFor(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function openingFallback(member: CatalogMember, briefing: string): OpeningPosition {
+  return {
+    memberId: member.slug,
+    recommendation: "No private recommendation was captured after two attempts.",
+    reasoning: `The chair's briefing remains the only available basis for ${member.name}'s later contribution: ${briefing.trim()}`,
+    concern: "No private concern was captured.",
+    question: "No private question was captured.",
+  };
+}
+
+function readoutFallback(
+  briefing: string,
+  transcript: TranscriptEvent[],
+  closingComments: ClosingComment[],
+): ExecutiveReadout {
+  const firstLine = briefing.split("\n").find((line) => line.trim())?.trim() ?? "Decision not stated";
+  const decision = firstLine.replace(/^Question:\s*/i, "");
+  const dissentPattern = /\b(disagree|disagreement|divided|oppose|opposed|reject)\b/i;
+  const hasExplicitDissent =
+    transcript.some(
+      (event) => event.kind === "reaction" && event.reaction === "disagree",
+    ) ||
+    transcript.some((event) => event.kind === "message" && dissentPattern.test(event.text)) ||
+    closingComments.some(({ comment }) => dissentPattern.test(comment));
+  const publicStatements = transcript
+    .filter((event) => event.kind === "message" && event.speakerId !== "chair" && event.speakerId !== "guest")
+    .slice(-3)
+    .map((event) => `${event.speakerName}: ${event.text}`);
+  const briefingContext = briefing
+    .split(/\n+/)
+    .map((line) => line.replace(/^Briefing:\s*/i, "").trim())
+    .filter((line) => line && !/^Question:/i.test(line));
+
+  return {
+    decision,
+    recommendation:
+      hasExplicitDissent
+        ? "The board did not reach a single recommendation. Its distinct closing positions are preserved below."
+        : closingComments[0]?.comment ?? "No recommendation was captured.",
+    divided: hasExplicitDissent,
+    options: closingComments.map(({ name, comment }) => `${name}: ${comment}`),
+    tradeoffs: publicStatements,
+    assumptions: briefingContext,
+    openQuestions: transcript
+      .filter((event) => event.kind === "message" && event.text.includes("?"))
+      .map((event) => event.text)
+      .slice(-3),
+    nextActions: [],
+    closingComments,
+  };
 }
 
 export function createMeetingSession(options: SessionOptions = {}) {
   const runtime = options.runtime ?? createMockRuntime();
   const autoContinue = options.autoContinue ?? false;
   const now = options.now ?? (() => Date.now());
+  const joinDelayMs = options.joinDelayMs ?? 800;
+  const wait = options.wait ?? waitFor;
   const listeners = new Set<Listener>();
-  let seq = 0;
+  let eventSeq = 0;
+  let generation = 0;
+  let actionTail: Promise<void> = Promise.resolve();
   let pumping = false;
   let ended = false;
+  let speakerCursor = 0;
+  const deferredSpeakers = new Set<string>();
 
   const state: MeetingState = {
     phase: "select",
@@ -102,8 +164,22 @@ export function createMeetingSession(options: SessionOptions = {}) {
   };
 
   function emit() {
-    seq += 1;
     for (const fn of listeners) fn();
+  }
+
+  function isCurrent(token: number): boolean {
+    return token === generation;
+  }
+
+  function enqueue<T>(work: (token: number) => Promise<T>, stale: T): Promise<T> {
+    const token = generation;
+    const run = () => (isCurrent(token) ? work(token) : Promise.resolve(stale));
+    const result = actionTail.then(run, run);
+    actionTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   function snapshot(): MeetingState {
@@ -112,15 +188,28 @@ export function createMeetingSession(options: SessionOptions = {}) {
       selected: [...state.selected],
       members: state.members.map((m) => ({ ...m })),
       guest: { ...state.guest },
-      transcript: [...state.transcript],
-      positions: { ...state.positions },
+      transcript: state.transcript.map((event) => ({ ...event })),
+      positions: Object.fromEntries(
+        Object.entries(state.positions).map(([slug, position]) => [slug, { ...position }]),
+      ),
       mentionQueue: [...state.mentionQueue],
-      readout: state.readout,
+      readout: state.readout
+        ? {
+            ...state.readout,
+            options: [...state.readout.options],
+            tradeoffs: [...state.readout.tradeoffs],
+            assumptions: [...state.readout.assumptions],
+            openQuestions: [...state.readout.openQuestions],
+            nextActions: [...state.readout.nextActions],
+            closingComments: state.readout.closingComments.map((comment) => ({ ...comment })),
+          }
+        : null,
     };
   }
 
   function addEvent(partial: Omit<TranscriptEvent, "id" | "createdAt">): TranscriptEvent {
-    const event: TranscriptEvent = { ...partial, id: uid("evt"), createdAt: now() };
+    eventSeq += 1;
+    const event: TranscriptEvent = { ...partial, id: `evt-${eventSeq}`, createdAt: now() };
     state.transcript = [...state.transcript, event];
     return event;
   }
@@ -156,6 +245,22 @@ export function createMeetingSession(options: SessionOptions = {}) {
     return state.selected.length >= 3 && state.selected.length <= 6 && state.briefing.trim().length > 0;
   }
 
+  function mentionedMember(text: string): string | undefined {
+    const normalized = text.toLowerCase();
+    const candidates = state.selected
+      .map((slug) => getMember(slug))
+      .filter((member): member is CatalogMember => Boolean(member))
+      .flatMap((member) => [member.name, ...member.aliases].map((name) => ({ member, name })))
+      .sort((a, b) => b.name.length - a.name.length);
+    const direct = candidates.find(({ name }) => {
+      const start = normalized.indexOf(`@${name.toLowerCase()}`);
+      if (start < 0) return false;
+      const next = normalized[start + name.length + 1];
+      return next === undefined || /[^a-z0-9]/.test(next);
+    });
+    return direct?.member.slug ?? extractMention(text, state.selected);
+  }
+
   function setMemberStatus(slug: string, status: SeatStatus) {
     state.members = state.members.map((m) => (m.slug === slug ? { ...m, status } : m));
   }
@@ -170,7 +275,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       memberName: member.name,
       briefing: state.briefing,
       phase: state.meetingPhase,
-      transcript: state.transcript.filter((e) => e.kind !== "system" || true),
+      transcript: state.transcript.map((event) => ({ ...event })),
       privatePosition: state.positions[slug],
       ownPriorStatements: own,
       boardNames: state.members.map((m) => m.name),
@@ -178,97 +283,121 @@ export function createMeetingSession(options: SessionOptions = {}) {
   }
 
   function nextSpeaker(): string | undefined {
-    const mention = state.mentionQueue.shift();
-    if (mention && state.members.some((m) => m.slug === mention)) return mention;
-    const unspoken = state.members.filter((m) => m.spokenCount === 0);
-    if (unspoken.length) return unspoken[0].slug;
-    const underTwo = state.members.filter((m) => m.spokenCount < 2);
-    const everyoneOnce = state.members.every((m) => m.spokenCount >= 1);
-    if (!everyoneOnce) {
-      const first = state.members.find((m) => m.spokenCount < 1);
-      return first?.slug;
+    while (state.mentionQueue.length) {
+      const mention = state.mentionQueue.shift();
+      if (mention && state.members.some((member) => member.slug === mention)) {
+        deferredSpeakers.delete(mention);
+        return mention;
+      }
     }
-    const pool = underTwo.length ? underTwo : state.members;
-    const idx = seq % pool.length;
-    return pool[idx]?.slug;
+    const unspoken = state.members.find(
+      (member) => member.spokenCount === 0 && !deferredSpeakers.has(member.slug),
+    );
+    if (unspoken) return unspoken.slug;
+    if (state.members.some((member) => member.spokenCount === 0)) deferredSpeakers.clear();
+    if (!state.members.length) return undefined;
+    const speaker = state.members[speakerCursor % state.members.length];
+    speakerCursor = (speakerCursor + 1) % state.members.length;
+    return speaker?.slug;
   }
 
-  async function runTurn(slug: string, capability: "publicTurn" | "answerDirect", prompt?: string) {
-    if (ended) return;
+  async function runTurn(
+    token: number,
+    slug: string,
+    capability: "publicTurn" | "answerDirect",
+    prompt?: string,
+  ): Promise<boolean> {
+    if (ended || !isCurrent(token)) return false;
     const member = getMember(slug);
-    if (!member) return;
+    if (!member) return false;
     setMemberStatus(slug, "speaking");
     emit();
-    try {
-      const turn = await runtime.publicTurn({
-        ...baseInput(slug),
-        capability,
-        prompt,
-        addressedTo: capability === "answerDirect" ? prompt : undefined,
-      });
-      const seat = state.members.find((m) => m.slug === slug);
-      if (seat) seat.spokenCount += 1;
-      addEvent({
-        kind: "message",
-        speakerId: slug,
-        speakerName: member.name,
-        text: turn.text,
-        addressedTo: turn.addressedTo,
-      });
-      if (turn.reaction) {
-        addEvent({
-          kind: "reaction",
-          speakerId: turn.reactionFrom ?? slug,
-          speakerName: getMember(turn.reactionFrom ?? slug)?.name ?? member.name,
-          text: turn.reaction,
-          reaction: turn.reaction,
-        });
-      }
-      if (turn.wantsToRespond) {
-        const target = state.members.find((m) => m.slug === turn.wantsToRespond);
-        if (target) {
-          setMemberStatus(target.slug, "wants_to_respond");
-          state.mentionQueue.unshift(target.slug);
-        }
-      }
-      setMemberStatus(slug, "ready");
-      emit();
-    } catch {
-      setMemberStatus(slug, "reconnecting");
-      emit();
+    let firstError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const turn = await runtime.publicTurn({
           ...baseInput(slug),
           capability,
           prompt,
+          addressedTo: capability === "answerDirect" ? prompt : undefined,
         });
+        if (!isCurrent(token) || ended) return false;
+        const seat = state.members.find((m) => m.slug === slug);
+        if (seat) seat.spokenCount += 1;
         addEvent({
           kind: "message",
           speakerId: slug,
           speakerName: member.name,
           text: turn.text,
+          addressedTo: turn.addressedTo,
         });
-        const seat = state.members.find((m) => m.slug === slug);
-        if (seat) seat.spokenCount += 1;
+        if (turn.reaction) {
+          addEvent({
+            kind: "reaction",
+            speakerId: turn.reactionFrom ?? slug,
+            speakerName: getMember(turn.reactionFrom ?? slug)?.name ?? member.name,
+            text: turn.reaction,
+            reaction: turn.reaction,
+          });
+        }
+        if (turn.wantsToRespond) {
+          const target = state.members.find((m) => m.slug === turn.wantsToRespond);
+          if (target) {
+            setMemberStatus(target.slug, "wants_to_respond");
+            state.mentionQueue.unshift(target.slug);
+          }
+        }
+        deferredSpeakers.delete(slug);
         setMemberStatus(slug, "ready");
-      } catch (err) {
-        state.lastError = err instanceof Error ? err.message : "A board member failed to speak.";
-        setMemberStatus(slug, "ready");
+        emit();
+        return true;
+      } catch (error) {
+        if (!isCurrent(token) || ended) return false;
+        firstError ??= error;
+        if (attempt === 0) {
+          setMemberStatus(slug, "reconnecting");
+          emit();
+        }
       }
-      emit();
     }
+    const detail = firstError instanceof Error ? firstError.message : "runtime request failed";
+    state.lastError = `${member.name} could not complete a turn after two attempts: ${detail}`;
+    deferredSpeakers.add(slug);
+    const privatePosition = state.positions[slug];
+    const recoveredText = privatePosition
+      ? `Recovered from the private opening after two failed public-turn attempts: ${privatePosition.recommendation} ${privatePosition.reasoning}`
+      : "No public statement was captured after two attempts, and no private opening was available to recover.";
+    const seat = state.members.find((candidate) => candidate.slug === slug);
+    if (seat) seat.spokenCount += 1;
+    addEvent({
+      kind: "message",
+      speakerId: slug,
+      speakerName: member.name,
+      text: recoveredText,
+    });
+    setMemberStatus(slug, "ready");
+    addEvent({
+      kind: "system",
+      speakerId: "system",
+      speakerName: "Secretary",
+      text: `${member.name} could not complete a turn after two attempts. The meeting will continue.`,
+    });
+    emit();
+    return false;
   }
 
-  async function pumpOnce(): Promise<boolean> {
+  async function pumpOnceCore(token: number): Promise<boolean> {
     if (ended || state.meetingPhase !== "discussion" || state.composing) return false;
     const slug = nextSpeaker();
     if (!slug) return false;
-    const capability = state.mentionQueue.length ? "publicTurn" : "publicTurn";
-    await runTurn(slug, capability);
-    return true;
+    await runTurn(token, slug, "publicTurn");
+    return isCurrent(token) && !ended;
   }
 
-  async function startMeeting(): Promise<{ ok: boolean; message?: string }> {
+  async function startMeetingCore(token: number): Promise<ActionResult> {
+    if (state.phase !== "brief") {
+      return { ok: false, message: "The meeting has already started or is not ready to start." };
+    }
     if (!canStart()) {
       return { ok: false, message: "Select three to six advisers and describe the decision." };
     }
@@ -296,25 +425,50 @@ export function createMeetingSession(options: SessionOptions = {}) {
     emit();
     const openings = await Promise.all(
       state.members.map(async (seat) => {
-        try {
-          const position = await runtime.formOpeningPosition({
-            ...baseInput(seat.slug),
-            capability: "formOpeningPosition",
-          });
-          setMemberStatus(seat.slug, "ready");
-          return [seat.slug, position] as const;
-        } catch {
-          setMemberStatus(seat.slug, "reconnecting");
-          const position = await runtime.formOpeningPosition({
-            ...baseInput(seat.slug),
-            capability: "formOpeningPosition",
-          });
-          setMemberStatus(seat.slug, "ready");
-          return [seat.slug, position] as const;
+        const member = getMember(seat.slug)!;
+        let failure: unknown;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const position = await runtime.formOpeningPosition({
+              ...baseInput(seat.slug),
+              capability: "formOpeningPosition",
+            });
+            if (!isCurrent(token)) return null;
+            setMemberStatus(seat.slug, "ready");
+            emit();
+            return { slug: seat.slug, position, failure: null };
+          } catch (error) {
+            if (!isCurrent(token)) return null;
+            failure = error;
+            if (attempt === 0) {
+              setMemberStatus(seat.slug, "reconnecting");
+              emit();
+            }
+          }
         }
+        setMemberStatus(seat.slug, "ready");
+        return {
+          slug: seat.slug,
+          position: openingFallback(member, state.briefing),
+          failure: `${member.name} could not form a private position after two attempts: ${failure instanceof Error ? failure.message : "runtime request failed"}`,
+        };
       }),
     );
-    state.positions = Object.fromEntries(openings);
+    if (!isCurrent(token)) return { ok: false, message: "Session was reset before opening completed." };
+    const completedOpenings = openings.filter((opening) => opening !== null);
+    state.positions = Object.fromEntries(
+      completedOpenings.map(({ slug, position }) => [slug, position]),
+    );
+    for (const opening of completedOpenings) {
+      if (!opening.failure) continue;
+      state.lastError = opening.failure;
+      addEvent({
+        kind: "system",
+        speakerId: "system",
+        speakerName: "Secretary",
+        text: `${getMember(opening.slug)?.name ?? opening.slug}'s private opening failed twice. A briefing-only fallback was kept so the meeting can continue.`,
+      });
+    }
     state.meetingPhase = "discussion";
     addEvent({
       kind: "system",
@@ -334,7 +488,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     try {
       let turns = 0;
       while (!ended && state.meetingPhase === "discussion" && !state.composing && turns < 12) {
-        const did = await pumpOnce();
+        const did = await enqueue(pumpOnceCore, false);
         if (!did) break;
         turns += 1;
       }
@@ -343,22 +497,24 @@ export function createMeetingSession(options: SessionOptions = {}) {
     }
   }
 
-  async function sendUserMessage(text: string) {
+  async function sendUserMessageCore(token: number, text: string): Promise<ActionResult> {
     const trimmed = text.trim();
-    if (!trimmed || state.phase !== "meeting" || ended) return;
+    if (!trimmed) return { ok: false, message: "Nothing to contribute." };
+    if (state.phase !== "meeting" || ended) return { ok: false, message: "No active meeting." };
     addEvent({
       kind: "message",
       speakerId: "chair",
       speakerName: "You",
       text: trimmed,
     });
-    const mentioned = extractMention(trimmed, state.selected);
+    const mentioned = mentionedMember(trimmed);
     emit();
     if (mentioned) {
-      await runTurn(mentioned, "answerDirect", trimmed);
+      await runTurn(token, mentioned, "answerDirect", trimmed);
     } else if (autoContinue) {
-      await pumpOnce();
+      await pumpOnceCore(token);
     }
+    return { ok: true };
   }
 
   function inspect(): InspectResult {
@@ -374,35 +530,61 @@ export function createMeetingSession(options: SessionOptions = {}) {
   }
 
   function join(name: string): { ok: boolean; message: string } {
-    if (state.phase !== "meeting") {
+    if (state.phase !== "meeting" || ended || state.meetingPhase === "ending") {
       return { ok: false, message: "No active board meeting to join." };
     }
     const display = name.trim();
     if (!display) return { ok: false, message: "Provide the name you know yourself by." };
-    if (state.guest.name && state.guest.status !== "empty" && state.guest.status !== "waiting") {
+    if (state.guest.name) {
       return { ok: false, message: `The guest seat is already occupied by ${state.guest.name}.` };
     }
+    const token = generation;
     state.guest = { name: display, status: "joining" };
     emit();
-    state.guest = { name: display, status: "joined" };
-    addEvent({
-      kind: "system",
-      speakerId: "system",
-      speakerName: "Secretary",
-      text: `${display} has taken the guest seat.`,
-    });
-    emit();
-    return { ok: true, message: `Joined as ${display}.` };
+    const completeJoin = () => {
+      if (!isCurrent(token) || ended || state.phase !== "meeting") return;
+      if (state.guest.name !== display || state.guest.status !== "joining") return;
+      state.guest = { name: display, status: "joined" };
+      addEvent({
+        kind: "system",
+        speakerId: "system",
+        speakerName: "Secretary",
+        text: `${display} has taken the guest seat.`,
+      });
+      emit();
+    };
+    const enqueueCompletion = () => {
+      void enqueue(async () => completeJoin(), undefined);
+    };
+    if (joinDelayMs === 0) {
+      enqueueCompletion();
+    } else {
+      void wait(joinDelayMs).then(
+        enqueueCompletion,
+        (error: unknown) => {
+          void enqueue(async () => {
+            if (!isCurrent(token) || state.guest.name !== display) return;
+            state.lastError = error instanceof Error ? error.message : "The guest could not join.";
+            state.guest = { name: null, status: "waiting" };
+            emit();
+          }, undefined);
+        },
+      );
+    }
+    return { ok: true, message: `Joining as ${display}.` };
   }
 
   function requireGuest(): { ok: false; message: string } | { ok: true; name: string } {
-    if (!state.guest.name || state.guest.status === "empty" || state.guest.status === "waiting") {
+    if (ended || state.phase !== "meeting" || state.meetingPhase === "ending") {
+      return { ok: false, message: "The meeting has ended." };
+    }
+    if (!state.guest.name || state.guest.status !== "joined") {
       return { ok: false, message: "Join the meeting before contributing." };
     }
     return { ok: true, name: state.guest.name };
   }
 
-  async function contribute(text: string) {
+  async function contributeCore(token: number, text: string): Promise<ActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     const trimmed = text.trim();
@@ -417,16 +599,17 @@ export function createMeetingSession(options: SessionOptions = {}) {
     emit();
     state.guest.status = "joined";
     emit();
-    if (autoContinue && state.meetingPhase === "discussion") await pumpOnce();
+    if (autoContinue && state.meetingPhase === "discussion") await pumpOnceCore(token);
     return { ok: true, message: "Context added to the public transcript." };
   }
 
-  async function address(memberName: string, text: string) {
+  async function addressCore(token: number, memberName: string, text: string): Promise<ActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     const member = matchMemberByName(memberName, state.selected);
     if (!member) return { ok: false, message: `No seated adviser named ${memberName}.` };
     const trimmed = text.trim();
+    if (!trimmed) return { ok: false, message: "Nothing to ask." };
     state.guest.status = "asking";
     addEvent({
       kind: "message",
@@ -435,33 +618,47 @@ export function createMeetingSession(options: SessionOptions = {}) {
       text: `@${member.name} ${trimmed}`,
       addressedTo: member.name,
     });
-    state.mentionQueue.unshift(member.slug);
     emit();
-    await runTurn(member.slug, "answerDirect", trimmed);
+    await runTurn(token, member.slug, "answerDirect", trimmed);
+    if (!isCurrent(token)) return { ok: false, message: "Session was reset before the answer completed." };
     state.guest.status = "joined";
     emit();
     return { ok: true, message: `${member.name} was addressed and answered.` };
   }
 
-  async function requestSynthesis() {
+  async function requestSynthesisCore(token: number): Promise<ActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
-    const text = await runtime.synthesis({
-      capability: "synthesis",
-      briefing: state.briefing,
-      phase: state.meetingPhase,
-      transcript: state.transcript,
-      ownPriorStatements: [],
-      boardNames: state.members.map((m) => m.name),
-    });
-    addEvent({
-      kind: "system",
-      speakerId: "secretary",
-      speakerName: "Secretary",
-      text,
-    });
+    let failure: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const text = await runtime.synthesis({
+          capability: "synthesis",
+          briefing: state.briefing,
+          phase: state.meetingPhase,
+          transcript: state.transcript.map((event) => ({ ...event })),
+          ownPriorStatements: [],
+          boardNames: state.members.map((m) => m.name),
+        });
+        if (!isCurrent(token)) return { ok: false, message: "Session was reset before synthesis completed." };
+        addEvent({
+          kind: "system",
+          speakerId: "secretary",
+          speakerName: "Secretary",
+          text,
+        });
+        emit();
+        return { ok: true, message: text };
+      } catch (error) {
+        failure = error;
+        if (!isCurrent(token)) return { ok: false, message: "Session was reset before synthesis completed." };
+      }
+    }
+    const message = "Interim synthesis failed twice. The meeting can continue without it.";
+    state.lastError = failure instanceof Error ? failure.message : message;
+    addEvent({ kind: "system", speakerId: "secretary", speakerName: "Secretary", text: message });
     emit();
-    return { ok: true, message: text };
+    return { ok: false, message };
   }
 
   function getReadoutTool(): { ready: boolean; message: string; readout?: ExecutiveReadout } {
@@ -474,10 +671,15 @@ export function createMeetingSession(options: SessionOptions = {}) {
     return { ready: true, message: "Readout ready.", readout: state.readout };
   }
 
-  async function endMeeting(): Promise<{ ok: boolean; message?: string }> {
+  async function endMeetingCore(token: number): Promise<ActionResult> {
     if (state.phase !== "meeting") return { ok: false, message: "No meeting to end." };
-    ended = true;
     state.meetingPhase = "ending";
+    emit();
+    for (const seat of state.members.filter((member) => member.spokenCount === 0)) {
+      await runTurn(token, seat.slug, "publicTurn");
+      if (!isCurrent(token)) return { ok: false, message: "Session was reset before ending completed." };
+    }
+    ended = true;
     addEvent({
       kind: "system",
       speakerId: "system",
@@ -503,12 +705,34 @@ export function createMeetingSession(options: SessionOptions = {}) {
         }
       }),
     );
-    const readout = await runtime.readout({
-      briefing: state.briefing,
-      transcript: state.transcript,
-      closingComments,
-      boardNames: state.members.map((m) => m.name),
-    });
+    if (!isCurrent(token)) return { ok: false, message: "Session was reset before ending completed." };
+    let readout: ExecutiveReadout | undefined;
+    let readoutFailure: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        readout = await runtime.readout({
+          briefing: state.briefing,
+          transcript: state.transcript.map((event) => ({ ...event })),
+          closingComments: closingComments.map((comment) => ({ ...comment })),
+          boardNames: state.members.map((m) => m.name),
+        });
+        if (!isCurrent(token)) return { ok: false, message: "Session was reset before readout completed." };
+        break;
+      } catch (error) {
+        readoutFailure = error;
+        if (!isCurrent(token)) return { ok: false, message: "Session was reset before readout completed." };
+      }
+    }
+    if (!readout) {
+      state.lastError = readoutFailure instanceof Error ? readoutFailure.message : "Readout failed twice.";
+      readout = readoutFallback(state.briefing, state.transcript, closingComments);
+      addEvent({
+        kind: "system",
+        speakerId: "system",
+        speakerName: "Secretary",
+        text: "Final synthesis failed twice. A transcript-based readout was assembled instead.",
+      });
+    }
     state.readout = readout;
     state.phase = "readout";
     state.meetingPhase = "closed";
@@ -517,6 +741,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
   }
 
   function reset() {
+    generation += 1;
+    actionTail = Promise.resolve();
     ended = true;
     pumping = false;
     state.phase = "select";
@@ -533,6 +759,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
     state.composing = false;
     state.readout = null;
     state.lastError = null;
+    eventSeq = 0;
+    speakerCursor = 0;
+    deferredSpeakers.clear();
     emit();
   }
 
@@ -541,8 +770,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
     subscribe(fn: Listener) {
       listeners.add(fn);
       return () => {
-      listeners.delete(fn);
-    };
+        listeners.delete(fn);
+      };
     },
     setSearch(query: string) {
       state.search = query;
@@ -570,25 +799,43 @@ export function createMeetingSession(options: SessionOptions = {}) {
       emit();
     },
     canStart,
-    startMeeting,
-    sendUserMessage,
+    startMeeting: () =>
+      enqueue(startMeetingCore, { ok: false, message: "Session was reset before starting completed." }),
+    sendUserMessage: (text: string) =>
+      enqueue(
+        (token) => sendUserMessageCore(token, text),
+        { ok: false, message: "Session was reset before the message was handled." },
+      ),
     setComposing(value: boolean) {
       state.composing = value;
       emit();
     },
-    pumpOnce,
+    pumpOnce: () => enqueue(pumpOnceCore, false),
     pumpDiscussion: async (n: number) => {
       for (let i = 0; i < n; i += 1) {
-        const did = await pumpOnce();
+        const did = await enqueue(pumpOnceCore, false);
         if (!did) break;
       }
     },
-    endMeeting,
+    endMeeting: () =>
+      enqueue(endMeetingCore, { ok: false, message: "Session was reset before ending completed." }),
     inspect,
     join,
-    contribute,
-    address,
-    requestSynthesis,
+    contribute: (text: string) =>
+      enqueue(
+        (token) => contributeCore(token, text),
+        { ok: false, message: "Session was reset before the contribution was handled." },
+      ),
+    address: (memberName: string, text: string) =>
+      enqueue(
+        (token) => addressCore(token, memberName, text),
+        { ok: false, message: "Session was reset before the question was handled." },
+      ),
+    requestSynthesis: () =>
+      enqueue(requestSynthesisCore, {
+        ok: false,
+        message: "Session was reset before synthesis was handled.",
+      }),
     getReadout: getReadoutTool,
     guestEndMeeting() {
       return {

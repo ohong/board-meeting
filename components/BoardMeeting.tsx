@@ -488,49 +488,50 @@ export function BoardMeeting({
             </div>
           </section>
 
-          <div className={styles.participantList} role="list" aria-label="Meeting participants">
-            <div className={styles.seatList} data-count={state.members.length}>
-              {state.members.map((member, index) => {
-                const position = positions[index] ?? positions[0];
-                const reaction = latestReaction.get(member.slug);
-                return (
-                  <div
-                    key={member.slug}
-                    role="listitem"
-                    className={styles.seatPosition}
-                    data-align={position.align}
-                    style={{ left: position.left, top: position.top }}
+          <ol
+            className={styles.participantList}
+            data-count={state.members.length}
+            aria-label="Meeting participants"
+          >
+            {state.members.map((member, index) => {
+              const position = positions[index] ?? positions[0];
+              const reaction = latestReaction.get(member.slug);
+              return (
+                <li
+                  key={member.slug}
+                  className={styles.seatPosition}
+                  data-align={position.align}
+                  aria-label={`${member.name}, ${MEMBER_STATUS[member.status]}`}
+                  style={{ left: position.left, top: position.top }}
+                >
+                  <button
+                    type="button"
+                    className={styles.memberSeat}
+                    data-status={member.status}
+                    aria-label={`Mention ${member.name}`}
+                    onClick={() => insertMention(member.name)}
                   >
-                    <button
-                      type="button"
-                      className={styles.memberSeat}
-                      data-status={member.status}
-                      aria-label={`${member.name}, ${MEMBER_STATUS[member.status]}. Insert mention`}
-                      onClick={() => insertMention(member.name)}
-                    >
-                      <ParticipantPortrait member={member} />
-                      <span className={styles.nameplate}>
-                        <strong>{member.name}</strong>
-                        <small>{MEMBER_STATUS[member.status]}</small>
-                        {reaction ? <em>{reaction}</em> : null}
-                      </span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                    <ParticipantPortrait member={member} />
+                    <span className={styles.nameplate}>
+                      <strong>{member.name}</strong>
+                      <small>{MEMBER_STATUS[member.status]}</small>
+                      {reaction ? <em>{reaction}</em> : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
 
-            <div className={styles.chairSeat} role="listitem" aria-label="You, chair">
+            <li className={styles.chairSeat} aria-label="You, chair">
               <Monogram label="You" />
               <span className={styles.chairNameplate}>
                 <strong>You</strong>
                 <small>Chair · The floor is yours</small>
               </span>
-            </div>
+            </li>
 
-            <div
+            <li
               className={styles.guestSeat}
-              role="listitem"
               data-status={state.guest.status}
               data-occupied={Boolean(state.guest.name) || undefined}
               aria-label={`${state.guest.name ?? "Guest agent"}, ${guestStatus(state.guest.status, Boolean(state.guest.name))}`}
@@ -541,8 +542,8 @@ export function BoardMeeting({
                 <small>{guestStatus(state.guest.status, Boolean(state.guest.name))}</small>
                 {state.guest.name ? <em>WebMCP</em> : null}
               </span>
-            </div>
-          </div>
+            </li>
+          </ol>
 
           <div className={styles.roomLegend} aria-hidden="true">
             <span>{state.members.length} advisers seated</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createMeetingSession, type MeetingSession, type MeetingState } from "@/lib/session";
 import {
   createMockRuntime,
@@ -32,13 +32,48 @@ function bootSession(live: boolean) {
   });
 }
 
+/**
+ * Replace a not-yet-started session without losing the chair's setup work.
+ * The source is reset before the replacement is created so any queued work is
+ * invalidated before the new runtime can become active.
+ */
+export function migratePreMeetingSession(
+  source: MeetingSession,
+  createReplacement: () => MeetingSession,
+): MeetingSession | null {
+  const snapshot = source.getState();
+  if (snapshot.phase !== "select" && snapshot.phase !== "brief") {
+    return null;
+  }
+
+  source.reset();
+  const replacement = createReplacement();
+  replacement.setSearch(snapshot.search);
+  for (const slug of snapshot.selected) {
+    const result = replacement.toggleMember(slug);
+    if (!result.ok) {
+      throw new Error(result.message ?? `Could not restore adviser ${slug}.`);
+    }
+  }
+  replacement.setBriefing(snapshot.briefing);
+  if (snapshot.phase === "brief") {
+    const result = replacement.goToBrief();
+    if (!result.ok) {
+      throw new Error(result.message ?? "Could not restore the briefing step.");
+    }
+  }
+
+  return replacement;
+}
+
 export function BoardApp() {
-  const [initialSession] = useState<MeetingSession>(() => bootSession(false));
-  const [session, setSession] = useState<MeetingSession>(() => initialSession);
-  const [state, setState] = useState<MeetingState>(() => initialSession.getState());
+  const [session, setSession] = useState<MeetingSession>(() => bootSession(false));
+  const [state, setState] = useState<MeetingState>(() => session.getState());
+  const activeSessionRef = useRef(session);
   const [runtimeNote, setRuntimeNote] = useState("Demo mode · scripted responses");
 
   useEffect(() => {
+    activeSessionRef.current = session;
     const unsub = session.subscribe(() => setState(session.getState()));
     return () => {
       unsub();
@@ -52,12 +87,17 @@ export function BoardApp() {
         const res = await fetch("/api/runtime-status");
         const data = (await res.json()) as { live: boolean; message: string };
         if (cancelled) return;
-        setRuntimeNote(data.live ? "Live mode · responses enabled" : "Demo mode · scripted responses");
-        const current = initialSession.getState();
-        if (data.live && current.phase === "select" && current.selected.length === 0) {
-          const live = bootSession(true);
+        if (!data.live) {
+          setRuntimeNote("Demo mode · scripted responses");
+          return;
+        }
+
+        const live = migratePreMeetingSession(activeSessionRef.current, () => bootSession(true));
+        if (live) {
+          activeSessionRef.current = live;
           setSession(live);
           setState(live.getState());
+          setRuntimeNote("Live mode · responses enabled");
         }
       } catch {
         if (!cancelled) {
@@ -69,7 +109,7 @@ export function BoardApp() {
     return () => {
       cancelled = true;
     };
-  }, [initialSession]);
+  }, []);
 
   const view = state;
 

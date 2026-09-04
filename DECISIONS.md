@@ -93,3 +93,12 @@ We considered exposing 36 separate Eve roots and calling OpenAI directly from th
 Public and direct-answer capabilities let the delegated adviser emit plain text so Eve exposes its incremental message events. The application attaches only to the child named by the root's delegated call, verifies the child's complete parent invocation tuple before relaying any content, and treats every delta as provisional. A turn becomes durable only after the authored workflow returns the exact expected capability, target, tool call, and schema-valid result. Retries reset the projection, and page reset or browser disconnect cooperatively cancels the active Eve turn.
 
 We considered keeping Eve's structured `{ text }` child output and revealing it only after completion. That offers the smallest protocol surface, but Eve's structured-output tool does not expose the spoken answer as real-time text. We also considered a presentation-only typewriter effect over the completed result; it looks streamed without reducing perceived model latency and would misrepresent the runtime. The chosen plain-text child plus validated workflow result adds a provisional projection layer, but preserves true child output streaming without making unverified text part of the meeting record.
+
+## 2026-09-03 — Migrate pre-meeting setup when live availability resolves
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+The page becomes interactive immediately with the deterministic runtime. If the runtime-status request later confirms live availability, the application snapshots and resets the current selection or briefing session, creates a live session, and replays the search, roster order, briefing, and onboarding phase through public session actions. An active meeting or completed readout is never replaced underneath the user.
+
+We considered blocking onboarding behind the runtime-status request. That removes migration logic, but makes the first interaction depend on a network round trip and turns a transient status failure into a blank or stalled entry experience. Preserving and migrating pre-meeting state adds a small replay helper, while keeping entry immediate and preventing an early selection from silently pinning a keyed visit to the mock runtime.

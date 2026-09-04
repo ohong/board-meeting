@@ -22,3 +22,4 @@
 - Routed live turns through Eve-isolated adviser and secretary subagents, with immutable capability envelopes, closed output schemas, a 90-word public-turn ceiling, and fail-closed identity checks.
 - Kept full-repository lint focused on authored source by excluding generated Next and Eve build artifacts.
 - Streamed public speech from the authenticated Eve adviser child while keeping partial text ephemeral, retry-safe, cancellable, and separate from the validated transcript.
+- Preserved in-progress selection and briefing work when a delayed runtime check upgrades the page from deterministic rehearsal to live Eve agents.

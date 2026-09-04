@@ -107,10 +107,10 @@ function invalidResult(
   return { ok: false, message };
 }
 
-function actionResult(
+function actionResult<T extends { ok: boolean; message?: string }>(
   onReceipt: BoardToolReceiptHandler | undefined,
   toolName: BoardToolName,
-  result: { ok: boolean; message?: string },
+  result: T,
   successMessage: string,
 ): BoardToolResult {
   const message = result.ok ? successMessage : (result.message ?? "The action was rejected.");
@@ -164,10 +164,11 @@ export function createBoardToolManifest(
           { name: "name", label: "name", maxLength: 80 },
         ]);
         if (!parsed.ok) return invalidResult(onReceipt, "join_board_meeting", parsed.message);
+        const result = session.join(parsed.values.name);
         return actionResult(
           onReceipt,
           "join_board_meeting",
-          session.join(parsed.values.name),
+          { ...result, guest: session.getState().guest },
           "Join request accepted.",
         );
       },

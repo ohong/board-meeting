@@ -102,3 +102,12 @@ We considered keeping Eve's structured `{ text }` child output and revealing it 
 The page becomes interactive immediately with the deterministic runtime. If the runtime-status request later confirms live availability, the application snapshots and resets the current selection or briefing session, creates a live session, and replays the search, roster order, briefing, and onboarding phase through public session actions. An active meeting or completed readout is never replaced underneath the user.
 
 We considered blocking onboarding behind the runtime-status request. That removes migration logic, but makes the first interaction depend on a network round trip and turns a transient status failure into a blank or stalled entry experience. Preserving and migrating pre-meeting state adds a small replay helper, while keeping entry immediate and preventing an early selection from silently pinning a keyed visit to the mock runtime.
+
+## 2026-09-03 — Reserve guest admission on the meeting command lane
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+Joining reserves the only guest seat and exposes its joining state synchronously. At the same moment, the session places an admission operation on the existing serialized command lane while its short visual delay runs concurrently. Any contribution, addressed question, or synthesis requested afterward therefore waits for the opening phase, any active public stream, and admission in the same deterministic order. Reset invalidates the entire sequence through the existing generation token.
+
+We considered a separate guest-admission promise that every substantive action would await. That makes the dependency explicit, but creates a second ordering mechanism beside the command lane and expands the number of intermediate failure paths. Reserving admission in the existing lane reuses its ordering and reset guarantees, while still allowing the visual delay to overlap private opening work.

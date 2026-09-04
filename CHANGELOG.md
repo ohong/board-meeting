@@ -23,3 +23,4 @@
 - Kept full-repository lint focused on authored source by excluding generated Next and Eve build artifacts.
 - Streamed public speech from the authenticated Eve adviser child while keeping partial text ephemeral, retry-safe, cancellable, and separate from the validated transcript.
 - Preserved in-progress selection and briefing work when a delayed runtime check upgrades the page from deterministic rehearsal to live Eve agents.
+- Queued guest admission and substantive WebMCP actions on the meeting command lane, kept activity states visible through resulting turns, and returned concise state evidence for every mutation.

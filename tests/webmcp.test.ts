@@ -103,19 +103,37 @@ describe("board WebMCP manifest", () => {
 
     expect(await tool(manifest, "join_board_meeting").execute({ name: " Codex " })).toMatchObject({
       ok: true,
+      guest: { name: "Codex", status: "joining" },
     });
-    expect(
-      await tool(manifest, "contribute_to_board_meeting").execute({ text: contribution }),
-    ).toMatchObject({ ok: true });
-    expect(
-      await tool(manifest, "address_board_member").execute({
-        member: "Daniel Ek",
-        text: question,
-      }),
-    ).toMatchObject({ ok: true });
-    expect(await tool(manifest, "request_board_synthesis").execute({})).toMatchObject({
+    const contributionResult = await tool(manifest, "contribute_to_board_meeting").execute({
+      text: contribution,
+    });
+    expect(contributionResult).toMatchObject({
       ok: true,
+      contribution: { speaker: "Codex", text: contribution },
+      guest: { name: "Codex", status: "joined" },
+      phase: "meeting",
+      meetingPhase: "discussion",
     });
+    const addressResult = await tool(manifest, "address_board_member").execute({
+      member: "Daniel Ek",
+      text: question,
+    });
+    expect(addressResult).toMatchObject({
+      ok: true,
+      addressedMember: { slug: "daniel-ek", name: "Daniel Ek" },
+      response: { speaker: "Daniel Ek" },
+    });
+    expect(String((addressResult.response as { text: string }).text)).not.toHaveLength(0);
+    const synthesisResult = await tool(manifest, "request_board_synthesis").execute({});
+    expect(synthesisResult).toMatchObject({
+      ok: true,
+      message: "Interim synthesis delivered.",
+      synthesis: expect.any(String),
+      phase: "meeting",
+      meetingPhase: "discussion",
+    });
+    expect(synthesisResult.synthesis).not.toBe(synthesisResult.message);
 
     expect(session.getState().guest).toEqual({ name: "Codex", status: "joined" });
     const transcript = session.getState().transcript;

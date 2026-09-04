@@ -248,6 +248,46 @@ describe("meeting session serialization and recovery", () => {
     ]);
   });
 
+  it("places a contribution immediately after the board turn already streaming", async () => {
+    let releaseTurn!: () => void;
+    const runtime = derivedRuntime({
+      publicTurn(input, options) {
+        options?.onStream?.({ type: "reset" });
+        options?.onStream?.({ type: "append", delta: "Streaming board turn" });
+        return new Promise((resolve) => {
+          releaseTurn = () => resolve({ text: `${input.memberName} committed board turn.` });
+        });
+      },
+    });
+    const session = await started(runtime, { joinDelayMs: 0 });
+    expect(session.join("Codex").ok).toBe(true);
+    await waitUntil(() => session.getState().guest.status === "joined", "guest did not join");
+
+    const boardTurn = session.pumpOnce();
+    await waitUntil(
+      () => session.getState().inProgressPublicMessage?.text === "Streaming board turn",
+      "board turn did not start streaming",
+    );
+    const contribution = session.contribute("Queued behind the streamed turn.");
+    await Promise.resolve();
+    expect(
+      session.getState().transcript.some((event) => event.speakerId === "guest"),
+    ).toBe(false);
+
+    releaseTurn();
+    expect(await boardTurn).toBe(true);
+    expect(await contribution).toMatchObject({ ok: true });
+    expect(
+      session
+        .getState()
+        .transcript.filter((event) => event.kind === "message")
+        .map(({ speakerId, text }) => [speakerId, text]),
+    ).toEqual([
+      ["daniel-ek", "Daniel Ek committed board turn."],
+      ["guest", "Queued behind the streamed turn."],
+    ]);
+  });
+
   it("keeps streamed text ephemeral, clears failed attempts, and atomically commits the final turn", async () => {
     let attempts = 0;
     const runtime = derivedRuntime({
@@ -482,7 +522,7 @@ describe("meeting session serialization and recovery", () => {
     expect(session.getState().transcript.at(-1)?.kind).toBe("system");
   });
 
-  it("makes joining observable, reserves exactly one guest, and gates guest tools", async () => {
+  it("makes joining observable, reserves exactly one guest, and orders guest tools after admission", async () => {
     let releaseJoin!: () => void;
     const wait = () => new Promise<void>((resolve) => (releaseJoin = resolve));
     const session = createMeetingSession({ runtime: derivedRuntime(), wait, joinDelayMs: 800 });
@@ -492,14 +532,170 @@ describe("meeting session serialization and recovery", () => {
     expect(session.join("Codex").ok).toBe(true);
     expect(session.getState().guest.status).toBe("joining");
     expect(session.join("Another agent").ok).toBe(false);
-    expect((await session.contribute("Too soon")).ok).toBe(false);
-    releaseJoin();
+    let settled = false;
+    const pendingContribution = session.contribute("Queued until admitted").then((result) => {
+      settled = true;
+      return result;
+    });
     await Promise.resolve();
-    await session.pumpOnce();
+    expect(settled).toBe(false);
+    releaseJoin();
+    expect((await pendingContribution).ok).toBe(true);
     expect(session.getState().guest.status).toBe("joined");
-    expect((await session.contribute("Now present")).ok).toBe(true);
     await session.endMeeting();
     expect((await session.requestSynthesis()).ok).toBe(false);
+  });
+
+  it("queues immediate guest actions until both opening and admission complete", async () => {
+    let releaseOpening!: () => void;
+    let releaseJoin!: () => void;
+    const openingGate = new Promise<void>((resolve) => (releaseOpening = resolve));
+    const base = derivedRuntime();
+    const runtime = derivedRuntime({
+      async formOpeningPosition(input) {
+        await openingGate;
+        return base.formOpeningPosition(input);
+      },
+      async publicTurn(input) {
+        return { text: `${input.memberName} answered the queued question.` };
+      },
+      async synthesis() {
+        return "Queued synthesis after admission.";
+      },
+    });
+    const session = createMeetingSession({
+      runtime,
+      autoContinue: false,
+      joinDelayMs: 800,
+      wait: () => new Promise<void>((resolve) => (releaseJoin = resolve)),
+    });
+    selectDemo(session);
+    const starting = session.startMeeting();
+    await waitUntil(
+      () => session.getState().meetingPhase === "opening",
+      "meeting did not enter opening",
+    );
+
+    expect(session.join("Codex")).toMatchObject({ ok: true });
+    expect(session.getState().guest).toEqual({ name: "Codex", status: "joining" });
+    const contribution = session.contribute("Evidence queued during opening.");
+    const answer = session.address("Daniel Ek", "What follows from that evidence?");
+    const synthesis = session.requestSynthesis();
+    let actionsSettled = false;
+    void Promise.all([contribution, answer, synthesis]).then(() => {
+      actionsSettled = true;
+    });
+    await Promise.resolve();
+    expect(actionsSettled).toBe(false);
+
+    releaseOpening();
+    expect((await starting).ok).toBe(true);
+    expect(session.getState().meetingPhase).toBe("discussion");
+    expect(session.getState().guest.status).toBe("joining");
+    releaseJoin();
+
+    expect(await contribution).toMatchObject({ ok: true });
+    expect(await answer).toMatchObject({ ok: true });
+    expect(await synthesis).toMatchObject({ ok: true });
+    expect(
+      session
+        .getState()
+        .transcript.filter((event) => event.kind === "message")
+        .map(({ speakerId, text }) => [speakerId, text]),
+    ).toEqual([
+      ["guest", "Evidence queued during opening."],
+      ["guest", "@Daniel Ek What follows from that evidence?"],
+      ["daniel-ek", "Daniel Ek answered the queued question."],
+    ]);
+    expect(session.getState().transcript.at(-1)).toMatchObject({
+      speakerId: "secretary",
+      text: "Queued synthesis after admission.",
+    });
+  });
+
+  it("keeps guest activity statuses visible through the work they initiate", async () => {
+    let holdTurn = false;
+    const pendingTurns: Array<() => void> = [];
+    const runtime = derivedRuntime({
+      publicTurn(input) {
+        if (!holdTurn) return Promise.resolve({ text: `${input.memberName} automatic turn.` });
+        return new Promise((resolve) => {
+          pendingTurns.push(() => resolve({ text: `${input.memberName} completed held work.` }));
+        });
+      },
+    });
+    const session = createMeetingSession({
+      runtime,
+      autoContinue: true,
+      joinDelayMs: 0,
+    });
+    selectDemo(session);
+    await session.startMeeting();
+    await waitUntil(
+      () =>
+        session
+          .getState()
+          .transcript.filter((event) => event.kind === "message" && event.speakerId !== "guest")
+          .length === 12,
+      "automatic discussion did not reach its turn cap",
+    );
+    expect(session.join("Codex").ok).toBe(true);
+    await waitUntil(() => session.getState().guest.status === "joined", "guest did not join");
+
+    holdTurn = true;
+    const contribution = session.contribute("Keep this status visible.");
+    await waitUntil(
+      () => session.getState().guest.status === "contributing" && pendingTurns.length === 1,
+      "contributing status did not persist through response work",
+    );
+    pendingTurns.shift()?.();
+    expect(await contribution).toMatchObject({ ok: true });
+    expect(session.getState().guest.status).toBe("joined");
+
+    const answer = session.address("Daniel Ek", "Hold while answering?");
+    await waitUntil(
+      () => session.getState().guest.status === "asking" && pendingTurns.length === 1,
+      "asking status did not persist through the direct answer",
+    );
+    pendingTurns.shift()?.();
+    expect(await answer).toMatchObject({ ok: true });
+    expect(session.getState().guest.status).toBe("joined");
+  });
+
+  it("invalidates a pending admission and its ordered guest action on reset", async () => {
+    let releaseOpening!: () => void;
+    let releaseJoin!: () => void;
+    const openingGate = new Promise<void>((resolve) => (releaseOpening = resolve));
+    const base = derivedRuntime();
+    const session = createMeetingSession({
+      runtime: derivedRuntime({
+        async formOpeningPosition(input) {
+          await openingGate;
+          return base.formOpeningPosition(input);
+        },
+      }),
+      autoContinue: false,
+      joinDelayMs: 800,
+      wait: () => new Promise<void>((resolve) => (releaseJoin = resolve)),
+    });
+    selectDemo(session);
+    const starting = session.startMeeting();
+    await waitUntil(() => session.getState().meetingPhase === "opening", "opening did not start");
+    expect(session.join("Codex").ok).toBe(true);
+    const contribution = session.contribute("This must not survive reset.");
+
+    session.reset();
+    releaseOpening();
+    releaseJoin();
+
+    expect((await starting).ok).toBe(false);
+    expect((await contribution).ok).toBe(false);
+    expect(session.getState()).toMatchObject({
+      phase: "select",
+      meetingPhase: "idle",
+      guest: { name: null, status: "empty" },
+      transcript: [],
+    });
   });
 
   it("invalidates queued work and late opening completions on reset", async () => {

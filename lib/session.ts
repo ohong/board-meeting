@@ -71,6 +71,21 @@ export type InspectResult = {
 type Listener = () => void;
 
 type ActionResult = { ok: boolean; message?: string };
+type ContributionActionResult = ActionResult & {
+  contribution?: { speaker: string; text: string };
+  guest?: GuestSeat;
+  phase?: Phase;
+  meetingPhase?: MeetingPhase;
+};
+type AddressActionResult = ActionResult & {
+  addressedMember?: { slug: string; name: string };
+  response?: { speaker: string; text: string } | null;
+};
+type SynthesisActionResult = ActionResult & {
+  synthesis?: string;
+  phase?: Phase;
+  meetingPhase?: MeetingPhase;
+};
 
 const MAX_AUTOMATIC_TURNS = 12;
 
@@ -646,24 +661,24 @@ export function createMeetingSession(options: SessionOptions = {}) {
       });
       emit();
     };
-    const enqueueCompletion = () => {
-      void enqueue(async () => completeJoin(), undefined);
-    };
-    if (joinDelayMs === 0) {
-      enqueueCompletion();
-    } else {
-      void wait(joinDelayMs).then(
-        enqueueCompletion,
-        (error: unknown) => {
-          void enqueue(async () => {
-            if (!isCurrent(token) || state.guest.name !== display) return;
-            state.lastError = error instanceof Error ? error.message : "The guest could not join.";
-            state.guest = { name: null, status: "waiting" };
-            emit();
-          }, undefined);
-        },
-      );
-    }
+    const admission = (joinDelayMs === 0 ? Promise.resolve() : wait(joinDelayMs)).then(
+      () => ({ ok: true as const }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    // Reserve this place in the action chain now, while the admission delay runs in parallel.
+    // Guest actions invoked after join therefore cannot overtake admission or the opening.
+    void enqueue(async () => {
+      const result = await admission;
+      if (!isCurrent(token) || state.guest.name !== display) return;
+      if (!result.ok) {
+        state.lastError =
+          result.error instanceof Error ? result.error.message : "The guest could not join.";
+        state.guest = { name: null, status: "waiting" };
+        emit();
+        return;
+      }
+      completeJoin();
+    }, undefined);
     return { ok: true, message: `Joining as ${display}.` };
   }
 
@@ -677,26 +692,42 @@ export function createMeetingSession(options: SessionOptions = {}) {
     return { ok: true, name: state.guest.name };
   }
 
-  async function contributeCore(token: number, text: string): Promise<ActionResult> {
+  async function contributeCore(token: number, text: string): Promise<ContributionActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     const trimmed = text.trim();
     if (!trimmed) return { ok: false, message: "Nothing to contribute." };
     state.guest.status = "contributing";
-    addEvent({
+    const contribution = addEvent({
       kind: "message",
       speakerId: "guest",
       speakerName: guest.name,
       text: trimmed,
     });
     emit();
-    state.guest.status = "joined";
-    emit();
     if (autoContinue && state.meetingPhase === "discussion") await pumpOnceCore(token);
-    return { ok: true, message: "Context added to the public transcript." };
+    if (!isCurrent(token)) {
+      return { ok: false, message: "Session was reset before the contribution was handled." };
+    }
+    if (state.guest.name === guest.name && state.guest.status === "contributing") {
+      state.guest.status = "joined";
+      emit();
+    }
+    return {
+      ok: true,
+      message: "Context added to the public transcript.",
+      contribution: { speaker: contribution.speakerName, text: contribution.text },
+      guest: { ...state.guest },
+      phase: state.phase,
+      meetingPhase: state.meetingPhase,
+    };
   }
 
-  async function addressCore(token: number, memberName: string, text: string): Promise<ActionResult> {
+  async function addressCore(
+    token: number,
+    memberName: string,
+    text: string,
+  ): Promise<AddressActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     const member = matchMemberByName(memberName, state.selected);
@@ -716,10 +747,18 @@ export function createMeetingSession(options: SessionOptions = {}) {
     if (!isCurrent(token)) return { ok: false, message: "Session was reset before the answer completed." };
     state.guest.status = "joined";
     emit();
-    return { ok: true, message: `${member.name} was addressed and answered.` };
+    const response = [...state.transcript]
+      .reverse()
+      .find((event) => event.kind === "message" && event.speakerId === member.slug);
+    return {
+      ok: true,
+      message: `${member.name} was addressed and answered.`,
+      addressedMember: { slug: member.slug, name: member.name },
+      response: response ? { speaker: response.speakerName, text: response.text } : null,
+    };
   }
 
-  async function requestSynthesisCore(token: number): Promise<ActionResult> {
+  async function requestSynthesisCore(token: number): Promise<SynthesisActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     let failure: unknown;
@@ -741,7 +780,13 @@ export function createMeetingSession(options: SessionOptions = {}) {
           text,
         });
         emit();
-        return { ok: true, message: text };
+        return {
+          ok: true,
+          message: "Interim synthesis delivered.",
+          synthesis: text,
+          phase: state.phase,
+          meetingPhase: state.meetingPhase,
+        };
       } catch (error) {
         failure = error;
         if (!isCurrent(token)) return { ok: false, message: "Session was reset before synthesis completed." };

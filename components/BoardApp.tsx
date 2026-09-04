@@ -14,6 +14,51 @@ import { BoardMeeting } from "./BoardMeeting";
 import { Readout } from "./Readout";
 import { WebMcpBridge } from "./WebMcp";
 
+type RuntimeStatus = { live: boolean; message: string };
+
+const RUNTIME_STATUS_FALLBACK_MS = 3_000;
+
+type RuntimeStatusMonitorOptions = {
+  request: () => Promise<RuntimeStatus>;
+  waitForFallback?: () => Promise<void>;
+  onFallback: () => void;
+  onResponse: (status: RuntimeStatus) => void;
+};
+
+/**
+ * Unblock demo mode after a bounded wait while preserving a late response so
+ * pre-meeting setup can still migrate to the live runtime.
+ */
+export async function monitorRuntimeStatus({
+  request,
+  waitForFallback = () =>
+    new Promise<void>((resolve) => window.setTimeout(resolve, RUNTIME_STATUS_FALLBACK_MS)),
+  onFallback,
+  onResponse,
+}: RuntimeStatusMonitorOptions): Promise<void> {
+  const response = request().then(
+    (status) => ({ kind: "response", status }) as const,
+    () => ({ kind: "failure" }) as const,
+  );
+  const first = await Promise.race([
+    response,
+    waitForFallback().then(() => ({ kind: "timeout" }) as const),
+  ]);
+
+  if (first.kind === "response") {
+    onResponse(first.status);
+    return;
+  }
+  if (first.kind === "failure") {
+    onFallback();
+    return;
+  }
+
+  onFallback();
+  const eventual = await response;
+  if (eventual.kind === "response") onResponse(eventual.status);
+}
+
 function bootSession(live: boolean) {
   if (live) {
     return createMeetingSession({
@@ -70,7 +115,8 @@ export function BoardApp() {
   const [session, setSession] = useState<MeetingSession>(() => bootSession(false));
   const [state, setState] = useState<MeetingState>(() => session.getState());
   const activeSessionRef = useRef(session);
-  const [runtimeNote, setRuntimeNote] = useState("Demo mode · scripted responses");
+  const [runtimeReady, setRuntimeReady] = useState(false);
+  const [runtimeNote, setRuntimeNote] = useState("Checking meeting setup…");
 
   useEffect(() => {
     activeSessionRef.current = session;
@@ -82,12 +128,21 @@ export function BoardApp() {
 
   useEffect(() => {
     let cancelled = false;
-    async function maybeGoLive() {
-      try {
+    void monitorRuntimeStatus({
+      request: async () => {
         const res = await fetch("/api/runtime-status");
-        const data = (await res.json()) as { live: boolean; message: string };
+        if (!res.ok) throw new Error(`Runtime status failed with ${res.status}.`);
+        return (await res.json()) as RuntimeStatus;
+      },
+      onFallback: () => {
+        if (cancelled) return;
+        setRuntimeReady(true);
+        setRuntimeNote("Demo mode · runtime check unavailable");
+      },
+      onResponse: (data) => {
         if (cancelled) return;
         if (!data.live) {
+          setRuntimeReady(true);
           setRuntimeNote("Demo mode · scripted responses");
           return;
         }
@@ -99,13 +154,9 @@ export function BoardApp() {
           setState(live.getState());
           setRuntimeNote("Live mode · responses enabled");
         }
-      } catch {
-        if (!cancelled) {
-          setRuntimeNote("Demo mode · runtime check unavailable");
-        }
-      }
-    }
-    void maybeGoLive();
+        setRuntimeReady(true);
+      },
+    });
     return () => {
       cancelled = true;
     };
@@ -123,7 +174,9 @@ export function BoardApp() {
         </p>
       ) : null}
       {view.phase === "select" ? <SelectBoard session={session} state={view} /> : null}
-      {view.phase === "brief" ? <BriefBoard session={session} state={view} /> : null}
+      {view.phase === "brief" ? (
+        <BriefBoard session={session} state={view} runtimeReady={runtimeReady} />
+      ) : null}
       {view.phase === "meeting" ? <BoardMeeting session={session} state={view} /> : null}
       {view.phase === "readout" ? <Readout session={session} state={view} /> : null}
       {view.phase === "select" || view.phase === "brief" ? (

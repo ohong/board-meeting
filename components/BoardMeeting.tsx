@@ -127,6 +127,10 @@ function mentionAt(value: string, cursor: number) {
   return { start, end: cursor, query: match[1].trimStart().toLowerCase() };
 }
 
+export function shouldPauseForComposer(draft: string, focusWithinComposer: boolean): boolean {
+  return Boolean(draft.trim()) && focusWithinComposer;
+}
+
 function ParticipantPortrait({ member }: { member: MemberSeat }) {
   return (
     <span className={styles.portraitFrame} aria-hidden="true">
@@ -589,7 +593,17 @@ export function BoardMeeting({
             </button>
           ) : null}
 
-          <form className={styles.composer} onSubmit={submitMessage}>
+          <form
+            className={styles.composer}
+            onSubmit={submitMessage}
+            onFocusCapture={() => session.setComposing(shouldPauseForComposer(draft, true))}
+            onBlurCapture={(event) => {
+              const nextTarget = event.relatedTarget;
+              const nextFocusInside =
+                nextTarget instanceof Node && event.currentTarget.contains(nextTarget);
+              session.setComposing(shouldPauseForComposer(draft, nextFocusInside));
+            }}
+          >
             <label htmlFor="chair-message">Chair the discussion</label>
             <div className={styles.composerField}>
               {mentionsOpen ? (
@@ -607,15 +621,16 @@ export function BoardMeeting({
                       role="option"
                       aria-selected={index === mentionIndex}
                       data-active={index === mentionIndex || undefined}
-                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() => insertMention(member.name)}
                     >
-                      <Portrait
-                        slug={member.slug}
-                        name={member.name}
-                        initials={member.initials}
-                        size="roster"
-                      />
+                      <span aria-hidden="true">
+                        <Portrait
+                          slug={member.slug}
+                          name={member.name}
+                          initials={member.initials}
+                          size="roster"
+                        />
+                      </span>
                       <span>
                         <strong>{member.name}</strong>
                         <small>{member.role.split(",")[0]}</small>
@@ -648,8 +663,6 @@ export function BoardMeeting({
                 onClick={(event) => setCursor(event.currentTarget.selectionStart)}
                 onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
                 onKeyDown={handleComposerKeyDown}
-                onFocus={() => session.setComposing(Boolean(draft.trim()))}
-                onBlur={() => session.setComposing(false)}
               />
               <button type="submit" disabled={!draft.trim() || composerDisabled}>
                 {sendPending ? "Sending…" : "Send"}

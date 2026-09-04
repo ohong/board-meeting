@@ -4,14 +4,23 @@ import { getMember } from "@/lib/catalog";
 import type { MeetingSession, MeetingState } from "@/lib/session";
 import { BoardPreview } from "./BoardPreview";
 
+export function startMeetingControl(runtimeReady: boolean, sessionReady: boolean) {
+  return {
+    disabled: !runtimeReady || !sessionReady,
+    label: runtimeReady ? "Start board meeting" : "Checking setup…",
+  };
+}
+
 export function BriefBoard({
   session,
   state,
+  runtimeReady,
 }: {
   session: MeetingSession;
   state: MeetingState;
+  runtimeReady: boolean;
 }) {
-  const ready = session.canStart();
+  const startControl = startMeetingControl(runtimeReady, session.canStart());
   const members = state.selected
     .map((slug) => getMember(slug))
     .filter((member): member is NonNullable<typeof member> => Boolean(member));
@@ -82,17 +91,19 @@ export function BriefBoard({
 
           <div className="decision-actions">
             <p>
-              {state.briefing.trim()
+              {!runtimeReady
+                ? "Checking whether live responses are available."
+                : state.briefing.trim()
                 ? "The brief is ready to enter the room."
                 : "Add a meaningful brief to continue."}
             </p>
             <button
               type="button"
-              disabled={!ready}
+              disabled={startControl.disabled}
               onClick={() => void session.startMeeting()}
               className="paper-primary start-meeting"
             >
-              Start board meeting
+              {startControl.label}
               <span aria-hidden="true">→</span>
             </button>
           </div>

@@ -129,7 +129,7 @@
 }
 
 .roomHeader button:focus-visible,
-.agendaFolio:focus-visible,
+.folioHeader:focus-visible,
 .memberSeat:focus-visible,
 .guestPass button:focus-visible,
 .guestPass textarea:focus-visible,
@@ -251,24 +251,48 @@
   border-bottom: 1px solid var(--human);
 }
 
-.agendaOpen {
-  width: min(440px, 54%);
+.agendaFolio.agendaOpen {
+  top: 50%;
+  width: min(520px, calc(100% - 36px));
   min-height: 220px;
+  max-height: calc(100% - 36px);
   transform: translate(-50%, -50%);
   box-shadow: 0 18px 34px #080907;
 }
 
 .folioHeader {
+  width: 100%;
+  min-height: 44px;
+  flex: none;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--paper-muted);
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.625rem;
   line-height: 1.35;
+  text-align: left;
 }
 
-.agendaFolio strong {
+.folioCopy {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agendaFolio.agendaOpen .folioCopy {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-color: #aaa297 transparent;
+}
+
+.folioCopy strong {
   display: -webkit-box;
   overflow: hidden;
   font-family: var(--font-newsreader), Georgia, serif;
@@ -280,22 +304,33 @@
   -webkit-line-clamp: 3;
 }
 
-.agendaOpen strong { -webkit-line-clamp: 4; }
+.agendaFolio.agendaOpen .folioCopy strong {
+  display: block;
+  flex: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
 
 .folioContext {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
+  flex: none;
   color: #4f4b45;
   font-size: 0.75rem;
   line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
+  white-space: pre-wrap;
+}
+
+.participantList {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
 }
 
 .seatList {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  z-index: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -477,6 +512,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  pointer-events: auto;
 }
 
 .chairSeat {
@@ -718,7 +754,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 22px 24px;
-  scroll-behavior: smooth;
   scrollbar-color: #aca59a transparent;
 }
 
@@ -1164,8 +1199,8 @@
   .guestNameplate small { font-size: 0.5625rem; }
 
   .agendaFolio { width: 210px; }
-  .agendaFolio strong { font-size: 1rem; }
-  .guestSeat { right: -1%; }
+  .folioCopy strong { font-size: 1rem; }
+  .guestSeat { right: 8px; }
   .roomLegend { display: none; }
 }
 
@@ -1257,7 +1292,7 @@
     padding: 10px 11px;
   }
 
-  .agendaFolio strong { font-size: 0.9375rem; }
+  .folioCopy strong { font-size: 0.9375rem; }
   .roomLegend { display: none; }
 
   .minutesHeader,
@@ -1272,6 +1307,4 @@
     animation: none;
     transition-duration: 0.01ms;
   }
-
-  .minutesLog { scroll-behavior: auto; }
 }

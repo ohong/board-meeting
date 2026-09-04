@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { monitorRuntimeStatus } from "../components/BoardApp";
-import { shouldPauseForComposer } from "../components/BoardMeeting";
+import {
+  shouldPauseForComposer,
+  transcriptScrollBehavior,
+} from "../components/BoardMeeting";
 import { startMeetingControl } from "../components/BriefBoard";
 
 function deferred<T>() {
@@ -18,6 +21,15 @@ describe("chair composer focus boundary", () => {
     expect(shouldPauseForComposer("A pending message", true)).toBe(true);
     expect(shouldPauseForComposer("A pending message", false)).toBe(false);
     expect(shouldPauseForComposer("   ", true)).toBe(false);
+  });
+});
+
+describe("minutes auto-scroll motion", () => {
+  it("uses motion only for completed additions when the user allows it", () => {
+    expect(transcriptScrollBehavior(true, false, false)).toBe("smooth");
+    expect(transcriptScrollBehavior(true, true, false)).toBe("auto");
+    expect(transcriptScrollBehavior(false, false, false)).toBe("auto");
+    expect(transcriptScrollBehavior(true, false, true)).toBe("auto");
   });
 });
 

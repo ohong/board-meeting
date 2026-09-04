@@ -131,6 +131,18 @@ export function shouldPauseForComposer(draft: string, focusWithinComposer: boole
   return Boolean(draft.trim()) && focusWithinComposer;
 }
 
+export function transcriptScrollBehavior(
+  completedAddition: boolean,
+  streaming: boolean,
+  reducedMotion: boolean,
+): ScrollBehavior {
+  return completedAddition && !streaming && !reducedMotion ? "smooth" : "auto";
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 function ParticipantPortrait({ member }: { member: MemberSeat }) {
   return (
     <span className={styles.portraitFrame} aria-hidden="true">
@@ -243,8 +255,10 @@ export function BoardMeeting({
     () => [...state.transcript].sort((a, b) => a.createdAt - b.createdAt),
     [state.transcript],
   );
+  const previousTranscriptLengthRef = useRef(chronologicalTranscript.length);
   const latestEventId = chronologicalTranscript.at(-1)?.id;
   const streamingEvent = state.inProgressPublicMessage;
+  const streamingActive = Boolean(streamingEvent);
   const memberById = useMemo(
     () => new Map(state.members.map((member) => [member.slug, member])),
     [state.members],
@@ -267,6 +281,11 @@ export function BoardMeeting({
         : "Board discussion";
   const activeSpeaker = state.members.find((member) => member.status === "speaking");
   const publicTurnBusy = Boolean(activeSpeaker) || ["contributing", "asking"].includes(state.guest.status);
+  const liveSpeaker =
+    streamingEvent?.speakerName ??
+    activeSpeaker?.name ??
+    (publicTurnBusy ? state.guest.name ?? "Guest agent" : null);
+  const liveMeetingStatus = `${phaseLabel}. ${liveSpeaker ? `${liveSpeaker} has the floor.` : "The table is listening."}`;
   const meetingClosing = state.meetingPhase === "ending" || endPending;
   const composerDisabled = meetingClosing || sendPending;
   const mention = mentionAt(draft, cursor);
@@ -281,12 +300,22 @@ export function BoardMeeting({
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
+    const completedAddition = chronologicalTranscript.length > previousTranscriptLengthRef.current;
+    previousTranscriptLengthRef.current = chronologicalTranscript.length;
     if (nearLatestRef.current) {
       requestAnimationFrame(() => {
-        log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+        if (!nearLatestRef.current) return;
+        log.scrollTo({
+          top: log.scrollHeight,
+          behavior: transcriptScrollBehavior(
+            completedAddition,
+            streamingActive,
+            prefersReducedMotion(),
+          ),
+        });
       });
     }
-  }, [chronologicalTranscript.length, latestEventId, streamingEvent?.text]);
+  }, [chronologicalTranscript.length, latestEventId, streamingActive, streamingEvent?.text]);
 
   function insertMention(name: string) {
     const input = composerRef.current;
@@ -385,7 +414,7 @@ export function BoardMeeting({
     if (!log) return;
     nearLatestRef.current = true;
     setNearLatest(true);
-    log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+    log.scrollTo({ top: log.scrollHeight, behavior: "auto" });
   }
 
   return (
@@ -404,6 +433,9 @@ export function BoardMeeting({
           <span className={styles.phaseStatus}>
             <i aria-hidden="true" /> {phaseLabel}
           </span>
+          <p className={styles.visuallyHidden} role="status" aria-atomic="true">
+            {liveMeetingStatus}
+          </p>
           <button
             type="button"
             className={styles.inviteButton}
@@ -436,70 +468,80 @@ export function BoardMeeting({
             <span className={styles.tableInlay} />
           </div>
 
-          <button
-            type="button"
+          <section
             className={`${styles.agendaFolio} ${agendaOpen ? styles.agendaOpen : ""}`}
-            aria-expanded={agendaOpen}
-            onClick={() => setAgendaOpen((open) => !open)}
+            aria-labelledby="briefing-question"
           >
-            <span className={styles.folioHeader}>
+            <button
+              type="button"
+              className={styles.folioHeader}
+              aria-expanded={agendaOpen}
+              aria-controls="briefing-copy"
+              onClick={() => setAgendaOpen((open) => !open)}
+            >
               <span>{phaseLabel}</span>
               <span>{agendaOpen ? "Close brief" : "Open brief"}</span>
-            </span>
-            <strong>{brief.question}</strong>
-            {agendaOpen && brief.context ? <span className={styles.folioContext}>{brief.context}</span> : null}
-          </button>
+            </button>
+            <div id="briefing-copy" className={styles.folioCopy}>
+              <strong id="briefing-question">{brief.question}</strong>
+              {agendaOpen && brief.context ? <p className={styles.folioContext}>{brief.context}</p> : null}
+            </div>
+          </section>
 
-          <ol className={styles.seatList} data-count={state.members.length} aria-label="Board members">
-            {state.members.map((member, index) => {
-              const position = positions[index] ?? positions[0];
-              const reaction = latestReaction.get(member.slug);
-              return (
-                <li
-                  key={member.slug}
-                  className={styles.seatPosition}
-                  data-align={position.align}
-                  style={{ left: position.left, top: position.top }}
-                >
-                  <button
-                    type="button"
-                    className={styles.memberSeat}
-                    data-status={member.status}
-                    aria-label={`${member.name}, ${MEMBER_STATUS[member.status]}. Insert mention`}
-                    onClick={() => insertMention(member.name)}
+          <div className={styles.participantList} role="list" aria-label="Meeting participants">
+            <div className={styles.seatList} data-count={state.members.length}>
+              {state.members.map((member, index) => {
+                const position = positions[index] ?? positions[0];
+                const reaction = latestReaction.get(member.slug);
+                return (
+                  <div
+                    key={member.slug}
+                    role="listitem"
+                    className={styles.seatPosition}
+                    data-align={position.align}
+                    style={{ left: position.left, top: position.top }}
                   >
-                    <ParticipantPortrait member={member} />
-                    <span className={styles.nameplate}>
-                      <strong>{member.name}</strong>
-                      <small>{MEMBER_STATUS[member.status]}</small>
-                      {reaction ? <em>{reaction}</em> : null}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+                    <button
+                      type="button"
+                      className={styles.memberSeat}
+                      data-status={member.status}
+                      aria-label={`${member.name}, ${MEMBER_STATUS[member.status]}. Insert mention`}
+                      onClick={() => insertMention(member.name)}
+                    >
+                      <ParticipantPortrait member={member} />
+                      <span className={styles.nameplate}>
+                        <strong>{member.name}</strong>
+                        <small>{MEMBER_STATUS[member.status]}</small>
+                        {reaction ? <em>{reaction}</em> : null}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
 
-          <div className={styles.chairSeat} aria-label="You, chair">
-            <Monogram label="You" />
-            <span className={styles.chairNameplate}>
-              <strong>You</strong>
-              <small>Chair · The floor is yours</small>
-            </span>
-          </div>
+            <div className={styles.chairSeat} role="listitem" aria-label="You, chair">
+              <Monogram label="You" />
+              <span className={styles.chairNameplate}>
+                <strong>You</strong>
+                <small>Chair · The floor is yours</small>
+              </span>
+            </div>
 
-          <div
-            className={styles.guestSeat}
-            data-status={state.guest.status}
-            data-occupied={Boolean(state.guest.name) || undefined}
-            aria-label={`${state.guest.name ?? "Guest agent"}, ${guestStatus(state.guest.status, Boolean(state.guest.name))}`}
-          >
-            <Monogram label={state.guest.name ?? "Guest"} accent={Boolean(state.guest.name)} />
-            <span className={styles.guestNameplate}>
-              <strong>{state.guest.name ?? "Guest agent"}</strong>
-              <small>{guestStatus(state.guest.status, Boolean(state.guest.name))}</small>
-              {state.guest.name ? <em>WebMCP</em> : null}
-            </span>
+            <div
+              className={styles.guestSeat}
+              role="listitem"
+              data-status={state.guest.status}
+              data-occupied={Boolean(state.guest.name) || undefined}
+              aria-label={`${state.guest.name ?? "Guest agent"}, ${guestStatus(state.guest.status, Boolean(state.guest.name))}`}
+            >
+              <Monogram label={state.guest.name ?? "Guest"} accent={Boolean(state.guest.name)} />
+              <span className={styles.guestNameplate}>
+                <strong>{state.guest.name ?? "Guest agent"}</strong>
+                <small>{guestStatus(state.guest.status, Boolean(state.guest.name))}</small>
+                {state.guest.name ? <em>WebMCP</em> : null}
+              </span>
+            </div>
           </div>
 
           <div className={styles.roomLegend} aria-hidden="true">
@@ -571,12 +613,13 @@ export function BoardMeeting({
                   />
                 ))}
                 {streamingEvent ? (
-                  <MinutesEntry
-                    key={streamingEvent.id}
-                    event={streamingEvent}
-                    member={memberById.get(streamingEvent.speakerId)}
-                    isCurrent
-                  />
+                  <div key={`${streamingEvent.id}-provisional`} aria-hidden="true">
+                    <MinutesEntry
+                      event={streamingEvent}
+                      member={memberById.get(streamingEvent.speakerId)}
+                      isCurrent
+                    />
+                  </div>
                 ) : null}
               </>
             ) : (

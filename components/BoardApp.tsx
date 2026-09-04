@@ -168,11 +168,6 @@ export function BoardApp() {
     <div
       className={`board-app min-h-screen flex flex-col ${view.phase === "meeting" ? "room-mode" : "paper-mode"}`}
     >
-      {view.lastError ? (
-        <p className="app-error" role="alert">
-          {view.lastError}
-        </p>
-      ) : null}
       {view.phase === "select" ? <SelectBoard session={session} state={view} /> : null}
       {view.phase === "brief" ? (
         <BriefBoard session={session} state={view} runtimeReady={runtimeReady} />

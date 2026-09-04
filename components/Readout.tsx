@@ -5,6 +5,7 @@ import { createDisplayedReadout, NONE_RECORDED } from "@/lib/displayed-readout";
 import type { MeetingSession, MeetingState } from "@/lib/session";
 import type { ClosingComment } from "@/lib/types";
 import { Portrait } from "./Portrait";
+import { MeetingProgress } from "./MeetingProgress";
 import styles from "./Readout.module.css";
 
 type CopyStatus = "idle" | "success" | "error";
@@ -73,6 +74,8 @@ export function Readout({
             </button>
           </div>
         </header>
+
+        <MeetingProgress current="readout" className={styles.progress} />
 
         <div className={styles.metadata} aria-label="Meeting details">
           <div>

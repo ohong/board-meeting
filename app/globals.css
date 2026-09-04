@@ -143,9 +143,50 @@ a:focus-visible {
   letter-spacing: 0.04em;
 }
 
-.current-task {
-  color: #68645c;
-  font-size: 0.8125rem;
+.meeting-progress {
+  min-width: 0;
+  color: #777168;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
+.meeting-progress ol {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.meeting-progress li {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.meeting-progress li + li::before {
+  width: clamp(12px, 2vw, 28px);
+  height: 1px;
+  margin: 0 8px;
+  background: #c9c1b5;
+  content: "";
+}
+
+.meeting-progress li[data-state="complete"] {
+  color: #4d4943;
+}
+
+.meeting-progress li[data-state="current"] {
+  color: #8b382b;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.meeting-progress-mobile {
+  display: none;
 }
 
 .onboarding-grid {
@@ -921,8 +962,21 @@ a:focus-visible {
     padding-inline: 16px;
   }
 
-  .current-task {
-    display: none;
+  .meeting-progress ol {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .meeting-progress-mobile {
+    display: block;
+    color: #8b382b;
+    font-weight: 700;
   }
 
   .onboarding-rail,

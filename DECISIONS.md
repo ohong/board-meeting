@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-09-04 — Show workflow position as editorial text
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved navigation scope
+
+Selection, briefing, and readout share one semantic four-stage progress landmark: Choose board, Write brief, Meet, Readout. The desktop treatment is a quiet text sequence joined by hairlines; narrow screens reduce it to the current label and its position in the four-stage flow. The active item uses both text emphasis and `aria-current`, so the state does not depend on color.
+
+We considered importing the checkpoint branch's numbered badge stepper. Its three-stage model combines selection and briefing, and the resulting wizard treatment conflicts with this product's editorial composition. We also considered retaining only each screen's current-task label. That is visually minimal, but it does not reveal the promised path to a meeting and durable record. The text-only sequence adds orientation without introducing circles, pills, decorative numbering, or new navigation actions.
+
 ## 2026-09-04 — Keep decision discovery in the catalog contract
 
 **Status:** accepted

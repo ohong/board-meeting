@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CATALOG, getMember } from "@/lib/catalog";
 import type { MeetingSession, MeetingState } from "@/lib/session";
 import { BoardPreview } from "./BoardPreview";
+import { MeetingProgress } from "./MeetingProgress";
 import { Portrait } from "./Portrait";
 
 export function SelectBoard({
@@ -29,7 +30,7 @@ export function SelectBoard({
           <span className="product-mark" aria-hidden="true">BM</span>
           <span>Board Meeting</span>
         </div>
-        <span className="current-task">Choose your board</span>
+        <MeetingProgress current="select" />
       </header>
 
       <div className="onboarding-grid selection-grid">

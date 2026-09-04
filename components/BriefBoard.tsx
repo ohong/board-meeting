@@ -3,6 +3,7 @@
 import { getMember } from "@/lib/catalog";
 import type { MeetingSession, MeetingState } from "@/lib/session";
 import { BoardPreview } from "./BoardPreview";
+import { MeetingProgress } from "./MeetingProgress";
 
 export function startMeetingControl(runtimeReady: boolean, sessionReady: boolean) {
   return {
@@ -42,7 +43,7 @@ export function BriefBoard({
           <span className="product-mark" aria-hidden="true">BM</span>
           <span>Board Meeting</span>
         </div>
-        <span className="current-task">Brief your board</span>
+        <MeetingProgress current="brief" />
       </header>
 
       <div className="onboarding-grid brief-grid">

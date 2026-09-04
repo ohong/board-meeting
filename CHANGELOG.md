@@ -4,6 +4,7 @@
 
 - Added a concise, searchable decision lens to every adviser in the frozen catalog and surfaced it without displacing the portrait-led selection treatment.
 - Made active catalog searches easier to understand and reset with token-aware matching, a filtered result count, and an inline Clear action.
+- Added a quiet, accessible four-stage progress line across selection, briefing, and the completed readout, with a compact mobile treatment.
 
 ## 2026-09-03
 

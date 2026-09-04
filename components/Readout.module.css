@@ -41,6 +41,13 @@
   border-bottom: 1px solid #171714;
 }
 
+.progress {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #d7d0c4;
+}
+
 .wordmark {
   display: flex;
   align-items: center;

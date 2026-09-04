@@ -1,16 +1,15 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import { Instrument_Sans, Newsreader, Playfair_Display } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const geist = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
 });
 
-const instrument = Instrument_Sans({
-  variable: "--font-instrument",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -33,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${instrument.variable} ${newsreader.variable} h-full antialiased`}
+      className={`${geist.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--ink)]">{children}</body>
     </html>

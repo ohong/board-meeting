@@ -11,3 +11,4 @@
 - Rebuilt the Eric Jorgenson, Marc Andreessen, Brian Armstrong, Jason Fried, Jimmy Iovine, and Tobi Lütke advisers with compact behavioral contracts and reviewable evidence ledgers.
 - Rebuilt the John Mackey, Patrick O’Shaughnessy, James Dyson, Todd Graves, Brad Jacobs, and Michael Dell advisers with distinct decision lenses, source ledgers, and bounded boardroom behavior.
 - Rebuilt the demo trio plus Doug Leone, Torsten Reil, and Sam Altman from canonical Founders interviews, with current roles, differentiated judgment, and explicit evaluation gaps.
+- Replaced selection and briefing with the warm-paper, portrait-led 4/8 composition from the supplied design references, including an always-visible board preview and exact target-viewport layouts.

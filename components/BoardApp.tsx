@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createMeetingSession, type MeetingSession, type MeetingState } from "@/lib/session";
 import { createMockRuntime } from "@/lib/runtime/mock";
 import { createBrowserRuntime } from "@/lib/runtime/browser";
@@ -18,10 +18,10 @@ function bootSession(live: boolean) {
 }
 
 export function BoardApp() {
-  const sessionRef = useRef<MeetingSession>(bootSession(false));
-  const [session, setSession] = useState<MeetingSession>(sessionRef.current);
-  const [state, setState] = useState<MeetingState>(() => sessionRef.current.getState());
-  const [setup, setSetup] = useState<string | null>(sessionRef.current.getState().setupMessage);
+  const [initialSession] = useState<MeetingSession>(() => bootSession(false));
+  const [session, setSession] = useState<MeetingSession>(() => initialSession);
+  const [state, setState] = useState<MeetingState>(() => initialSession.getState());
+  const [runtimeNote, setRuntimeNote] = useState("Demo mode · scripted responses");
 
   useEffect(() => {
     const unsub = session.subscribe(() => setState(session.getState()));
@@ -37,19 +37,16 @@ export function BoardApp() {
         const res = await fetch("/api/runtime-status");
         const data = (await res.json()) as { live: boolean; message: string };
         if (cancelled) return;
-        setSetup(data.message);
-        const current = sessionRef.current.getState();
+        setRuntimeNote(data.live ? "Live mode · responses enabled" : "Demo mode · scripted responses");
+        const current = initialSession.getState();
         if (data.live && current.phase === "select" && current.selected.length === 0) {
           const live = bootSession(true);
-          sessionRef.current = live;
           setSession(live);
           setState(live.getState());
         }
       } catch {
         if (!cancelled) {
-          setSetup(
-            "OPENAI_API_KEY is not set. The board is running a deterministic mock so you can test the room, orchestration, and WebMCP.",
-          );
+          setRuntimeNote("Demo mode · runtime check unavailable");
         }
       }
     }
@@ -57,21 +54,28 @@ export function BoardApp() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialSession]);
 
   const view = state;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {setup && view.runtimeId === "mock" ? (
-        <div className="px-6 py-2 text-center text-[11px] tracking-[0.06em] text-[var(--brass)] border-b border-[oklch(50%_0.04_70_/_0.28)] bg-[oklch(14%_0.02_55)]">
-          {setup}
-        </div>
+    <div
+      className={`board-app min-h-screen flex flex-col ${view.phase === "meeting" ? "room-mode" : "paper-mode"}`}
+    >
+      {view.lastError ? (
+        <p className="app-error" role="alert">
+          {view.lastError}
+        </p>
       ) : null}
       {view.phase === "select" ? <SelectBoard session={session} state={view} /> : null}
       {view.phase === "brief" ? <BriefBoard session={session} state={view} /> : null}
       {view.phase === "meeting" ? <BoardMeeting session={session} state={view} /> : null}
       {view.phase === "readout" ? <Readout session={session} state={view} /> : null}
+      {view.phase === "select" || view.phase === "brief" ? (
+        <div className="runtime-note" aria-label="Runtime status">
+          <i aria-hidden="true" /> {runtimeNote}
+        </div>
+      ) : null}
       <WebMcpBridge key={view.runtimeId} session={session} />
     </div>
   );

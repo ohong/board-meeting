@@ -1,8 +1,8 @@
 "use client";
 
-import { LetterMark } from "./LetterMark";
 import { getMember } from "@/lib/catalog";
 import type { MeetingSession, MeetingState } from "@/lib/session";
+import { BoardPreview } from "./BoardPreview";
 
 export function BriefBoard({
   session,
@@ -12,65 +12,91 @@ export function BriefBoard({
   state: MeetingState;
 }) {
   const ready = session.canStart();
+  const members = state.selected
+    .map((slug) => getMember(slug))
+    .filter((member): member is NonNullable<typeof member> => Boolean(member));
+
+  function returnToSelection() {
+    const selected = [...state.selected];
+    const briefing = state.briefing;
+    session.reset();
+    selected.forEach((slug) => session.toggleMember(slug));
+    session.setBriefing(briefing);
+    window.scrollTo(0, 0);
+  }
+
   return (
-    <main className="flex-1 px-8 py-10 w-full flex flex-col items-center">
-      <div className="masthead mb-8 self-start max-w-[920px] w-full mx-auto">The Board</div>
-
-      <div className="w-full max-w-[820px]">
-        <div className="flex flex-wrap gap-3 mb-6 justify-center">
-          {state.selected.map((slug) => {
-            const m = getMember(slug)!;
-            return (
-              <div
-                key={slug}
-                className="flex items-center gap-2 text-sm text-[var(--muted)] border border-[oklch(50%_0.04_70_/_0.3)] px-3 py-1.5"
-              >
-                <LetterMark initials={m.initials} size="sm" />
-                <span className="serif text-[var(--ink)]">{m.name}</span>
-              </div>
-            );
-          })}
+    <main className="paper-onboarding" id="main-content">
+      <header className="onboarding-header">
+        <a href="#main-content" className="skip-link">Skip to decision brief</a>
+        <div className="product-lockup">
+          <span className="product-mark" aria-hidden="true">BM</span>
+          <span>Board Meeting</span>
         </div>
+        <span className="current-task">Brief your board</span>
+      </header>
 
-        <div className="paper-card p-8 md:p-10 -rotate-[0.4deg]">
-          <div className="label text-[var(--paper-muted)] mb-3">Memorandum to the board</div>
-          <h1 className="text-[32px] leading-[1.1] font-semibold tracking-[-0.02em] text-[var(--paper-ink)] mb-2">
-            Brief your board
-          </h1>
-          <p className="text-[14px] text-[var(--paper-muted)] mb-6 leading-relaxed">
-            One decision. As much context as you want. Links stay plain text; the table will not fetch
-            them.
+      <div className="onboarding-grid brief-grid">
+        <aside className="onboarding-rail briefing-rail">
+          <button type="button" className="paper-back" onClick={returnToSelection}>
+            <span aria-hidden="true">←</span> Change board
+          </button>
+          <div className="rail-intro compact-intro">
+            <h2>The room is assembled.</h2>
+            <p>Everyone at this table will receive the same brief.</p>
+          </div>
+          <BoardPreview members={members} compact />
+          <p className="board-source-note">
+            {members.length} selected advisers. You remain chair.
           </p>
-          <label className="block">
-            <span className="block text-[11px] tracking-[0.16em] uppercase text-[var(--paper-muted)] mb-2">
-              What decision are you trying to make?
-            </span>
+        </aside>
+
+        <section className="decision-sheet" aria-labelledby="decision-title">
+          <div className="decision-heading">
+            <div>
+              <h1 id="decision-title">What decision are you trying to make?</h1>
+              <p>
+                Give them the context you would give a real board: the goal, the numbers, the
+                constraints, and what feels difficult.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="example-action"
+              onClick={() => session.useExampleDecision()}
+            >
+              Use example decision
+            </button>
+          </div>
+
+          <label className="decision-input" htmlFor="board-briefing">
+            <span>Decision brief</span>
             <textarea
+              id="board-briefing"
               value={state.briefing}
-              onChange={(e) => session.setBriefing(e.target.value)}
-              rows={12}
-              className="w-full bg-transparent border border-[oklch(45%_0.03_55_/_0.25)] p-4 text-[17px] leading-relaxed outline-none min-h-[280px] text-[var(--paper-ink)] font-[family-name:var(--font-newsreader)] resize-y"
+              onChange={(event) => session.setBriefing(event.target.value)}
+              placeholder="Describe the decision, what has led you here, and what the board should challenge."
+              rows={14}
             />
           </label>
-        </div>
 
-        <div className="flex items-center justify-between mt-8">
-          <button
-            type="button"
-            onClick={() => session.useExampleDecision()}
-            className="text-[var(--brass)] text-sm font-medium tracking-wide"
-          >
-            Use example decision
-          </button>
-          <button
-            type="button"
-            disabled={!ready}
-            onClick={() => void session.startMeeting()}
-            className="btn-brass"
-          >
-            Start Board Meeting
-          </button>
-        </div>
+          <div className="decision-actions">
+            <p>
+              {state.briefing.trim()
+                ? "The brief is ready to enter the room."
+                : "Add a meaningful brief to continue."}
+            </p>
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => void session.startMeeting()}
+              className="paper-primary start-meeting"
+            >
+              Start board meeting
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </section>
       </div>
     </main>
   );

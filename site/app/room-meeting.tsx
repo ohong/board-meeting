@@ -2,6 +2,7 @@
 
 /* oxlint-disable next/no-img-element -- Bundled archival portraits use a fixed crop in the Sites runtime. */
 
+import { useEffect, useRef } from 'react';
 import { Cable, Send } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -81,6 +82,15 @@ export function RoomMeetingScreen({
   const allOpeningsReady = selectedMembers.every((member) =>
     transcript.some((message) => message.memberId === member.id),
   );
+  const transcriptScrollerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const scroller = transcriptScrollerRef.current;
+      scroller?.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingSpeaker, transcript.length]);
 
   function seatStatus(member: BoardMember, index: number) {
     const hasPosition = transcript.some(
@@ -95,7 +105,7 @@ export function RoomMeetingScreen({
   }
 
   return (
-    <section className="room-experience flex min-h-screen min-w-0 flex-col bg-[#10110f] text-[#f2eee6]">
+    <section className="room-experience flex min-h-screen min-w-0 flex-col bg-[#10110f] text-[#f2eee6] lg:h-screen lg:min-h-0 lg:overflow-hidden">
       <header className="room-header flex min-h-16 items-center gap-4 border-b border-white/10 px-5 py-3 lg:px-7">
         <div className="flex shrink-0 items-center gap-3">
           <span className="grid size-8 place-items-center border border-[#a88952]/55 font-serif text-sm">
@@ -133,7 +143,7 @@ export function RoomMeetingScreen({
       <div className="meeting-grid grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(400px,34vw)]">
         <section className="room-field relative min-h-[680px] overflow-hidden border-b border-white/10 lg:min-h-0 lg:border-r lg:border-b-0">
           <div className="room-light absolute inset-0" />
-          <div className="room-stage relative mx-auto h-full min-h-[680px] w-full max-w-[1040px]">
+          <div className="room-stage relative mx-auto h-full min-h-[680px] w-full max-w-[1040px] lg:min-h-0">
             <div className="board-table" aria-hidden="true">
               <div className="board-table-inlay" />
             </div>
@@ -182,7 +192,7 @@ export function RoomMeetingScreen({
             ) : null}
           </div>
 
-          <div className="pointer-events-none absolute bottom-4 left-5 z-30 max-w-sm lg:left-7">
+          <div className="room-guidance pointer-events-none absolute bottom-4 left-5 z-30 max-w-sm lg:left-7">
             <p className="font-mono text-[0.64rem] text-[#aaa79f]">
               Click a seat to call on someone
             </p>
@@ -208,6 +218,7 @@ export function RoomMeetingScreen({
           </div>
 
           <div
+            ref={transcriptScrollerRef}
             className="min-h-0 flex-1 overflow-y-auto px-5"
             aria-live="polite"
           >
@@ -301,7 +312,7 @@ function ParticipantSeat({
 
 function HumanSeat() {
   return (
-    <div className="participant-seat absolute top-[91%] left-1/2 z-20 w-32 -translate-x-1/2 -translate-y-1/2 text-center">
+    <div className="participant-seat absolute top-[84%] left-1/2 z-20 w-32 -translate-x-1/2 -translate-y-1/2 text-center">
       <span className="mx-auto grid size-14 place-items-center rounded-full border-2 border-[#e16e57] bg-[#242520] font-serif text-lg text-[#f2eee6]">
         Y
       </span>
@@ -323,7 +334,7 @@ function GuestSeat({ name, status }: { name: string | null; status: string }) {
     .join('');
   return (
     <div
-      className={`guest-seat participant-seat absolute top-[88%] left-[78%] z-20 w-36 -translate-x-1/2 -translate-y-1/2 text-center ${name ? 'is-joined' : 'is-waiting'}`}
+      className={`guest-seat participant-seat absolute top-[82%] left-[78%] z-20 w-36 -translate-x-1/2 -translate-y-1/2 text-center ${name ? 'is-joined' : 'is-waiting'}`}
     >
       <span className="guest-monogram mx-auto grid size-14 place-items-center rounded-full border border-dashed border-[#7c9cff]/70 bg-[#171916] font-mono text-sm text-[#b8c7ff]">
         {name ? initials : <Cable className="size-4" />}

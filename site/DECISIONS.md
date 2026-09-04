@@ -29,3 +29,13 @@ Decision made independently because the source page does not provide an explicit
 
 The bundled portraits and biographies are used to evaluate the concept and retain links to the source interviews. Obtain permission or replace the images before a public production launch.
 
+## 2026-09-03 — Build the boardroom as a responsive interface, not a static scene
+
+Decision made independently after reviewing the project's `/design` references and the user's request for a skeuomorphic table.
+
+Two approaches were considered:
+
+1. Use a rendered boardroom image as the stage. This would produce richer physical detail quickly, but seating, speaking state, and the WebMCP guest arrival would be frozen or require fragile overlays.
+2. Construct the smoked table, brass edge, agenda folio, portraits, nameplates, and fixed 3–6 seat plans in CSS and React. This is visually quieter than an illustration, but every state remains responsive, accessible, and causally tied to the meeting.
+
+The second approach was selected. Paper is used for preparation and readout; the room switches to near-black during the live discussion. Human activity is rust red, guest-agent activity is blue, and the central decision remains physically on the table.

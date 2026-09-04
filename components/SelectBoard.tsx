@@ -72,11 +72,23 @@ export function SelectBoard({
               <h2 id="adviser-library-title">Adviser library</h2>
               <p>Guests from David Senra’s Founders interviews.</p>
             </div>
-            <span>
-              {state.search.trim()
-                ? `${catalog.length} of ${CATALOG.length} ${catalog.length === 1 ? "match" : "matches"}`
-                : `${catalog.length} advisers`}
-            </span>
+            <div className="catalog-heading-actions">
+              <span>
+                {state.search.trim()
+                  ? `${catalog.length} of ${CATALOG.length} ${catalog.length === 1 ? "match" : "matches"}`
+                  : `${catalog.length} advisers`}
+              </span>
+              <button
+                type="button"
+                className="demo-board-action"
+                onClick={() => {
+                  const result = session.useDemoBoard();
+                  if (result.ok) setLimitAttempt(null);
+                }}
+              >
+                Use demo board
+              </button>
+            </div>
           </div>
 
           <div className="catalog-search">

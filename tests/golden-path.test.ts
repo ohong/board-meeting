@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOG, searchCatalog } from "../lib/catalog";
+import { CATALOG, DEMO_SLUGS, searchCatalog } from "../lib/catalog";
 import { EXAMPLE_BRIEFING, EXAMPLE_DECISION, EXAMPLE_QUESTION } from "../lib/example";
 import { createMockRuntime } from "../lib/runtime/mock";
 import { createMeetingSession } from "../lib/session";
@@ -33,6 +33,42 @@ describe("catalog", () => {
     expect(results[6]?.ok).toBe(false);
     expect(session.getState().selected).toHaveLength(6);
     expect(session.getState().selectionMessage).toMatch(/six/i);
+  });
+
+  it("seats the exact demo board atomically during setup and locks it after start", async () => {
+    const session = createMeetingSession({ runtime: createMockRuntime() });
+    for (const member of CATALOG.slice(0, 7)) session.toggleMember(member.slug);
+    session.setSearch("no match");
+    expect(session.getState().selectionMessage).toMatch(/six/i);
+
+    let notifications = 0;
+    session.subscribe(() => {
+      notifications += 1;
+    });
+
+    expect(session.useDemoBoard()).toEqual({ ok: true });
+    expect(notifications).toBe(1);
+    expect(session.getState()).toMatchObject({
+      selected: [...DEMO_SLUGS],
+      search: "",
+      selectionMessage: null,
+    });
+
+    expect(session.goToBrief().ok).toBe(true);
+    session.toggleMember(DEMO_SLUGS[0]);
+    expect(session.useDemoBoard()).toEqual({ ok: true });
+    expect(session.getState().selected).toEqual([...DEMO_SLUGS]);
+
+    session.setBriefing("Question: Should we change course?");
+    expect((await session.startMeeting()).ok).toBe(true);
+    const activeState = session.getState();
+    const beforeRejectedAction = notifications;
+    expect(session.useDemoBoard()).toEqual({
+      ok: false,
+      message: "Board membership is locked for this meeting.",
+    });
+    expect(notifications).toBe(beforeRejectedAction);
+    expect(session.getState()).toEqual(activeState);
   });
 });
 

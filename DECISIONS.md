@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-09-04 — Treat the demo board as a setup transaction
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved prototype-port scope
+
+The selection session exposes one setup-only action that replaces any partial roster with the canonical `DEMO_SLUGS` order, clears search and selection errors, and emits one state change. The interface presents it as a quiet shortcut beside the adviser library; the selected people still travel through the catalog, briefing, and ordinary three-seat boardroom.
+
+We considered sequencing three existing member toggles in the component. That reuses the smallest surface, but publishes intermediate rosters, can accidentally deselect an already chosen demo member, and makes replacement behavior depend on current selection. A session transaction makes the exact outcome atomic and testable. We did not create a separate demo roster because that would duplicate member identity and seating logic, invite catalog drift, and make the rehearsal less representative of the real meeting path.
+
 ## 2026-09-04 — Show workflow position as editorial text
 
 **Status:** accepted

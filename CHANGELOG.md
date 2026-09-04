@@ -2,6 +2,7 @@
 
 ## 2026-09-04
 
+- Added a one-click demo-board action that atomically replaces any setup roster with the canonical demo trio while retaining the same catalog and seating flow.
 - Made all six WebMCP tools self-guiding with human-readable titles, complete safety annotations, next-action hints, bounded transcript paging, and focused readout-section retrieval while preserving the exact full-memo default.
 - Capped chair-authored briefs and messages at their runtime limits, surfaced live character use in both inputs, and bounded repeated turn and interim-synthesis transcript context without truncating the visible record or final readout input.
 - Added a concise, searchable decision lens to every adviser in the frozen catalog and surfaced it without displacing the portrait-led selection treatment.

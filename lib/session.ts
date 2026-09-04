@@ -1,4 +1,4 @@
-import { CATALOG, getMember, matchMemberByName, searchCatalog } from "./catalog";
+import { CATALOG, DEMO_SLUGS, getMember, matchMemberByName, searchCatalog } from "./catalog";
 import { EXAMPLE_DECISION, EXAMPLE_QUESTION } from "./example";
 import { extractMention } from "./mentions";
 import { createMockRuntime } from "./runtime/mock";
@@ -383,6 +383,17 @@ export function createMeetingSession(options: SessionOptions = {}) {
       return { ok: false, message: state.selectionMessage };
     }
     state.selected = [...state.selected, slug];
+    state.selectionMessage = null;
+    emit();
+    return { ok: true };
+  }
+
+  function useDemoBoard(): ActionResult {
+    if (state.phase !== "select" && state.phase !== "brief") {
+      return { ok: false, message: "Board membership is locked for this meeting." };
+    }
+    state.selected = [...DEMO_SLUGS];
+    state.search = "";
     state.selectionMessage = null;
     emit();
     return { ok: true };
@@ -1096,6 +1107,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     visibleCatalog,
     catalog: CATALOG,
     toggleMember,
+    useDemoBoard,
     goToBrief() {
       if (state.selected.length < 3) {
         state.selectionMessage = "Choose at least three advisers.";

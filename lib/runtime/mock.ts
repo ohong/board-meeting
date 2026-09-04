@@ -1,5 +1,5 @@
 import { getMember } from "../catalog";
-import { EXAMPLE_QUESTION } from "../example";
+import { EXAMPLE_DECISION, EXAMPLE_QUESTION } from "../example";
 import type {
   BoardRuntime,
   ClosingComment,
@@ -127,6 +127,18 @@ function compactBriefing(briefing: string): string {
   return line.length > 120 ? `${line.slice(0, 117)}…` : line;
 }
 
+function isExampleDecision(briefing: string): boolean {
+  return briefing === EXAMPLE_DECISION;
+}
+
+function boundedExcerpt(text: string, maxCharacters = 170): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxCharacters) return normalized;
+  const prefix = normalized.slice(0, maxCharacters - 1);
+  const lastBoundary = prefix.lastIndexOf(" ");
+  return `${prefix.slice(0, lastBoundary > maxCharacters / 2 ? lastBoundary : undefined)}…`;
+}
+
 export function demoOpeningDelayMs(memberId: string): number {
   const preset = MOCK_DEMO_TIMING.openingDelayMs[
     memberId as keyof typeof MOCK_DEMO_TIMING.openingDelayMs
@@ -157,10 +169,25 @@ function latestQuestioner(input: RuntimeTurnInput): string {
   );
 }
 
+function latestGuestEvidence(transcript: RuntimeTurnInput["transcript"]) {
+  const contribution = [...transcript]
+    .reverse()
+    .find(
+      (event) =>
+        event.kind === "message" && event.speakerId === "guest" && !event.addressedTo,
+    );
+  if (!contribution) return null;
+  const excerpt = boundedExcerpt(contribution.text);
+  return {
+    excerpt,
+    label: `Guest-supplied evidence (${contribution.speakerName}): ${excerpt}`,
+  };
+}
+
 function genericTurn(input: RuntimeTurnInput, turnIndex: number): MemberTurn {
   const m = getMember(input.memberId);
   const name = m?.name ?? input.memberId;
-  const startingPoint = input.privatePosition?.recommendation ?? "Keep the next move reversible";
+  const decision = compactBriefing(input.briefing);
   const priorBoardPoint = [...input.transcript]
     .reverse()
     .find(
@@ -171,20 +198,84 @@ function genericTurn(input: RuntimeTurnInput, turnIndex: number): MemberTurn {
         event.speakerId !== "guest",
     )?.text;
   const variants = [
-    `${name}'s starting point: ${startingPoint} Name the assumption that has to be true, assign an owner to measure it, and avoid making the irreversible part of the decision first.`,
-    `Split this into reversible and irreversible moves. Run the smallest version that can disprove the plan, publish the decision date now, and keep the current path available until the evidence arrives.`,
+    `${name}'s starting point on “${decision}”: name the assumption that has to be true, assign an owner to measure it, and avoid making the irreversible part of the decision first.`,
+    `${name} would split “${decision}” into reversible and irreversible moves. Run the smallest version that can disprove the plan, publish the decision date now, and keep the current path available until the evidence arrives.`,
     priorBoardPoint
-      ? `The useful tension in the room is not personality; it is the claim behind “${priorBoardPoint.slice(0, 96)}${priorBoardPoint.length > 96 ? "…" : ""}” Test that claim directly before averaging the board into a vague compromise.`
-      : `The missing input is a falsifiable threshold. Decide what result would make the board say no, not only what result would let the team declare victory.`,
-    `Close the experiment with a written rule: the owner, the measure, the review date, and the condition that reverses course. Without those four things, “reversible” is only a comforting adjective.`,
+      ? `${name} sees useful tension in the claim “${boundedExcerpt(priorBoardPoint, 96)}” Test that claim directly before averaging the board into a vague compromise.`
+      : `${name} sees a missing falsifiable threshold for “${decision}.” Decide what result would make the board say no, not only what result would let the team declare victory.`,
+    `${name} would close the experiment on “${decision}” with a written rule: the owner, measure, review date, and condition that reverses course. Without those four things, “reversible” is only a comforting adjective.`,
   ];
   return { text: variants[turnIndex % variants.length] };
 }
 
-function fallbackReadout(
+function directTurn(input: RuntimeTurnInput, exampleDecision: boolean): MemberTurn {
+  const addressedTo = latestQuestioner(input);
+  const decision = compactBriefing(input.briefing);
+  if (input.memberId === "daniel-ek") {
+    const guestEvidence = latestGuestEvidence(input.transcript);
+    if (guestEvidence) {
+      return {
+        text: exampleDecision
+          ? `The guest adds: “${guestEvidence.excerpt}” That is evidence about the discovery path, not permission to preserve every free account. Instrument the path this evidence names, keep only the narrow behavior that produces qualified demand, and put everything else through the trial.`
+          : `The guest adds: “${guestEvidence.excerpt}” Treat that as an input, not a verdict on “${decision}.” Instrument the behavior it describes, compare it with a clean cohort, and decide against a threshold written before the result arrives.`,
+        addressedTo,
+      };
+    }
+    return {
+      text: exampleDecision
+        ? "I do not see new guest evidence in the public record yet. Before treating free as either a channel or a leak, instrument how paying teams first enter and define the result that would justify narrowing access or moving everyone to the trial."
+        : `I do not see new guest evidence in the public record yet. For “${decision},” identify the behavior that would change the recommendation, instrument it, and choose the decision threshold before collecting the result.`,
+      addressedTo,
+    };
+  }
+  if (exampleDecision && input.memberId === "lulu-cheng-meservey") {
+    return {
+      text: "You explain a free-tier change as a promise, not a punishment. Tell them you are done pretending a workspace you cannot support is generosity. Offer a clean trial, grandfather the ones who already built a home, and ask your best customers to invite people into something you will actually stand behind.",
+      addressedTo,
+    };
+  }
+  const prompt = boundedExcerpt(input.prompt ?? "the question in the public record", 120);
+  return {
+    text: `${getMember(input.memberId)?.name ?? "The seat"} answers “${prompt}” directly: for “${decision},” make the next test reversible, state what evidence would change the recommendation, and keep the final choice tied to that result rather than the room's personalities.`,
+    addressedTo,
+  };
+}
+
+function genericClosing(input: RuntimeTurnInput): string {
+  const ownStatement = [...input.transcript]
+    .reverse()
+    .find((event) => event.kind === "message" && event.speakerId === input.memberId)?.text;
+  const name = getMember(input.memberId)?.name ?? input.memberName;
+  if (ownStatement) {
+    return `${name}'s closing position remains: “${boundedExcerpt(ownStatement)}” Carry its decision rule into the written follow-up.`;
+  }
+  return `${name}: keep “${compactBriefing(input.briefing)}” reversible until its central assumption has an owner, a measure, and a review date.`;
+}
+
+function genericSynthesis(
   briefing: string,
+  transcript: RuntimeTurnInput["transcript"],
+): string {
+  const statements = transcript
+    .filter(
+      (event) =>
+        event.kind === "message" && event.speakerId !== "chair" && event.speakerId !== "guest",
+    )
+    .slice(-3)
+    .map((event) => `${event.speakerName}: “${boundedExcerpt(event.text, 130)}”`);
+  const record = statements.length
+    ? `The latest positions are ${statements.join("; ")}.`
+    : "No adviser has made a public claim yet.";
+  const guestEvidence = latestGuestEvidence(transcript);
+  return `Decision under review: “${compactBriefing(briefing)}.” ${record}${guestEvidence ? ` ${guestEvidence.label}.` : ""} The unresolved work is to identify the assumption separating these positions and the evidence that would change it.`;
+}
+
+function exampleReadout(
+  briefing: string,
+  transcript: RuntimeTurnInput["transcript"],
   closingComments: ClosingComment[],
 ): ExecutiveReadout {
+  const guestEvidence = latestGuestEvidence(transcript);
   return {
     decision: briefing.split("\n")[0]?.replace(/^Question:\s*/i, "") || EXAMPLE_QUESTION,
     recommendation:
@@ -204,6 +295,7 @@ function fallbackReadout(
       "Free is a major source of paying-customer discovery (34%)",
       "Free is a major source of support cost (38% of tickets)",
       "An 18-person team cannot operate two products indefinitely",
+      ...(guestEvidence ? [guestEvidence.label] : []),
     ],
     openQuestions: [
       "What share of recent enterprise wins started as a shared free workspace?",
@@ -219,6 +311,73 @@ function fallbackReadout(
   };
 }
 
+function genericReadout(
+  briefing: string,
+  transcript: RuntimeTurnInput["transcript"],
+  closingComments: ClosingComment[],
+): ExecutiveReadout {
+  const lines = briefing
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const decision =
+    lines.find((line) => /^Question:/i.test(line))?.replace(/^Question:\s*/i, "") ??
+    compactBriefing(briefing);
+  const publicStatements = transcript
+    .filter(
+      (event) =>
+        event.kind === "message" && event.speakerId !== "chair" && event.speakerId !== "guest",
+    )
+    .slice(-3)
+    .map((event) => `${event.speakerName}: ${boundedExcerpt(event.text, 180)}`);
+  const questions = transcript
+    .filter((event) => event.kind === "message" && event.text.includes("?"))
+    .slice(-3)
+    .map((event) => boundedExcerpt(event.text, 180));
+  const uniqueClosings = new Set(
+    closingComments.map(({ comment }) => comment.trim().toLowerCase()).filter(Boolean),
+  );
+  const divided =
+    uniqueClosings.size > 1 ||
+    transcript.some(
+      (event) => event.kind === "reaction" && event.reaction === "disagree",
+    );
+  const guestEvidence = latestGuestEvidence(transcript);
+
+  return {
+    decision,
+    recommendation: divided
+      ? "The board's closing positions remain distinct. Use the tests and thresholds preserved below rather than manufacturing consensus."
+      : closingComments[0]?.comment ??
+        "The board has not supplied a closing recommendation; keep the next step reversible.",
+    divided,
+    options:
+      closingComments.length > 0
+        ? closingComments.map(({ name, comment }) => `${name}: ${comment}`)
+        : ["No closing option was captured."],
+    tradeoffs:
+      publicStatements.length > 0
+        ? publicStatements
+        : ["No explicit tradeoff was captured in the public transcript."],
+    assumptions:
+      lines.length > 1
+        ? [
+            ...lines.slice(1).map((line) => line.replace(/^Briefing:\s*/i, "")),
+            ...(guestEvidence ? [guestEvidence.label] : []),
+          ]
+        : [compactBriefing(briefing), ...(guestEvidence ? [guestEvidence.label] : [])],
+    openQuestions:
+      questions.length > 0
+        ? questions
+        : ["Which observable result would reverse the current recommendation?"],
+    nextActions: [
+      "Name the owner, measure, review date, and reversal threshold for the next test.",
+      "Record the result against the original briefing before making the irreversible move.",
+    ],
+    closingComments,
+  };
+}
+
 export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntime {
   const wait = options.wait ?? waitFor;
   const pause = async (milliseconds: number) => {
@@ -228,37 +387,24 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
     id: "mock",
     async formOpeningPosition(input) {
       await pause(options.openingDelayMs?.(input.memberId) ?? 0);
-      const preset = OPENINGS[input.memberId];
+      const preset = isExampleDecision(input.briefing) ? OPENINGS[input.memberId] : undefined;
       return preset ? { ...preset, memberId: input.memberId } : genericOpening(input);
     },
     async publicTurn(input, turnOptions) {
       await pause(options.publicTurnDelayMs ?? 0);
       turnOptions?.signal?.throwIfAborted();
       const n = input.ownPriorStatements.length;
+      const exampleDecision = isExampleDecision(input.briefing);
       let turn: MemberTurn;
       if (input.capability === "answerDirect" || input.prompt) {
-        const addressedTo = latestQuestioner(input);
-        if (input.memberId === "lulu-cheng-meservey") {
-          turn = {
-            text: "You explain a free-tier change as a promise, not a punishment. Tell them you are done pretending a workspace you cannot support is generosity. Offer a clean trial, grandfather the ones who already built a home, and ask your best customers to invite people into something you will actually stand behind.",
-            addressedTo,
-          };
-        } else if (input.memberId === "daniel-ek") {
-          turn = {
-            text: "If seven of your last ten enterprise wins entered through a shared free workspace, that is not folklore, that is the funnel. I would not kill free. I would instrument sharing, keep a narrow free path for invites, and put the trial on unshared tire-kickers. Evidence beats ideology.",
-            addressedTo,
-          };
-        } else {
-          turn = {
-            text: `${getMember(input.memberId)?.name ?? "The seat"} answers directly: the evidence in the room should change the next experiment, not the personality of the company. Make the reversible test, then decide.`,
-            addressedTo,
-          };
-        }
-      } else if (n === 0 && FIRST_TURNS[input.memberId]) {
+        turn = directTurn(input, exampleDecision);
+      } else if (exampleDecision && n === 0 && FIRST_TURNS[input.memberId]) {
         turn = FIRST_TURNS[input.memberId];
-      } else {
+      } else if (exampleDecision) {
         const followUp = FOLLOW_UP_TURNS[input.memberId]?.[n - 1];
         turn = followUp ?? genericTurn(input, n);
+      } else {
+        turn = genericTurn(input, n);
       }
 
       if (turnOptions?.onStream) {
@@ -273,7 +419,7 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
       return turn;
     },
     async closingComment(input) {
-      const map: Record<string, string> = {
+      const exampleClosings: Record<string, string> = {
         "daniel-ek":
           "Measure the shared-workspace path before you burn it. If enterprise still enters through free, keep a narrow invite-free; trial the rest.",
         "david-heinemeier-hansson":
@@ -281,19 +427,22 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
         "lulu-cheng-meservey":
           "Whatever you do, write the sentence first. Trust is the word of mouth you are afraid to lose.",
       };
-      return (
-        map[input.memberId] ??
-        `${getMember(input.memberId)?.name}: run a reversible test and do not confuse exhaustion with strategy.`
-      );
+      return isExampleDecision(input.briefing) && exampleClosings[input.memberId]
+        ? exampleClosings[input.memberId]
+        : genericClosing(input);
     },
-    async synthesis({ transcript }) {
+    async synthesis({ briefing, transcript }) {
+      if (!isExampleDecision(briefing)) return genericSynthesis(briefing, transcript);
       const speakers = Array.from(
         new Set(transcript.filter((e) => e.kind === "message").map((e) => e.speakerName)),
       );
-      return `Agreement: the current free tier is operationally expensive. Disagreement: whether free is still a discovery engine (Ek) or a crowd you should stop hosting (DHH). Unresolved: the story customers will tell, which Lulu treats as the real risk. Voices so far: ${speakers.join(", ") || "the table"}.`;
+      const guestEvidence = latestGuestEvidence(transcript);
+      return `Agreement: the current free tier is operationally expensive. Disagreement: whether free is still a discovery engine (Ek) or a crowd you should stop hosting (DHH). Unresolved: the story customers will tell, which Lulu treats as the real risk.${guestEvidence ? ` ${guestEvidence.label}.` : ""} Voices so far: ${speakers.join(", ") || "the table"}.`;
     },
-    async readout({ briefing, closingComments }) {
-      return fallbackReadout(briefing, closingComments);
+    async readout({ briefing, transcript, closingComments }) {
+      return isExampleDecision(briefing)
+        ? exampleReadout(briefing, transcript, closingComments)
+        : genericReadout(briefing, transcript, closingComments);
     },
   };
 }

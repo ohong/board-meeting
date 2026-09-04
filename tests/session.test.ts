@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { EXAMPLE_DECISION } from "../lib/example";
 import { createMockRuntime } from "../lib/runtime/mock";
 import { createMeetingSession, type MeetingSession } from "../lib/session";
 import type { BoardRuntime, RuntimeTurnInput } from "../lib/types";
@@ -113,7 +114,10 @@ describe("meeting session serialization and recovery", () => {
   });
 
   it("keeps the demo trio substantive and nonrepetitive across twelve turns", async () => {
-    const session = await started(createMockRuntime());
+    const session = createMeetingSession({ runtime: createMockRuntime(), autoContinue: false });
+    selectDemo(session);
+    session.setBriefing(EXAMPLE_DECISION);
+    await session.startMeeting();
 
     await session.pumpDiscussion(12);
 

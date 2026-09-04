@@ -111,3 +111,12 @@ We considered blocking onboarding behind the runtime-status request. That remove
 Joining reserves the only guest seat and exposes its joining state synchronously. At the same moment, the session places an admission operation on the existing serialized command lane while its short visual delay runs concurrently. Any contribution, addressed question, or synthesis requested afterward therefore waits for the opening phase, any active public stream, and admission in the same deterministic order. Reset invalidates the entire sequence through the existing generation token.
 
 We considered a separate guest-admission promise that every substantive action would await. That makes the dependency explicit, but creates a second ordering mechanism beside the command lane and expands the number of intermediate failure paths. Reserving admission in the existing lane reuses its ordering and reset guarantees, while still allowing the visual delay to overlap private opening work.
+
+## 2026-09-03 — Isolate the deterministic demo fixture by exact briefing
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+The deterministic runtime uses the hand-authored demo trio only when the briefing exactly equals the one-click example fixture. Every other briefing routes through separate briefing- and transcript-grounded openings, turns, direct answers, synthesis, closings, and readout. Guest evidence is accepted only from an actual non-addressed guest contribution, bounded before reuse, and carried into both synthesis and readout; directed questions alone never become evidence.
+
+We considered topic or substring recognition so lightly edited free-tier prompts could retain the polished rehearsal. That convenience creates ambiguous fixture boundaries and risks introducing demo metrics into an unrelated user decision. We also considered removing scripted behavior entirely, which is maximally uniform but weakens a no-key rehearsal intended by the specification. Exact fixture equality keeps the golden path dependable while making fabricated cross-briefing facts structurally difficult.

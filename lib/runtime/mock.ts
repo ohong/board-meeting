@@ -385,8 +385,9 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
   };
   return {
     id: "mock",
-    async formOpeningPosition(input) {
+    async formOpeningPosition(input, callOptions) {
       await pause(options.openingDelayMs?.(input.memberId) ?? 0);
+      callOptions?.signal?.throwIfAborted();
       const preset = isExampleDecision(input.briefing) ? OPENINGS[input.memberId] : undefined;
       return preset ? { ...preset, memberId: input.memberId } : genericOpening(input);
     },
@@ -418,7 +419,8 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
       }
       return turn;
     },
-    async closingComment(input) {
+    async closingComment(input, callOptions) {
+      callOptions?.signal?.throwIfAborted();
       const exampleClosings: Record<string, string> = {
         "daniel-ek":
           "Measure the shared-workspace path before you burn it. If enterprise still enters through free, keep a narrow invite-free; trial the rest.",
@@ -431,7 +433,8 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
         ? exampleClosings[input.memberId]
         : genericClosing(input);
     },
-    async synthesis({ briefing, transcript }) {
+    async synthesis({ briefing, transcript }, callOptions) {
+      callOptions?.signal?.throwIfAborted();
       if (!isExampleDecision(briefing)) return genericSynthesis(briefing, transcript);
       const speakers = Array.from(
         new Set(transcript.filter((e) => e.kind === "message").map((e) => e.speakerName)),
@@ -439,7 +442,8 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
       const guestEvidence = latestGuestEvidence(transcript);
       return `Agreement: the current free tier is operationally expensive. Disagreement: whether free is still a discovery engine (Ek) or a crowd you should stop hosting (DHH). Unresolved: the story customers will tell, which Lulu treats as the real risk.${guestEvidence ? ` ${guestEvidence.label}.` : ""} Voices so far: ${speakers.join(", ") || "the table"}.`;
     },
-    async readout({ briefing, transcript, closingComments }) {
+    async readout({ briefing, transcript, closingComments }, callOptions) {
+      callOptions?.signal?.throwIfAborted();
       return isExampleDecision(briefing)
         ? exampleReadout(briefing, transcript, closingComments)
         : genericReadout(briefing, transcript, closingComments);

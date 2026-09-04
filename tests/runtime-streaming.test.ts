@@ -137,6 +137,31 @@ describe("browser public-turn stream", () => {
     expect(observedAbort).toBe(true);
   });
 
+  it("passes cancellation through structured browser runtime requests", async () => {
+    let observedSignal: AbortSignal | null = null;
+    const fetcher: typeof fetch = (_input, init) => {
+      observedSignal = init?.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        observedSignal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    };
+    const runtime = createBrowserRuntime({ fetch: fetcher });
+    const controller = new AbortController();
+    const pending = runtime.formOpeningPosition(
+      { ...publicInput(), capability: "formOpeningPosition" },
+      { signal: controller.signal },
+    );
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(observedSignal).toBe(controller.signal);
+  });
+
   it("streams deterministic mock chunks with zero default timing", async () => {
     const runtime = createMockRuntime();
     const updates: Array<{ type: string; delta?: string }> = [];

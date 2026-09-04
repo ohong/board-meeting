@@ -536,6 +536,33 @@ describe("Eve-native board runtime", () => {
     expect(targets).toEqual(["secretary", "secretary"]);
   });
 
+  it("passes structured runtime cancellation to the Eve invocation", async () => {
+    let observedSignal: AbortSignal | undefined;
+    const delegate = successfulInvoker({ text: "Bounded synthesis." });
+    const runtime = createLiveRuntime({
+      eveHost: "http://board.test",
+      invokeEve: async (input) => {
+        observedSignal = input.signal;
+        return delegate(input);
+      },
+    });
+    const controller = new AbortController();
+
+    await runtime.synthesis(
+      {
+        capability: "synthesis",
+        briefing: "Question: Change the plan?",
+        phase: "discussion",
+        transcript: [],
+        ownPriorStatements: [],
+        boardNames: ["Daniel Ek"],
+      },
+      { signal: controller.signal },
+    );
+
+    expect(observedSignal).toBe(controller.signal);
+  });
+
   it("sends the complete public transcript to the secretary readout", async () => {
     const transcript = Array.from({ length: 30 }, (_, index) => ({
       id: `event-${index}`,

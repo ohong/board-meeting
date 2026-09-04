@@ -19,6 +19,7 @@ export type SessionOptions = {
   runtime?: BoardRuntime;
   autoContinue?: boolean;
   autoTurnGapMs?: number;
+  runtimeDeadlineMs?: number;
   now?: () => number;
   joinDelayMs?: number;
   wait?: (milliseconds: number) => Promise<void>;
@@ -88,6 +89,7 @@ type SynthesisActionResult = ActionResult & {
 };
 
 const MAX_AUTOMATIC_TURNS = 12;
+const DEFAULT_RUNTIME_DEADLINE_MS = 30_000;
 
 function waitFor(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -101,6 +103,20 @@ function openingFallback(member: CatalogMember, briefing: string): OpeningPositi
     concern: "No private concern was captured.",
     question: "No private question was captured.",
   };
+}
+
+function boundedWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(" ");
+  return `${words.slice(0, maxWords).join(" ").replace(/[.,;:!?]?$/, "")}…`;
+}
+
+function boundedEvidence(text: string, maxCharacters = 240): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxCharacters) return normalized;
+  const prefix = normalized.slice(0, maxCharacters - 1);
+  const boundary = prefix.lastIndexOf(" ");
+  return `${prefix.slice(0, boundary > maxCharacters / 2 ? boundary : undefined)}…`;
 }
 
 function readoutFallback(
@@ -117,6 +133,11 @@ function readoutFallback(
     ) ||
     transcript.some((event) => event.kind === "message" && dissentPattern.test(event.text)) ||
     closingComments.some(({ comment }) => dissentPattern.test(comment));
+  const normalizedClosings = new Set(
+    closingComments.map(({ comment }) => comment.replace(/\s+/g, " ").trim().toLowerCase()),
+  );
+  // Distinct closings are distinct positions unless a semantic evaluator proves otherwise.
+  const divided = hasExplicitDissent || normalizedClosings.size > 1;
   const publicStatements = transcript
     .filter((event) => event.kind === "message" && event.speakerId !== "chair" && event.speakerId !== "guest")
     .slice(-3)
@@ -125,17 +146,26 @@ function readoutFallback(
     .split(/\n+/)
     .map((line) => line.replace(/^Briefing:\s*/i, "").trim())
     .filter((line) => line && !/^Question:/i.test(line));
+  const guestStatements = transcript
+    .filter(
+      (event) =>
+        event.kind === "message" &&
+        event.speakerId === "guest" &&
+        !event.addressedTo,
+    )
+    .slice(-3)
+    .map((event) => `Guest evidence (${event.speakerName}): ${boundedEvidence(event.text)}`);
 
   return {
     decision,
     recommendation:
-      hasExplicitDissent
+      divided
         ? "The board did not reach a single recommendation. Its distinct closing positions are preserved below."
         : closingComments[0]?.comment ?? "No recommendation was captured.",
-    divided: hasExplicitDissent,
+    divided,
     options: closingComments.map(({ name, comment }) => `${name}: ${comment}`),
     tradeoffs: publicStatements,
-    assumptions: briefingContext,
+    assumptions: [...briefingContext, ...guestStatements],
     openQuestions: transcript
       .filter((event) => event.kind === "message" && event.text.includes("?"))
       .map((event) => event.text)
@@ -149,6 +179,10 @@ export function createMeetingSession(options: SessionOptions = {}) {
   const runtime = options.runtime ?? createMockRuntime();
   const autoContinue = options.autoContinue ?? false;
   const autoTurnGapMs = Math.max(0, options.autoTurnGapMs ?? 0);
+  const configuredRuntimeDeadlineMs = options.runtimeDeadlineMs ?? DEFAULT_RUNTIME_DEADLINE_MS;
+  const runtimeDeadlineMs = Number.isFinite(configuredRuntimeDeadlineMs)
+    ? Math.max(0, configuredRuntimeDeadlineMs)
+    : DEFAULT_RUNTIME_DEADLINE_MS;
   const now = options.now ?? (() => Date.now());
   const joinDelayMs = options.joinDelayMs ?? 800;
   const wait = options.wait ?? waitFor;
@@ -161,7 +195,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
   let resumeAutoPumpGeneration: number | null = null;
   let ended = false;
   let speakerCursor = 0;
-  let activePublicTurn: AbortController | null = null;
+  const activeRuntimeControllers = new Set<AbortController>();
   const deferredSpeakers = new Set<string>();
 
   const state: MeetingState = {
@@ -193,6 +227,41 @@ export function createMeetingSession(options: SessionOptions = {}) {
 
   function isCurrent(token: number): boolean {
     return token === generation;
+  }
+
+  async function runRuntimeAttempt<T>(
+    capability: string,
+    work: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const controller = new AbortController();
+    activeRuntimeControllers.add(controller);
+    const deadlineError = new Error(
+      `${capability} exceeded its ${runtimeDeadlineMs}ms attempt deadline.`,
+    );
+    deadlineError.name = "RuntimeDeadlineError";
+    const aborted = new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener(
+        "abort",
+        () => {
+          reject(
+            controller.signal.reason instanceof Error
+              ? controller.signal.reason
+              : new Error(String(controller.signal.reason ?? "Runtime attempt cancelled.")),
+          );
+        },
+        { once: true },
+      );
+    });
+    const timeout = setTimeout(() => controller.abort(deadlineError), runtimeDeadlineMs);
+    try {
+      return await Promise.race([
+        Promise.resolve().then(() => work(controller.signal)),
+        aborted,
+      ]);
+    } finally {
+      clearTimeout(timeout);
+      activeRuntimeControllers.delete(controller);
+    }
   }
 
   function enqueue<T>(work: (token: number) => Promise<T>, stale: T): Promise<T> {
@@ -343,10 +412,10 @@ export function createMeetingSession(options: SessionOptions = {}) {
     slug: string,
     capability: "publicTurn" | "answerDirect",
     prompt?: string,
-  ): Promise<boolean> {
-    if (ended || !isCurrent(token)) return false;
+  ): Promise<TranscriptEvent | null> {
+    if (ended || !isCurrent(token)) return null;
     const member = getMember(slug);
-    if (!member) return false;
+    if (!member) return null;
     const directAnswerRecipient =
       capability === "answerDirect" ? latestDirectAnswerRecipient() : undefined;
     setMemberStatus(slug, "speaking");
@@ -357,40 +426,44 @@ export function createMeetingSession(options: SessionOptions = {}) {
         setMemberStatus(slug, "speaking");
         emit();
       }
-      const turnController = new AbortController();
-      activePublicTurn = turnController;
+      let attemptActive = true;
       try {
-        const turn = await runtime.publicTurn({
-          ...baseInput(slug),
-          capability,
-          prompt,
-          addressedTo: directAnswerRecipient,
-        }, {
-          signal: turnController.signal,
-          onStream(update) {
-            if (!isCurrent(token) || ended || activePublicTurn !== turnController) return;
-            if (update.type === "reset") {
-              state.inProgressPublicMessage = null;
-            } else {
-              const current = state.inProgressPublicMessage;
-              state.inProgressPublicMessage = {
-                id: `in-progress-${token}-${slug}-${attempt}`,
-                kind: "message",
-                speakerId: slug,
-                speakerName: member.name,
-                text: `${current?.text ?? ""}${update.delta}`,
-                addressedTo: directAnswerRecipient,
-                createdAt: current?.createdAt ?? now(),
-              };
-            }
-            emit();
-          },
-        });
-        if (!isCurrent(token) || ended) return false;
+        const turn = await runRuntimeAttempt(capability, (signal) =>
+          runtime.publicTurn(
+            {
+              ...baseInput(slug),
+              capability,
+              prompt,
+              addressedTo: directAnswerRecipient,
+            },
+            {
+              signal,
+              onStream(update) {
+                if (!isCurrent(token) || ended || !attemptActive || signal.aborted) return;
+                if (update.type === "reset") {
+                  state.inProgressPublicMessage = null;
+                } else {
+                  const current = state.inProgressPublicMessage;
+                  state.inProgressPublicMessage = {
+                    id: `in-progress-${token}-${slug}-${attempt}`,
+                    kind: "message",
+                    speakerId: slug,
+                    speakerName: member.name,
+                    text: `${current?.text ?? ""}${update.delta}`,
+                    addressedTo: directAnswerRecipient,
+                    createdAt: current?.createdAt ?? now(),
+                  };
+                }
+                emit();
+              },
+            },
+          ),
+        );
+        if (!isCurrent(token) || ended) return null;
         state.inProgressPublicMessage = null;
         const seat = state.members.find((m) => m.slug === slug);
         if (seat) seat.spokenCount += 1;
-        addEvent({
+        const response = addEvent({
           kind: "message",
           speakerId: slug,
           speakerName: member.name,
@@ -417,9 +490,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
         deferredSpeakers.delete(slug);
         setMemberStatus(slug, "ready");
         emit();
-        return true;
+        return response;
       } catch (error) {
-        if (!isCurrent(token) || ended) return false;
+        if (!isCurrent(token) || ended) return null;
         state.inProgressPublicMessage = null;
         firstError ??= error;
         if (attempt === 0) {
@@ -427,16 +500,16 @@ export function createMeetingSession(options: SessionOptions = {}) {
           emit();
         }
       } finally {
-        if (activePublicTurn === turnController) activePublicTurn = null;
+        attemptActive = false;
       }
     }
     const detail = firstError instanceof Error ? firstError.message : "runtime request failed";
     state.lastError = `${member.name} could not complete a turn after two attempts: ${detail}`;
     deferredSpeakers.add(slug);
     const privatePosition = state.positions[slug];
-    const recoveredText = privatePosition
+    const recoveredText = boundedWords(privatePosition
       ? `Recovered from the private opening after two failed public-turn attempts: ${privatePosition.recommendation} ${privatePosition.reasoning}`
-      : "No public statement was captured after two attempts, and no private opening was available to recover.";
+      : "No public statement was captured after two attempts, and no private opening was available to recover.", 90);
     const seat = state.members.find((candidate) => candidate.slug === slug);
     if (seat) seat.spokenCount += 1;
     addEvent({
@@ -453,7 +526,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       text: `${member.name} could not complete a turn after two attempts. The meeting will continue.`,
     });
     emit();
-    return false;
+    return null;
   }
 
   async function pumpOnceCore(token: number): Promise<boolean> {
@@ -499,10 +572,15 @@ export function createMeetingSession(options: SessionOptions = {}) {
         let failure: unknown;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           try {
-            const position = await runtime.formOpeningPosition({
-              ...baseInput(seat.slug),
-              capability: "formOpeningPosition",
-            });
+            const position = await runRuntimeAttempt("formOpeningPosition", (signal) =>
+              runtime.formOpeningPosition(
+                {
+                  ...baseInput(seat.slug),
+                  capability: "formOpeningPosition",
+                },
+                { signal },
+              ),
+            );
             if (!isCurrent(token)) return null;
             setMemberStatus(seat.slug, "ready");
             emit();
@@ -743,18 +821,23 @@ export function createMeetingSession(options: SessionOptions = {}) {
       addressedTo: member.name,
     });
     emit();
-    await runTurn(token, member.slug, "answerDirect", trimmed);
+    const response = await runTurn(token, member.slug, "answerDirect", trimmed);
     if (!isCurrent(token)) return { ok: false, message: "Session was reset before the answer completed." };
     state.guest.status = "joined";
     emit();
-    const response = [...state.transcript]
-      .reverse()
-      .find((event) => event.kind === "message" && event.speakerId === member.slug);
+    if (!response) {
+      return {
+        ok: false,
+        message: `${member.name} could not answer after two attempts. The question remains in the public transcript.`,
+        addressedMember: { slug: member.slug, name: member.name },
+        response: null,
+      };
+    }
     return {
       ok: true,
       message: `${member.name} was addressed and answered.`,
       addressedMember: { slug: member.slug, name: member.name },
-      response: response ? { speaker: response.speakerName, text: response.text } : null,
+      response: { speaker: response.speakerName, text: response.text },
     };
   }
 
@@ -764,14 +847,19 @@ export function createMeetingSession(options: SessionOptions = {}) {
     let failure: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const text = await runtime.synthesis({
-          capability: "synthesis",
-          briefing: state.briefing,
-          phase: state.meetingPhase,
-          transcript: state.transcript.map((event) => ({ ...event })),
-          ownPriorStatements: [],
-          boardNames: state.members.map((m) => m.name),
-        });
+        const text = await runRuntimeAttempt("synthesis", (signal) =>
+          runtime.synthesis(
+            {
+              capability: "synthesis",
+              briefing: state.briefing,
+              phase: state.meetingPhase,
+              transcript: state.transcript.map((event) => ({ ...event })),
+              ownPriorStatements: [],
+              boardNames: state.members.map((m) => m.name),
+            },
+            { signal },
+          ),
+        );
         if (!isCurrent(token)) return { ok: false, message: "Session was reset before synthesis completed." };
         addEvent({
           kind: "system",
@@ -827,20 +915,40 @@ export function createMeetingSession(options: SessionOptions = {}) {
     emit();
     const closingComments: ClosingComment[] = await Promise.all(
       state.members.map(async (seat) => {
-        try {
-          const comment = await runtime.closingComment({
-            ...baseInput(seat.slug),
-            capability: "closingComment",
-          });
-          return { memberId: seat.slug, name: seat.name, comment };
-        } catch {
-          const pos = state.positions[seat.slug];
-          return {
-            memberId: seat.slug,
-            name: seat.name,
-            comment: pos?.recommendation ?? "No closing comment captured.",
-          };
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const comment = await runRuntimeAttempt("closingComment", (signal) =>
+              runtime.closingComment(
+                {
+                  ...baseInput(seat.slug),
+                  capability: "closingComment",
+                },
+                { signal },
+              ),
+            );
+            return { memberId: seat.slug, name: seat.name, comment };
+          } catch {
+            if (!isCurrent(token)) break;
+          }
         }
+        const latestPublic = [...state.transcript]
+          .reverse()
+          .find(
+            (event) =>
+              event.kind === "message" &&
+              event.speakerId === seat.slug &&
+              event.text.trim().length > 0 &&
+              !/^Recovered from the private opening|^No public statement was captured/i.test(
+                event.text,
+              ),
+          );
+        const pos = state.positions[seat.slug];
+        return {
+          memberId: seat.slug,
+          name: seat.name,
+          comment:
+            latestPublic?.text ?? pos?.recommendation ?? "No closing comment captured.",
+        };
       }),
     );
     if (!isCurrent(token)) return { ok: false, message: "Session was reset before ending completed." };
@@ -848,12 +956,17 @@ export function createMeetingSession(options: SessionOptions = {}) {
     let readoutFailure: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        readout = await runtime.readout({
-          briefing: state.briefing,
-          transcript: state.transcript.map((event) => ({ ...event })),
-          closingComments: closingComments.map((comment) => ({ ...comment })),
-          boardNames: state.members.map((m) => m.name),
-        });
+        readout = await runRuntimeAttempt("readout", (signal) =>
+          runtime.readout(
+            {
+              briefing: state.briefing,
+              transcript: state.transcript.map((event) => ({ ...event })),
+              closingComments: closingComments.map((comment) => ({ ...comment })),
+              boardNames: state.members.map((m) => m.name),
+            },
+            { signal },
+          ),
+        );
         if (!isCurrent(token)) return { ok: false, message: "Session was reset before readout completed." };
         break;
       } catch (error) {
@@ -879,8 +992,10 @@ export function createMeetingSession(options: SessionOptions = {}) {
   }
 
   function reset() {
-    activePublicTurn?.abort("The board meeting was reset.");
-    activePublicTurn = null;
+    for (const controller of activeRuntimeControllers) {
+      controller.abort(new Error("The board meeting was reset."));
+    }
+    activeRuntimeControllers.clear();
     generation += 1;
     actionTail = Promise.resolve();
     ended = true;

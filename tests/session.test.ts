@@ -12,7 +12,10 @@ function selectDemo(session: MeetingSession) {
   session.setBriefing("Question: Should we change course?\n\nBriefing: Customer evidence is mixed.");
 }
 
-async function started(runtime: BoardRuntime, options: { joinDelayMs?: number } = {}) {
+async function started(
+  runtime: BoardRuntime,
+  options: { joinDelayMs?: number; runtimeDeadlineMs?: number } = {},
+) {
   const session = createMeetingSession({ runtime, autoContinue: false, ...options });
   selectDemo(session);
   expect((await session.startMeeting()).ok).toBe(true);
@@ -51,6 +54,55 @@ function derivedRuntime(overrides: Partial<BoardRuntime> = {}): BoardRuntime {
 }
 
 describe("meeting session serialization and recovery", () => {
+  it("bounds hung opening attempts without serializing the board", async () => {
+    let active = 0;
+    let maxActive = 0;
+    let attempts = 0;
+    const runtime = derivedRuntime({
+      formOpeningPosition() {
+        attempts += 1;
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        return new Promise<never>(() => undefined);
+      },
+    });
+    const session = createMeetingSession({
+      runtime,
+      autoContinue: false,
+      runtimeDeadlineMs: 1,
+    });
+    selectDemo(session);
+
+    await expect(session.startMeeting()).resolves.toMatchObject({ ok: true });
+    expect(attempts).toBe(6);
+    expect(maxActive).toBeGreaterThanOrEqual(3);
+    expect(Object.keys(session.getState().positions)).toHaveLength(3);
+  });
+
+  it("reset cancels every parallel runtime attempt even when promises ignore abort", async () => {
+    const signals: AbortSignal[] = [];
+    const runtime = derivedRuntime({
+      formOpeningPosition(_input, options) {
+        if (options?.signal) signals.push(options.signal);
+        return new Promise<never>(() => undefined);
+      },
+    });
+    const session = createMeetingSession({
+      runtime,
+      autoContinue: false,
+      runtimeDeadlineMs: 10_000,
+    });
+    selectDemo(session);
+    const pending = session.startMeeting();
+    await waitUntil(() => signals.length === 3, "parallel opening attempts did not start");
+
+    session.reset();
+
+    await expect(pending).resolves.toMatchObject({ ok: false });
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    expect(session.getState().phase).toBe("select");
+  });
+
   it("reveals independently completed mock openings without slowing the default runtime", async () => {
     const releases = new Map<number, () => void>();
     const delays = new Map([
@@ -381,6 +433,25 @@ describe("meeting session serialization and recovery", () => {
     });
   });
 
+  it("returns a failed exact direct answer instead of an earlier member response", async () => {
+    const runtime = derivedRuntime({
+      async publicTurn(input) {
+        if (input.capability === "answerDirect") throw new Error("direct answer unavailable");
+        return { text: "Earlier public response." };
+      },
+    });
+    const session = await started(runtime, { joinDelayMs: 0 });
+    await session.pumpOnce();
+    session.join("Codex");
+    await waitUntil(() => session.getState().guest.status === "joined", "guest did not join");
+
+    const result = await session.address("Daniel Ek", "Does this change your view?");
+
+    expect(result).toMatchObject({ ok: false, response: null });
+    expect(result.message).toMatch(/could not answer after two attempts/i);
+    expect(result.response?.text).not.toBe("Earlier public response.");
+  });
+
   it("retries openings and turns once, then records faithful nonfatal fallbacks", async () => {
     const base = derivedRuntime();
     let openingAttempts = 0;
@@ -448,6 +519,63 @@ describe("meeting session serialization and recovery", () => {
     ).toContain("Recovered from the private opening");
   });
 
+  it("caps public-turn recovery statements at 90 words", async () => {
+    const longField = Array.from({ length: 80 }, (_, index) => `detail-${index}`).join(" ");
+    const runtime = derivedRuntime({
+      async formOpeningPosition(input) {
+        return {
+          memberId: input.memberId,
+          recommendation: longField,
+          reasoning: longField,
+          concern: "Concern.",
+          question: "Question?",
+        };
+      },
+      async publicTurn(input) {
+        if (input.memberId === "daniel-ek") throw new Error("turn unavailable");
+        return { text: `${input.memberName} spoke.` };
+      },
+    });
+    const session = await started(runtime);
+
+    await session.pumpOnce();
+
+    const recovery = session
+      .getState()
+      .transcript.find(
+        (event) => event.speakerId === "daniel-ek" && event.text.startsWith("Recovered"),
+      );
+    expect(recovery).toBeDefined();
+    expect(recovery!.text.trim().split(/\s+/)).toHaveLength(90);
+  });
+
+  it("bounds hung public turns and interim synthesis", async () => {
+    let publicAttempts = 0;
+    let synthesisAttempts = 0;
+    const runtime = derivedRuntime({
+      publicTurn() {
+        publicAttempts += 1;
+        return new Promise<never>(() => undefined);
+      },
+      synthesis() {
+        synthesisAttempts += 1;
+        return new Promise<never>(() => undefined);
+      },
+    });
+    const session = await started(runtime, {
+      joinDelayMs: 0,
+      runtimeDeadlineMs: 1,
+    });
+
+    await expect(session.pumpOnce()).resolves.toBe(true);
+    session.join("Codex");
+    await waitUntil(() => session.getState().guest.status === "joined", "guest did not join");
+    await expect(session.requestSynthesis()).resolves.toMatchObject({ ok: false });
+
+    expect(publicAttempts).toBe(2);
+    expect(synthesisAttempts).toBe(2);
+  }, 2_000);
+
   it("drains every unspoken seat before collecting parallel closing comments", async () => {
     let activeTurns = 0;
     let maxTurns = 0;
@@ -483,6 +611,53 @@ describe("meeting session serialization and recovery", () => {
     expect(maxClosings).toBe(3);
   });
 
+  it("bounds hung parallel closings and final readout", async () => {
+    let closingAttempts = 0;
+    let readoutAttempts = 0;
+    const runtime = derivedRuntime({
+      closingComment() {
+        closingAttempts += 1;
+        return new Promise<never>(() => undefined);
+      },
+      readout() {
+        readoutAttempts += 1;
+        return new Promise<never>(() => undefined);
+      },
+    });
+    const session = await started(runtime, { runtimeDeadlineMs: 1 });
+
+    const result = await session.endMeeting();
+
+    expect(result.ok).toBe(true);
+    expect(closingAttempts).toBe(6);
+    expect(readoutAttempts).toBe(2);
+    expect(session.getState()).toMatchObject({ phase: "readout", meetingPhase: "closed" });
+  }, 2_000);
+
+  it("uses the latest substantive public statement when closing generation fails", async () => {
+    const captured: Array<{ memberId: string; comment: string }> = [];
+    const runtime = derivedRuntime({
+      async publicTurn(input) {
+        return { text: `${input.memberName} latest public position.` };
+      },
+      async closingComment() {
+        throw new Error("closing unavailable");
+      },
+      async readout(input) {
+        captured.push(...input.closingComments);
+        return createMockRuntime().readout(input);
+      },
+    });
+    const session = await started(runtime);
+    await session.pumpDiscussion(4);
+
+    await session.endMeeting();
+
+    expect(captured.find(({ memberId }) => memberId === "daniel-ek")?.comment).toBe(
+      "Daniel Ek latest public position.",
+    );
+  });
+
   it("retries readout once then builds a briefing- and transcript-faithful fallback", async () => {
     let attempts = 0;
     const runtime = derivedRuntime({
@@ -506,6 +681,33 @@ describe("meeting session serialization and recovery", () => {
     expect(readout?.closingComments).toHaveLength(3);
     expect(JSON.stringify(readout)).toContain("Customer evidence is mixed");
     expect(JSON.stringify(readout)).not.toMatch(/6,000|1\.6M|2\.3%/);
+  });
+
+  it("preserves conflicting closings and bounded guest evidence in fallback readouts", async () => {
+    const guestStatement = `${"guest-evidence ".repeat(80)}tail-sentinel`;
+    const runtime = derivedRuntime({
+      async closingComment(input) {
+        return `${input.memberName} chooses option ${input.memberId}.`;
+      },
+      async readout() {
+        throw new Error("synthesis offline");
+      },
+    });
+    const session = await started(runtime, { joinDelayMs: 0 });
+    session.join("Witness");
+    await waitUntil(() => session.getState().guest.status === "joined", "guest did not join");
+    await session.contribute(guestStatement);
+    await session.address("Daniel Ek", "question-only-sentinel");
+
+    await session.endMeeting();
+
+    const readout = session.getState().readout;
+    expect(readout?.divided).toBe(true);
+    expect(readout?.recommendation).toMatch(/did not reach a single recommendation/i);
+    expect(readout?.options).toHaveLength(3);
+    expect(readout?.assumptions.join(" ")).toContain("guest-evidence");
+    expect(readout?.assumptions.join(" ")).not.toContain("tail-sentinel");
+    expect(readout?.assumptions.join(" ")).not.toContain("question-only-sentinel");
   });
 
   it("retries interim synthesis once and leaves a clear nonfatal result", async () => {

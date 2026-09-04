@@ -5,6 +5,7 @@ import type {
   MemberTurn,
   OpeningPosition,
   PublicTurnOptions,
+  RuntimeCallOptions,
   TranscriptEvent,
 } from "../types";
 import {
@@ -16,11 +17,16 @@ type BrowserRuntimeOptions = {
   fetch?: typeof fetch;
 };
 
-async function post<T>(fetcher: typeof fetch, body: unknown): Promise<T> {
+async function post<T>(
+  fetcher: typeof fetch,
+  body: unknown,
+  options: RuntimeCallOptions = {},
+): Promise<T> {
   const res = await fetcher("/api/member-turn", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: options.signal,
   });
   const data = (await res.json()) as { ok: boolean; error?: string; result?: T };
   if (!res.ok || !data.ok) {
@@ -131,26 +137,34 @@ export function createBrowserRuntime(options: BrowserRuntimeOptions = {}): Board
   const fetcher = options.fetch ?? fetch;
   return {
     id: "live",
-    formOpeningPosition(input) {
-      return post<OpeningPosition>(fetcher, { capability: "formOpeningPosition", input });
+    formOpeningPosition(input, callOptions) {
+      return post<OpeningPosition>(
+        fetcher,
+        { capability: "formOpeningPosition", input },
+        callOptions,
+      );
     },
     publicTurn(input, turnOptions) {
       const capability = input.capability === "answerDirect" ? "answerDirect" : "publicTurn";
       return streamPublicTurn(fetcher, capability, input, turnOptions);
     },
-    closingComment(input) {
-      return post<string>(fetcher, { capability: "closingComment", input });
+    closingComment(input, callOptions) {
+      return post<string>(fetcher, { capability: "closingComment", input }, callOptions);
     },
-    synthesis(input) {
-      return post<string>(fetcher, { capability: "synthesis", input });
+    synthesis(input, callOptions) {
+      return post<string>(fetcher, { capability: "synthesis", input }, callOptions);
     },
     readout(input: {
       briefing: string;
       transcript: TranscriptEvent[];
       closingComments: ClosingComment[];
       boardNames: string[];
-    }) {
-      return post<ExecutiveReadout>(fetcher, { capability: "readout", input });
+    }, callOptions) {
+      return post<ExecutiveReadout>(
+        fetcher,
+        { capability: "readout", input },
+        callOptions,
+      );
     },
   };
 }

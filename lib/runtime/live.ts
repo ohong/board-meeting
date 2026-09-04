@@ -451,10 +451,10 @@ export function createLiveRuntime(options: LiveRuntimeOptions = {}): BoardRuntim
 
   return {
     id: "live",
-    async formOpeningPosition(input) {
+    async formOpeningPosition(input, callOptions) {
       const target = adviserSlugSchema.parse(input.memberId);
       const result = openingPositionSchema.parse(
-        await invoke("formOpeningPosition", target, memberMessage(input)),
+        await invoke("formOpeningPosition", target, memberMessage(input), callOptions),
       );
       if (result.memberId !== target) {
         throw new EveRuntimeContractError(
@@ -476,23 +476,29 @@ export function createLiveRuntime(options: LiveRuntimeOptions = {}): BoardRuntim
         await invoke(input.capability, target, memberMessage(input), options),
       );
     },
-    async closingComment(input) {
+    async closingComment(input, callOptions) {
       const target = adviserSlugSchema.parse(input.memberId);
       return textResultSchema.parse(
-        await invoke("closingComment", target, memberMessage(input)),
+        await invoke("closingComment", target, memberMessage(input), callOptions),
       ).text;
     },
-    async synthesis(input) {
+    async synthesis(input, callOptions) {
       return textResultSchema.parse(
-        await invoke("synthesis", SECRETARY_TARGET, secretaryMessage("synthesis", input)),
+        await invoke(
+          "synthesis",
+          SECRETARY_TARGET,
+          secretaryMessage("synthesis", input),
+          callOptions,
+        ),
       ).text;
     },
-    async readout(input) {
+    async readout(input, callOptions) {
       const result = executiveReadoutCoreSchema.parse(
         await invoke(
           "readout",
           SECRETARY_TARGET,
           secretaryMessage("readout", input),
+          callOptions,
         ),
       );
       return { ...result, closingComments: input.closingComments };

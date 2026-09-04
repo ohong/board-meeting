@@ -173,19 +173,21 @@ export async function handleMemberTurnPost(
     let result: unknown;
     switch (parsed.data.capability) {
       case "formOpeningPosition":
-        result = await runtime.formOpeningPosition(parsed.data.input);
+        result = await runtime.formOpeningPosition(parsed.data.input, {
+          signal: request.signal,
+        });
         break;
       case "publicTurn":
       case "answerDirect":
         return publicTurnResponse(runtime, parsed.data.input, request.signal);
       case "closingComment":
-        result = await runtime.closingComment(parsed.data.input);
+        result = await runtime.closingComment(parsed.data.input, { signal: request.signal });
         break;
       case "synthesis":
-        result = await runtime.synthesis(parsed.data.input);
+        result = await runtime.synthesis(parsed.data.input, { signal: request.signal });
         break;
       case "readout":
-        result = await runtime.readout(parsed.data.input);
+        result = await runtime.readout(parsed.data.input, { signal: request.signal });
         break;
     }
     return Response.json({ ok: true, result });

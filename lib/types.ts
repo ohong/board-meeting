@@ -78,8 +78,11 @@ export type PublicTurnStreamUpdate =
   | { type: "reset" }
   | { type: "append"; delta: string };
 
-export type PublicTurnOptions = {
+export type RuntimeCallOptions = {
   signal?: AbortSignal;
+};
+
+export type PublicTurnOptions = RuntimeCallOptions & {
   onStream?: (update: PublicTurnStreamUpdate) => void;
 };
 
@@ -125,14 +128,20 @@ export type RuntimeTurnInput = {
 
 export type BoardRuntime = {
   id: "mock" | "live";
-  formOpeningPosition(input: RuntimeTurnInput): Promise<OpeningPosition>;
+  formOpeningPosition(
+    input: RuntimeTurnInput,
+    options?: RuntimeCallOptions,
+  ): Promise<OpeningPosition>;
   publicTurn(input: RuntimeTurnInput, options?: PublicTurnOptions): Promise<MemberTurn>;
-  closingComment(input: RuntimeTurnInput): Promise<string>;
-  synthesis(input: Omit<RuntimeTurnInput, "memberId" | "memberName">): Promise<string>;
+  closingComment(input: RuntimeTurnInput, options?: RuntimeCallOptions): Promise<string>;
+  synthesis(
+    input: Omit<RuntimeTurnInput, "memberId" | "memberName">,
+    options?: RuntimeCallOptions,
+  ): Promise<string>;
   readout(input: {
     briefing: string;
     transcript: TranscriptEvent[];
     closingComments: ClosingComment[];
     boardNames: string[];
-  }): Promise<ExecutiveReadout>;
+  }, options?: RuntimeCallOptions): Promise<ExecutiveReadout>;
 };

@@ -87,6 +87,46 @@ describe("member-turn API boundary", () => {
     });
   });
 
+  it("passes request cancellation to structured live runtime calls", async () => {
+    let runtimeSignal: AbortSignal | undefined;
+    const runtime = {
+      ...createMockRuntime(),
+      async synthesis(_input, options) {
+        runtimeSignal = options?.signal;
+        return "Structured synthesis.";
+      },
+    } satisfies ReturnType<typeof createMockRuntime>;
+    const controller = new AbortController();
+    const signalRequest = new Request("https://board.test/api/member-turn", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://board.test",
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({
+        capability: "synthesis",
+        input: {
+          capability: "synthesis",
+          briefing: "Question: Change?",
+          phase: "discussion",
+          transcript: [],
+          ownPriorStatements: [],
+          boardNames: ["Daniel Ek"],
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    await handleMemberTurnPost(signalRequest, {
+      createRuntime: () => runtime,
+      hasLiveKey: () => true,
+    });
+    controller.abort();
+
+    expect(runtimeSignal?.aborted).toBe(true);
+  });
+
   it("aborts the live runtime when the response consumer disconnects", async () => {
     let runtimeSignal: AbortSignal | undefined;
     const runtime = {

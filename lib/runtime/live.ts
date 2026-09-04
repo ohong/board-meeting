@@ -1,6 +1,10 @@
 import { Buffer } from "node:buffer";
 import { getVercelOidcToken } from "@vercel/oidc";
-import { Client, type MessageStreamEvent } from "eve/client";
+import {
+  Client,
+  isCurrentTurnBoundaryEvent,
+  type MessageStreamEvent,
+} from "eve/client";
 
 import { createMockRuntime } from "./mock";
 import {
@@ -14,6 +18,7 @@ import {
 } from "./schemas";
 import type {
   BoardRuntime,
+  PublicTurnOptions,
   RuntimeTurnInput,
   TranscriptEvent,
   TurnCapability,
@@ -33,6 +38,9 @@ export type EveInvocationResult = {
 export type EveInvoker = (input: {
   host: string;
   message: string;
+  expectedTarget: string;
+  signal?: AbortSignal;
+  onStream?: PublicTurnOptions["onStream"];
 }) => Promise<EveInvocationResult>;
 
 export type LiveRuntimeOptions = {
@@ -98,14 +106,152 @@ function createEveClient(host: string): Client {
   });
 }
 
-const defaultEveInvoker: EveInvoker = async ({ host, message }) => {
-  const client = createEveClient(host);
-  // Every capability starts a fresh Eve session; lib/session.ts still owns
-  // meeting-level Promise.all concurrency.
-  const { response } = await client.sessions.create({ message });
-  const result = await response.result();
-  return { status: result.status, events: result.events };
+type EveResponseLike = AsyncIterable<MessageStreamEvent> & {
+  cancel(): Promise<unknown>;
 };
+
+export type EveClientLike = {
+  sessions: {
+    create(input: {
+      message: string;
+      signal?: AbortSignal;
+    }): Promise<{ response: EveResponseLike }>;
+    attach(sessionId: string): {
+      stream(options: { signal?: AbortSignal; startIndex?: number }): AsyncIterable<MessageStreamEvent>;
+    };
+  };
+};
+
+function statusFromEvents(events: readonly MessageStreamEvent[]): EveInvocationResult["status"] {
+  if (events.some((event) => event.type === "session.failed")) return "failed";
+  if (events.some((event) => event.type === "session.completed")) return "completed";
+  return "waiting";
+}
+
+async function relayExpectedChild(
+  client: EveClientLike,
+  call: Extract<MessageStreamEvent, { type: "subagent.called" }>,
+  expectedTarget: string,
+  signal: AbortSignal,
+  onStream: NonNullable<PublicTurnOptions["onStream"]>,
+) {
+  const child = client.sessions.attach(call.data.childSessionId);
+  let authenticatedChild = false;
+  let visibleMessage = "";
+  for await (const event of child.stream({ signal, startIndex: 0 })) {
+    signal.throwIfAborted();
+    if (!authenticatedChild && event.type !== "session.started") {
+      throw new EveRuntimeContractError(
+        "EVE_SUBAGENT_CALL_INVALID",
+        "The Eve child stream emitted an event before authenticating its delegated subagent invocation.",
+      );
+    }
+    if (event.type === "session.started") {
+      const invocation = event.data.invocation;
+      if (
+        invocation?.kind !== "subagent" ||
+        invocation.name !== expectedTarget ||
+        invocation.parentCallId !== call.data.callId ||
+        invocation.parentSessionId !== call.data.sessionId ||
+        invocation.parentTurnId !== call.data.turnId
+      ) {
+        throw new EveRuntimeContractError(
+          "EVE_SUBAGENT_CALL_INVALID",
+          `The attached Eve child session was not the expected subagent '${expectedTarget}'.`,
+        );
+      }
+      authenticatedChild = true;
+    } else if (event.type === "step.started" || event.type === "step.failed") {
+      visibleMessage = "";
+      onStream({ type: "reset" });
+    } else if (event.type === "message.appended") {
+      visibleMessage += event.data.messageDelta;
+      onStream({ type: "append", delta: event.data.messageDelta });
+    } else if (
+      event.type === "message.completed" &&
+      event.data.finishReason !== "tool-calls" &&
+      event.data.message !== null &&
+      event.data.message !== visibleMessage
+    ) {
+      // Eve can retain abandoned provider-attempt deltas. The completed block
+      // is authoritative, so reconcile the ephemeral projection before the
+      // workflow result is validated and made durable by the caller.
+      visibleMessage = event.data.message;
+      onStream({ type: "reset" });
+      onStream({ type: "append", delta: visibleMessage });
+    }
+    if (isCurrentTurnBoundaryEvent(event)) break;
+  }
+  if (!authenticatedChild) {
+    throw new EveRuntimeContractError(
+      "EVE_SUBAGENT_CALL_INVALID",
+      "The Eve child stream did not identify its delegated subagent invocation.",
+    );
+  }
+}
+
+export function createEveInvoker(
+  clientFactory: (host: string) => EveClientLike = createEveClient,
+): EveInvoker {
+  return async ({ host, message, expectedTarget, signal, onStream }) => {
+    signal?.throwIfAborted();
+    const client = clientFactory(host);
+    const transportController = new AbortController();
+    const transportSignal = transportController.signal;
+    let response: EveResponseLike | undefined;
+    let aborting: Promise<void> | undefined;
+    const abortTurn = () => {
+      if (!response) {
+        transportController.abort(signal?.reason);
+        return;
+      }
+      aborting ??= response
+        .cancel()
+        .catch(() => undefined)
+        .then(() => transportController.abort(signal?.reason));
+    };
+    signal?.addEventListener("abort", abortTurn, { once: true });
+    try {
+      // Every capability starts a fresh Eve session; lib/session.ts still owns
+      // meeting-level Promise.all concurrency.
+      ({ response } = await client.sessions.create({ message, signal: transportSignal }));
+      if (signal?.aborted) abortTurn();
+
+      const events: MessageStreamEvent[] = [];
+      let childRelay: Promise<void> | undefined;
+      let childError: unknown;
+      for await (const event of response) {
+        events.push(event);
+        if (
+          onStream &&
+          childRelay === undefined &&
+          event.type === "subagent.called" &&
+          event.data.name === expectedTarget &&
+          event.data.toolName === expectedTarget
+        ) {
+          childRelay = relayExpectedChild(
+            client,
+            event,
+            expectedTarget,
+            transportSignal,
+            onStream,
+          ).catch((error: unknown) => {
+            childError = error;
+          });
+        }
+      }
+      await childRelay;
+      if (childError) throw childError;
+      signal?.throwIfAborted();
+      return { status: statusFromEvents(events), events };
+    } finally {
+      signal?.removeEventListener("abort", abortTurn);
+      if (aborting) await aborting;
+    }
+  };
+}
+
+const defaultEveInvoker = createEveInvoker();
 
 function recentTranscript(events: TranscriptEvent[]): TranscriptEvent[] {
   return events.slice(-24);
@@ -122,11 +268,15 @@ function memberMessage(input: RuntimeTurnInput): string {
       "Give a 40-70 word closing comment with the most important recommendation, unresolved concern, or next action.",
   } as const;
 
+  const responseContract =
+    input.capability === "publicTurn" || input.capability === "answerDirect"
+      ? "Return only the words you would say aloud. Do not return JSON, routing metadata, or markdown."
+      : "Return only the structured value required by the output schema.";
   return [
     `Board capability: ${input.capability}.`,
     instructions[input.capability as keyof typeof instructions],
     "Use only the supplied meeting state and your authored adviser instructions.",
-    "Return only the structured value required by the output schema.",
+    responseContract,
     JSON.stringify({ ...input, transcript: recentTranscript(input.transcript) }),
   ].join("\n\n");
 }
@@ -229,6 +379,7 @@ function extractWorkflowOutput(
     workflowResult.data.status !== "completed" ||
     !toolResult ||
     toolResult.kind !== "tool-result" ||
+    toolResult.callId !== workflowCall.callId ||
     toolResult.isError
   ) {
     throw new EveRuntimeContractError(
@@ -274,9 +425,16 @@ export function createLiveRuntime(options: LiveRuntimeOptions = {}): BoardRuntim
     capability: WorkflowCapability,
     target: WorkflowTarget,
     message: string,
+    options?: PublicTurnOptions,
   ): Promise<unknown> {
     const routingEnvelope = encodeRoutingEnvelope(capability, target, message);
-    const invocation = await invokeEve({ host, message: rootMessage(routingEnvelope) });
+    const invocation = await invokeEve({
+      host,
+      message: rootMessage(routingEnvelope),
+      expectedTarget: target,
+      signal: options?.signal,
+      onStream: options?.onStream,
+    });
     return extractWorkflowOutput(invocation, { capability, target, routingEnvelope });
   }
 
@@ -295,7 +453,7 @@ export function createLiveRuntime(options: LiveRuntimeOptions = {}): BoardRuntim
       }
       return result;
     },
-    async publicTurn(input) {
+    async publicTurn(input, options) {
       const target = adviserSlugSchema.parse(input.memberId);
       if (input.capability !== "publicTurn" && input.capability !== "answerDirect") {
         throw new EveRuntimeContractError(
@@ -304,7 +462,7 @@ export function createLiveRuntime(options: LiveRuntimeOptions = {}): BoardRuntim
         );
       }
       return memberTurnSchema.parse(
-        await invoke(input.capability, target, memberMessage(input)),
+        await invoke(input.capability, target, memberMessage(input), options),
       );
     },
     async closingComment(input) {

@@ -84,3 +84,12 @@ We considered placing fixed delays inside the mock runtime or session defaults. 
 Each live capability starts a fresh Eve root session carrying an immutable, encoded route. The root may call only the authored `board_runtime` workflow; that workflow invokes exactly one declared adviser or the unseen secretary in its own child session. The API accepts a result only when the event record proves the one expected workflow call, the exact expected child identity, and a completed value matching the capability's closed schema. Public turns over 90 words fail validation and enter the session engine's existing retry path. Production server-to-Eve calls use same-project Vercel OIDC.
 
 We considered exposing 36 separate Eve roots and calling OpenAI directly from the application. Separate roots remove one routing hop, but duplicate deployment and authorization policy across the roster. Direct AI SDK calls are simpler, but do not create auditable Eve child sessions and would violate the separate-agent requirement. The single routing root adds one small model-directed tool step, but centralizes policy while retaining independently configured, discoverable adviser contexts.
+
+## 2026-09-03 — Stream provisional speech from the authenticated Eve child
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+Public and direct-answer capabilities let the delegated adviser emit plain text so Eve exposes its incremental message events. The application attaches only to the child named by the root's delegated call, verifies the child's complete parent invocation tuple before relaying any content, and treats every delta as provisional. A turn becomes durable only after the authored workflow returns the exact expected capability, target, tool call, and schema-valid result. Retries reset the projection, and page reset or browser disconnect cooperatively cancels the active Eve turn.
+
+We considered keeping Eve's structured `{ text }` child output and revealing it only after completion. That offers the smallest protocol surface, but Eve's structured-output tool does not expose the spoken answer as real-time text. We also considered a presentation-only typewriter effect over the completed result; it looks streamed without reducing perceived model latency and would misrepresent the runtime. The chosen plain-text child plus validated workflow result adds a provisional projection layer, but preserves true child output streaming without making unverified text part of the meeting record.

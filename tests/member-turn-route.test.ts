@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { POST } from "../app/api/member-turn/route";
+import { handleMemberTurnPost, POST } from "../app/api/member-turn/route";
+import { createMockRuntime } from "../lib/runtime/mock";
 
 function request(body: unknown, headers: Record<string, string> = {}) {
   return new Request("https://board.test/api/member-turn", {
@@ -10,7 +11,107 @@ function request(body: unknown, headers: Record<string, string> = {}) {
   });
 }
 
+function validPublicTurnBody() {
+  return {
+    capability: "publicTurn" as const,
+    input: {
+      capability: "publicTurn" as const,
+      memberId: "daniel-ek",
+      memberName: "Daniel Ek",
+      briefing: "Question: Change?",
+      phase: "discussion" as const,
+      transcript: [],
+      ownPriorStatements: [],
+      boardNames: ["Daniel Ek", "David Heinemeier Hansson", "Lulu Cheng Meservey"],
+    },
+  };
+}
+
 describe("member-turn API boundary", () => {
+  it("relays public turns as NDJSON but keeps the final result explicit", async () => {
+    const runtime = {
+      ...createMockRuntime(),
+      async publicTurn(_input, options) {
+        options?.onStream?.({ type: "reset" });
+        options?.onStream?.({ type: "append", delta: "Streamed " });
+        options?.onStream?.({ type: "append", delta: "answer." });
+        return { text: "Streamed answer." };
+      },
+    } satisfies ReturnType<typeof createMockRuntime>;
+    const response = await handleMemberTurnPost(
+      request(validPublicTurnBody(), { origin: "https://board.test", "sec-fetch-site": "same-origin" }),
+      { createRuntime: () => runtime, hasLiveKey: () => true },
+    );
+
+    expect(response.headers.get("content-type")).toContain("application/x-ndjson");
+    expect(await response.text()).toBe(
+      [
+        JSON.stringify({ type: "reset" }),
+        JSON.stringify({ type: "append", delta: "Streamed " }),
+        JSON.stringify({ type: "append", delta: "answer." }),
+        JSON.stringify({ type: "complete", result: { text: "Streamed answer." } }),
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("preserves JSON responses for structured non-public capabilities", async () => {
+    const runtime = {
+      ...createMockRuntime(),
+      async synthesis() {
+        return "Structured synthesis.";
+      },
+    } satisfies ReturnType<typeof createMockRuntime>;
+    const response = await handleMemberTurnPost(
+      request(
+        {
+          capability: "synthesis",
+          input: {
+            capability: "synthesis",
+            briefing: "Question: Change?",
+            phase: "discussion",
+            transcript: [],
+            ownPriorStatements: [],
+            boardNames: ["Daniel Ek"],
+          },
+        },
+        { origin: "https://board.test", "sec-fetch-site": "same-origin" },
+      ),
+      { createRuntime: () => runtime, hasLiveKey: () => true },
+    );
+
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      result: "Structured synthesis.",
+    });
+  });
+
+  it("aborts the live runtime when the response consumer disconnects", async () => {
+    let runtimeSignal: AbortSignal | undefined;
+    const runtime = {
+      ...createMockRuntime(),
+      publicTurn(_input, options) {
+        runtimeSignal = options?.signal;
+        return new Promise<never>((_resolve, reject) => {
+          runtimeSignal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      },
+    } satisfies ReturnType<typeof createMockRuntime>;
+    const response = await handleMemberTurnPost(
+      request(validPublicTurnBody(), { origin: "https://board.test", "sec-fetch-site": "same-origin" }),
+      { createRuntime: () => runtime, hasLiveKey: () => true },
+    );
+
+    await response.body?.cancel("test disconnect");
+
+    expect(runtimeSignal?.aborted).toBe(true);
+  });
+
   it("rejects cross-origin browser requests", async () => {
     const response = await POST(request({}, { origin: "https://attacker.test" }));
     expect(response.status).toBe(403);

@@ -37,19 +37,29 @@ export default defineTool({
       ["eve", "workflow"].join("/")
     );
     const { agent } = workflowModule;
+    const streamsPublicText =
+      envelope.capability === "publicTurn" || envelope.capability === "answerDirect";
     const result = await agent(ctx, {
       key: "board-runtime-delegation",
       target: envelope.target,
       message: envelope.message,
-      outputSchema: outputJsonSchemaForCapability(
-        envelope.capability,
-      ) as AgentOutputSchema,
+      ...(streamsPublicText
+        ? {}
+        : {
+            outputSchema: outputJsonSchemaForCapability(
+              envelope.capability,
+            ) as AgentOutputSchema,
+          }),
     });
+
+    const validatedResult = streamsPublicText
+      ? outputSchemaForCapability(envelope.capability).parse({ text: result })
+      : outputSchemaForCapability(envelope.capability).parse(result);
 
     return {
       capability: envelope.capability,
       target: envelope.target,
-      result: outputSchemaForCapability(envelope.capability).parse(result),
+      result: validatedResult,
     };
   },
 });

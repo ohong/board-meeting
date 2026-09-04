@@ -74,6 +74,15 @@ export type MemberTurn = {
   wantsToRespond?: string;
 };
 
+export type PublicTurnStreamUpdate =
+  | { type: "reset" }
+  | { type: "append"; delta: string };
+
+export type PublicTurnOptions = {
+  signal?: AbortSignal;
+  onStream?: (update: PublicTurnStreamUpdate) => void;
+};
+
 export type ClosingComment = {
   memberId: string;
   name: string;
@@ -117,7 +126,7 @@ export type RuntimeTurnInput = {
 export type BoardRuntime = {
   id: "mock" | "live";
   formOpeningPosition(input: RuntimeTurnInput): Promise<OpeningPosition>;
-  publicTurn(input: RuntimeTurnInput): Promise<MemberTurn>;
+  publicTurn(input: RuntimeTurnInput, options?: PublicTurnOptions): Promise<MemberTurn>;
   closingComment(input: RuntimeTurnInput): Promise<string>;
   synthesis(input: Omit<RuntimeTurnInput, "memberId" | "memberName">): Promise<string>;
   readout(input: {

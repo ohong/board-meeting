@@ -5,11 +5,78 @@ import {
   resolveEveHost,
 } from "@/lib/runtime/live";
 import { memberTurnApiRequestSchema } from "@/lib/runtime/schemas";
+import type { BoardRuntime, RuntimeTurnInput } from "@/lib/types";
 
 const MAX_BODY_BYTES = 256 * 1024;
 
 function errorResponse(status: number, code: string, error: string) {
   return Response.json({ ok: false, code, error }, { status });
+}
+
+type RouteDependencies = {
+  createRuntime: (options: { eveHost: string }) => BoardRuntime;
+  hasLiveKey: () => boolean;
+};
+
+const defaultDependencies: RouteDependencies = { createRuntime, hasLiveKey };
+
+function streamLine(value: unknown): Uint8Array {
+  return new TextEncoder().encode(`${JSON.stringify(value)}\n`);
+}
+
+function runtimeError(error: unknown) {
+  if (error instanceof EveRuntimeContractError) {
+    return { code: error.code, error: error.message };
+  }
+  console.error("Live Eve board runtime call failed.", error);
+  return {
+    code: "EVE_RUNTIME_UNAVAILABLE",
+    error: "The Eve runtime could not complete this board turn.",
+  };
+}
+
+function publicTurnResponse(
+  runtime: BoardRuntime,
+  input: RuntimeTurnInput,
+  requestSignal: AbortSignal,
+) {
+  const cancellation = new AbortController();
+  const signal = AbortSignal.any([requestSignal, cancellation.signal]);
+  let open = true;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      void runtime
+        .publicTurn(input, {
+          signal,
+          onStream(event) {
+            if (open && !signal.aborted) controller.enqueue(streamLine(event));
+          },
+        })
+        .then((result) => {
+          if (open && !signal.aborted) controller.enqueue(streamLine({ type: "complete", result }));
+        })
+        .catch((error: unknown) => {
+          if (open && !signal.aborted) controller.enqueue(streamLine({ type: "error", ...runtimeError(error) }));
+        })
+        .finally(() => {
+          if (!open) return;
+          open = false;
+          controller.close();
+        });
+    },
+    cancel(reason) {
+      open = false;
+      cancellation.abort(reason);
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "x-accel-buffering": "no",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 export function validateSameOrigin(request: Request): string | null {
@@ -53,7 +120,10 @@ class RequestBodyError extends Error {
   }
 }
 
-export async function POST(request: Request) {
+export async function handleMemberTurnPost(
+  request: Request,
+  dependencies: RouteDependencies = defaultDependencies,
+) {
   const sameOriginError = validateSameOrigin(request);
   if (sameOriginError) return errorResponse(403, "CROSS_ORIGIN_REQUEST", sameOriginError);
 
@@ -90,7 +160,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!hasLiveKey()) {
+  if (!dependencies.hasLiveKey()) {
     return errorResponse(
       503,
       "LIVE_RUNTIME_NOT_CONFIGURED",
@@ -99,7 +169,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const runtime = createRuntime({ eveHost: resolveEveHost(request) });
+    const runtime = dependencies.createRuntime({ eveHost: resolveEveHost(request) });
     let result: unknown;
     switch (parsed.data.capability) {
       case "formOpeningPosition":
@@ -107,8 +177,7 @@ export async function POST(request: Request) {
         break;
       case "publicTurn":
       case "answerDirect":
-        result = await runtime.publicTurn(parsed.data.input);
-        break;
+        return publicTurnResponse(runtime, parsed.data.input, request.signal);
       case "closingComment":
         result = await runtime.closingComment(parsed.data.input);
         break;
@@ -121,14 +190,11 @@ export async function POST(request: Request) {
     }
     return Response.json({ ok: true, result });
   } catch (error) {
-    if (error instanceof EveRuntimeContractError) {
-      return errorResponse(502, error.code, error.message);
-    }
-    console.error("Live Eve board runtime call failed.", error);
-    return errorResponse(
-      502,
-      "EVE_RUNTIME_UNAVAILABLE",
-      "The Eve runtime could not complete this board turn.",
-    );
+    const failure = runtimeError(error);
+    return errorResponse(502, failure.code, failure.error);
   }
+}
+
+export function POST(request: Request) {
+  return handleMemberTurnPost(request);
 }

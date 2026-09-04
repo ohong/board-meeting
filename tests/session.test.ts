@@ -248,6 +248,95 @@ describe("meeting session serialization and recovery", () => {
     ]);
   });
 
+  it("keeps streamed text ephemeral, clears failed attempts, and atomically commits the final turn", async () => {
+    let attempts = 0;
+    const runtime = derivedRuntime({
+      async publicTurn(_input, options) {
+        attempts += 1;
+        options?.onStream?.({ type: "reset" });
+        options?.onStream?.({
+          type: "append",
+          delta: attempts === 1 ? "Abandoned partial" : "Validated final turn.",
+        });
+        if (attempts === 1) throw new Error("retry the child turn");
+        return { text: "Validated final turn." };
+      },
+    });
+    const session = await started(runtime);
+    const drafts: Array<string | null> = [];
+    const unsubscribe = session.subscribe(() => {
+      drafts.push(session.getState().inProgressPublicMessage?.text ?? null);
+    });
+
+    await session.pumpOnce();
+    unsubscribe();
+
+    expect(drafts).toContain("Abandoned partial");
+    expect(drafts).toContain("Validated final turn.");
+    expect(session.getState().inProgressPublicMessage).toBeNull();
+    const committed = session
+      .getState()
+      .transcript.filter((event) => event.kind === "message" && event.speakerId === "daniel-ek");
+    expect(committed.map((event) => event.text)).toEqual(["Validated final turn."]);
+  });
+
+  it("cancels and clears an in-progress public message when the meeting resets", async () => {
+    let runtimeSignal: AbortSignal | undefined;
+    const runtime = derivedRuntime({
+      publicTurn(_input, options) {
+        runtimeSignal = options?.signal;
+        options?.onStream?.({ type: "reset" });
+        options?.onStream?.({ type: "append", delta: "Never commit this" });
+        return new Promise<never>((_resolve, reject) => {
+          runtimeSignal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      },
+    });
+    const session = await started(runtime);
+    const pending = session.pumpOnce();
+    await waitUntil(
+      () => session.getState().inProgressPublicMessage?.text === "Never commit this",
+      "the streamed draft did not appear",
+    );
+
+    session.reset();
+
+    await expect(pending).resolves.toBe(false);
+    expect(runtimeSignal?.aborted).toBe(true);
+    expect(session.getState().inProgressPublicMessage).toBeNull();
+    expect(session.getState().transcript).toEqual([]);
+  });
+
+  it("derives direct-answer recipients from the latest chair or guest message", async () => {
+    const runtime = derivedRuntime({
+      async publicTurn() {
+        return { text: "Direct answer.", addressedTo: "Untrusted child metadata" };
+      },
+    });
+    const chairSession = await started(runtime);
+    await chairSession.sendUserMessage("@Daniel Ek Does this change your view?");
+    expect(chairSession.getState().transcript.at(-1)).toMatchObject({
+      speakerId: "daniel-ek",
+      addressedTo: "You",
+    });
+
+    const guestSession = await started(runtime, { joinDelayMs: 0 });
+    expect(guestSession.join("Codex").ok).toBe(true);
+    await waitUntil(
+      () => guestSession.getState().guest.status === "joined",
+      "guest did not finish joining",
+    );
+    await guestSession.address("Daniel Ek", "Does this change your view?");
+    expect(guestSession.getState().transcript.at(-1)).toMatchObject({
+      speakerId: "daniel-ek",
+      addressedTo: "Codex",
+    });
+  });
+
   it("retries openings and turns once, then records faithful nonfatal fallbacks", async () => {
     const base = derivedRuntime();
     let openingAttempts = 0;

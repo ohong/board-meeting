@@ -2,12 +2,15 @@ import { Buffer } from "node:buffer";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { MessageStreamEvent } from "eve/client";
 
 import { CATALOG } from "../lib/catalog";
 import {
   createLiveRuntime,
+  createEveInvoker,
   createRuntime,
   EveRuntimeContractError,
+  type EveClientLike,
   type EveInvoker,
 } from "../lib/runtime/live";
 import { ADVISER_COUNT } from "../lib/runtime/schemas";
@@ -97,7 +100,269 @@ function successfulInvoker(
   };
 }
 
+function eventStream(events: readonly MessageStreamEvent[], onCancel?: () => void) {
+  return {
+    async cancel() {
+      onCancel?.();
+      return { status: "accepted" };
+    },
+    async *[Symbol.asyncIterator]() {
+      for (const event of events) yield event;
+    },
+  };
+}
+
 describe("Eve-native board runtime", () => {
+  it("relays only the selected child message and resets abandoned child steps", async () => {
+    const childEvents = [
+      {
+        type: "session.started",
+        data: {
+          invocation: {
+            kind: "subagent",
+            name: "daniel-ek",
+            parentCallId: "call_adviser",
+            parentSessionId: "root_session",
+            parentTurnId: "root_turn",
+          },
+        },
+      },
+      { type: "step.started", data: { modelId: "test", sequence: 0, stepIndex: 0, turnId: "child_turn" } },
+      { type: "message.appended", data: { messageDelta: "Discard me", sequence: 0, stepIndex: 0, turnId: "child_turn" } },
+      { type: "step.failed", data: { code: "retry", message: "retry", sequence: 0, stepIndex: 0, turnId: "child_turn" } },
+      { type: "step.started", data: { modelId: "test", sequence: 0, stepIndex: 1, turnId: "child_turn" } },
+      { type: "message.appended", data: { messageDelta: "Final ", sequence: 0, stepIndex: 1, turnId: "child_turn" } },
+      { type: "message.appended", data: { messageDelta: "answer.", sequence: 0, stepIndex: 1, turnId: "child_turn" } },
+      { type: "message.completed", data: { finishReason: "stop", message: "Final answer.", sequence: 0, stepIndex: 1, turnId: "child_turn" } },
+      { type: "session.waiting", data: { continuationToken: "", wait: "next-user-message" } },
+    ] as unknown as MessageStreamEvent[];
+    const client: EveClientLike = {
+      sessions: {
+        async create({ message }) {
+          const { encoded, decoded } = routingEnvelopeFrom(message);
+          const rootEvents = [
+            { type: "reasoning.appended", data: { reasoningDelta: "private root reasoning" } },
+            { type: "message.appended", data: { messageDelta: "root narration" } },
+            {
+              type: "actions.requested",
+              data: {
+                actions: [{
+                  callId: "call_workflow",
+                  input: { routingEnvelope: encoded },
+                  kind: "workflow-tool-call",
+                  toolName: "board_runtime",
+                  workflowId: "workflow_board_runtime",
+                }],
+              },
+            },
+            {
+              type: "subagent.called",
+              data: {
+                callId: "call_adviser",
+                childSessionId: "child_session",
+                name: "daniel-ek",
+                sessionId: "root_session",
+                toolName: "daniel-ek",
+                turnId: "root_turn",
+              },
+            },
+            {
+              type: "action.result",
+              data: {
+                status: "completed",
+                result: {
+                  callId: "call_workflow",
+                  kind: "tool-result",
+                  output: {
+                    capability: decoded.capability,
+                    target: decoded.target,
+                    result: { text: "Final answer." },
+                  },
+                  toolName: "board_runtime",
+                },
+              },
+            },
+            { type: "session.waiting", data: { continuationToken: "", wait: "next-user-message" } },
+          ] as unknown as MessageStreamEvent[];
+          return { response: eventStream(rootEvents) };
+        },
+        attach(sessionId) {
+          expect(sessionId).toBe("child_session");
+          return { stream: () => eventStream(childEvents) };
+        },
+      },
+    };
+    const updates: Array<{ type: string; delta?: string }> = [];
+    const runtime = createLiveRuntime({
+      eveHost: "http://board.test",
+      invokeEve: createEveInvoker(() => client),
+    });
+
+    await expect(
+      runtime.publicTurn(baseInput(), { onStream: (update) => updates.push(update) }),
+    ).resolves.toEqual({ text: "Final answer." });
+    expect(updates).toEqual([
+      { type: "reset" },
+      { type: "append", delta: "Discard me" },
+      { type: "reset" },
+      { type: "reset" },
+      { type: "append", delta: "Final " },
+      { type: "append", delta: "answer." },
+    ]);
+    expect(updates.flatMap((update) => update.delta ?? []).join(""))
+      .not.toContain("root narration");
+    expect(updates.flatMap((update) => update.delta ?? []).join(""))
+      .not.toContain("private root reasoning");
+  });
+
+  it("fails closed without relaying a child event emitted before authentication", async () => {
+    const childEvents = [
+      {
+        type: "message.appended",
+        data: {
+          messageDelta: "This must never surface.",
+          sequence: 0,
+          stepIndex: 0,
+          turnId: "child_turn",
+        },
+      },
+      {
+        type: "session.started",
+        data: {
+          invocation: {
+            kind: "subagent",
+            name: "daniel-ek",
+            parentCallId: "call_adviser",
+            parentSessionId: "root_session",
+            parentTurnId: "root_turn",
+          },
+        },
+      },
+    ] as unknown as MessageStreamEvent[];
+    const client: EveClientLike = {
+      sessions: {
+        async create({ message }) {
+          const { encoded, decoded } = routingEnvelopeFrom(message);
+          const rootEvents = [
+            {
+              type: "actions.requested",
+              data: {
+                actions: [{
+                  callId: "call_workflow",
+                  input: { routingEnvelope: encoded },
+                  kind: "workflow-tool-call",
+                  toolName: "board_runtime",
+                  workflowId: "workflow_board_runtime",
+                }],
+              },
+            },
+            {
+              type: "subagent.called",
+              data: {
+                callId: "call_adviser",
+                childSessionId: "child_session",
+                name: "daniel-ek",
+                sessionId: "root_session",
+                toolName: "daniel-ek",
+                turnId: "root_turn",
+              },
+            },
+            {
+              type: "action.result",
+              data: {
+                status: "completed",
+                result: {
+                  callId: "call_workflow",
+                  kind: "tool-result",
+                  output: {
+                    capability: decoded.capability,
+                    target: decoded.target,
+                    result: { text: "This result must not be accepted." },
+                  },
+                  toolName: "board_runtime",
+                },
+              },
+            },
+            {
+              type: "session.waiting",
+              data: { continuationToken: "", wait: "next-user-message" },
+            },
+          ] as unknown as MessageStreamEvent[];
+          return { response: eventStream(rootEvents) };
+        },
+        attach(sessionId) {
+          expect(sessionId).toBe("child_session");
+          return { stream: () => eventStream(childEvents) };
+        },
+      },
+    };
+    const updates: Array<{ type: string; delta?: string }> = [];
+    const runtime = createLiveRuntime({
+      eveHost: "http://board.test",
+      invokeEve: createEveInvoker(() => client),
+    });
+
+    await expect(
+      runtime.publicTurn(baseInput(), { onStream: (update) => updates.push(update) }),
+    ).rejects.toMatchObject({
+      code: "EVE_SUBAGENT_CALL_INVALID",
+    } satisfies Partial<EveRuntimeContractError>);
+    expect(updates).toEqual([]);
+  });
+
+  it("cooperatively cancels the exact Eve root turn when its AbortSignal fires", async () => {
+    let cancelled = false;
+    let releaseTurn: (() => void) | undefined;
+    const turnReleased = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
+    const response = {
+      async cancel() {
+        cancelled = true;
+        releaseTurn?.();
+        return { status: "accepted" };
+      },
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: "turn.started",
+          data: { sequence: 0, turnId: "root_turn" },
+        } as unknown as MessageStreamEvent;
+        await turnReleased;
+        yield {
+          type: "turn.cancelled",
+          data: { sequence: 0, turnId: "root_turn" },
+        } as unknown as MessageStreamEvent;
+        yield {
+          type: "session.waiting",
+          data: { continuationToken: "", wait: "next-user-message" },
+        } as unknown as MessageStreamEvent;
+      },
+    };
+    const client: EveClientLike = {
+      sessions: {
+        async create() {
+          return { response };
+        },
+        attach() {
+          throw new Error("No child should be attached for this cancellation test.");
+        },
+      },
+    };
+    const controller = new AbortController();
+    const pending = createEveInvoker(() => client)({
+      host: "http://board.test",
+      message: "cancel me",
+      expectedTarget: "daniel-ek",
+      signal: controller.signal,
+    });
+    await Promise.resolve();
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(cancelled).toBe(true);
+  });
+
   it("routes a selected member slug to the exact subagent.called identity", async () => {
     const invocations: string[] = [];
     const delegate = successfulInvoker({ text: "Run the reversible test first." });
@@ -282,6 +547,7 @@ describe("Eve-native board runtime", () => {
       const delegated = await successfulInvoker({ text: "Do not accept me." })({
         host: "http://board.test",
         message,
+        expectedTarget: "daniel-ek",
       });
       const events = delegated.events.map((event) =>
         event.type === "action.result"

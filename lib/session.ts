@@ -48,6 +48,7 @@ export type MeetingState = {
   members: MemberSeat[];
   guest: GuestSeat;
   transcript: TranscriptEvent[];
+  inProgressPublicMessage: TranscriptEvent | null;
   positions: Record<string, OpeningPosition>;
   mentionQueue: string[];
   composing: boolean;
@@ -145,6 +146,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
   let resumeAutoPumpGeneration: number | null = null;
   let ended = false;
   let speakerCursor = 0;
+  let activePublicTurn: AbortController | null = null;
   const deferredSpeakers = new Set<string>();
 
   const state: MeetingState = {
@@ -157,6 +159,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     members: [],
     guest: { name: null, status: "empty" },
     transcript: [],
+    inProgressPublicMessage: null,
     positions: {},
     mentionQueue: [],
     composing: false,
@@ -195,6 +198,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
       members: state.members.map((m) => ({ ...m })),
       guest: { ...state.guest },
       transcript: state.transcript.map((event) => ({ ...event })),
+      inProgressPublicMessage: state.inProgressPublicMessage
+        ? { ...state.inProgressPublicMessage }
+        : null,
       positions: Object.fromEntries(
         Object.entries(state.positions).map(([slug, position]) => [slug, { ...position }]),
       ),
@@ -307,6 +313,16 @@ export function createMeetingSession(options: SessionOptions = {}) {
     return speaker?.slug;
   }
 
+  function latestDirectAnswerRecipient(): string | undefined {
+    return [...state.transcript]
+      .reverse()
+      .find(
+        (event) =>
+          event.kind === "message" &&
+          (event.speakerId === "chair" || event.speakerId === "guest"),
+      )?.speakerName;
+  }
+
   async function runTurn(
     token: number,
     slug: string,
@@ -316,18 +332,47 @@ export function createMeetingSession(options: SessionOptions = {}) {
     if (ended || !isCurrent(token)) return false;
     const member = getMember(slug);
     if (!member) return false;
+    const directAnswerRecipient =
+      capability === "answerDirect" ? latestDirectAnswerRecipient() : undefined;
     setMemberStatus(slug, "speaking");
     emit();
     let firstError: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt > 0) {
+        setMemberStatus(slug, "speaking");
+        emit();
+      }
+      const turnController = new AbortController();
+      activePublicTurn = turnController;
       try {
         const turn = await runtime.publicTurn({
           ...baseInput(slug),
           capability,
           prompt,
-          addressedTo: capability === "answerDirect" ? prompt : undefined,
+          addressedTo: directAnswerRecipient,
+        }, {
+          signal: turnController.signal,
+          onStream(update) {
+            if (!isCurrent(token) || ended || activePublicTurn !== turnController) return;
+            if (update.type === "reset") {
+              state.inProgressPublicMessage = null;
+            } else {
+              const current = state.inProgressPublicMessage;
+              state.inProgressPublicMessage = {
+                id: `in-progress-${token}-${slug}-${attempt}`,
+                kind: "message",
+                speakerId: slug,
+                speakerName: member.name,
+                text: `${current?.text ?? ""}${update.delta}`,
+                addressedTo: directAnswerRecipient,
+                createdAt: current?.createdAt ?? now(),
+              };
+            }
+            emit();
+          },
         });
         if (!isCurrent(token) || ended) return false;
+        state.inProgressPublicMessage = null;
         const seat = state.members.find((m) => m.slug === slug);
         if (seat) seat.spokenCount += 1;
         addEvent({
@@ -335,7 +380,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
           speakerId: slug,
           speakerName: member.name,
           text: turn.text,
-          addressedTo: turn.addressedTo,
+          addressedTo:
+            capability === "answerDirect" ? directAnswerRecipient : turn.addressedTo,
         });
         if (turn.reaction) {
           addEvent({
@@ -359,11 +405,14 @@ export function createMeetingSession(options: SessionOptions = {}) {
         return true;
       } catch (error) {
         if (!isCurrent(token) || ended) return false;
+        state.inProgressPublicMessage = null;
         firstError ??= error;
         if (attempt === 0) {
           setMemberStatus(slug, "reconnecting");
           emit();
         }
+      } finally {
+        if (activePublicTurn === turnController) activePublicTurn = null;
       }
     }
     const detail = firstError instanceof Error ? firstError.message : "runtime request failed";
@@ -785,6 +834,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
   }
 
   function reset() {
+    activePublicTurn?.abort("The board meeting was reset.");
+    activePublicTurn = null;
     generation += 1;
     actionTail = Promise.resolve();
     ended = true;
@@ -800,6 +851,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     state.members = [];
     state.guest = { name: null, status: "empty" };
     state.transcript = [];
+    state.inProgressPublicMessage = null;
     state.positions = {};
     state.mentionQueue = [];
     state.composing = false;

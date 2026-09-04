@@ -68,6 +68,19 @@ export const memberTurnSchema = z
   })
   .strict();
 
+export const publicTurnStreamEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("reset") }).strict(),
+  z.object({ type: z.literal("append"), delta: z.string() }).strict(),
+  z.object({ type: z.literal("complete"), result: memberTurnSchema }).strict(),
+  z
+    .object({
+      type: z.literal("error"),
+      code: z.string().min(1),
+      error: z.string().min(1),
+    })
+    .strict(),
+]);
+
 export const textResultSchema = z.object({ text: z.string().min(1).max(12_000) }).strict();
 
 export const closingCommentSchema = z

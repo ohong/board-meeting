@@ -240,6 +240,7 @@ export function BoardMeeting({
     [state.transcript],
   );
   const latestEventId = chronologicalTranscript.at(-1)?.id;
+  const streamingEvent = state.inProgressPublicMessage;
   const memberById = useMemo(
     () => new Map(state.members.map((member) => [member.slug, member])),
     [state.members],
@@ -281,7 +282,7 @@ export function BoardMeeting({
         log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
       });
     }
-  }, [chronologicalTranscript.length, latestEventId]);
+  }, [chronologicalTranscript.length, latestEventId, streamingEvent?.text]);
 
   function insertMention(name: string) {
     const input = composerRef.current;
@@ -555,15 +556,25 @@ export function BoardMeeting({
             aria-busy={publicTurnBusy}
             onScroll={handleLogScroll}
           >
-            {chronologicalTranscript.length ? (
-              chronologicalTranscript.map((event) => (
-                <MinutesEntry
-                  key={event.id}
-                  event={event}
-                  member={memberById.get(event.speakerId)}
-                  isCurrent={event.id === latestEventId}
-                />
-              ))
+            {chronologicalTranscript.length || streamingEvent ? (
+              <>
+                {chronologicalTranscript.map((event) => (
+                  <MinutesEntry
+                    key={event.id}
+                    event={event}
+                    member={memberById.get(event.speakerId)}
+                    isCurrent={!streamingEvent && event.id === latestEventId}
+                  />
+                ))}
+                {streamingEvent ? (
+                  <MinutesEntry
+                    key={streamingEvent.id}
+                    event={streamingEvent}
+                    member={memberById.get(streamingEvent.speakerId)}
+                    isCurrent
+                  />
+                ) : null}
+              </>
             ) : (
               <div className={styles.emptyMinutes}>
                 <strong>The record begins when the room speaks.</strong>

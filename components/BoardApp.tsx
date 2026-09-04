@@ -25,6 +25,7 @@ function bootSession(live: boolean) {
     runtime: createMockRuntime({
       openingDelayMs: demoOpeningDelayMs,
       publicTurnDelayMs: MOCK_DEMO_TIMING.publicTurnDelayMs,
+      publicTurnChunkDelayMs: MOCK_DEMO_TIMING.publicTurnChunkDelayMs,
     }),
     autoContinue: true,
     autoTurnGapMs: MOCK_DEMO_TIMING.autoTurnGapMs,

@@ -103,12 +103,14 @@ export const MOCK_DEMO_TIMING = {
     "lulu-cheng-meservey": 1100,
   },
   publicTurnDelayMs: 650,
+  publicTurnChunkDelayMs: 24,
   autoTurnGapMs: 700,
 } as const;
 
 export type MockRuntimeOptions = {
   openingDelayMs?: (memberId: string) => number;
   publicTurnDelayMs?: number;
+  publicTurnChunkDelayMs?: number;
   wait?: (milliseconds: number) => Promise<void>;
 };
 
@@ -229,31 +231,46 @@ export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntim
       const preset = OPENINGS[input.memberId];
       return preset ? { ...preset, memberId: input.memberId } : genericOpening(input);
     },
-    async publicTurn(input) {
+    async publicTurn(input, turnOptions) {
       await pause(options.publicTurnDelayMs ?? 0);
+      turnOptions?.signal?.throwIfAborted();
       const n = input.ownPriorStatements.length;
+      let turn: MemberTurn;
       if (input.capability === "answerDirect" || input.prompt) {
         const addressedTo = latestQuestioner(input);
         if (input.memberId === "lulu-cheng-meservey") {
-          return {
+          turn = {
             text: "You explain a free-tier change as a promise, not a punishment. Tell them you are done pretending a workspace you cannot support is generosity. Offer a clean trial, grandfather the ones who already built a home, and ask your best customers to invite people into something you will actually stand behind.",
             addressedTo,
           };
-        }
-        if (input.memberId === "daniel-ek") {
-          return {
+        } else if (input.memberId === "daniel-ek") {
+          turn = {
             text: "If seven of your last ten enterprise wins entered through a shared free workspace, that is not folklore, that is the funnel. I would not kill free. I would instrument sharing, keep a narrow free path for invites, and put the trial on unshared tire-kickers. Evidence beats ideology.",
             addressedTo,
           };
+        } else {
+          turn = {
+            text: `${getMember(input.memberId)?.name ?? "The seat"} answers directly: the evidence in the room should change the next experiment, not the personality of the company. Make the reversible test, then decide.`,
+            addressedTo,
+          };
         }
-        return {
-          text: `${getMember(input.memberId)?.name ?? "The seat"} answers directly: the evidence in the room should change the next experiment, not the personality of the company. Make the reversible test, then decide.`,
-          addressedTo,
-        };
+      } else if (n === 0 && FIRST_TURNS[input.memberId]) {
+        turn = FIRST_TURNS[input.memberId];
+      } else {
+        const followUp = FOLLOW_UP_TURNS[input.memberId]?.[n - 1];
+        turn = followUp ?? genericTurn(input, n);
       }
-      if (n === 0 && FIRST_TURNS[input.memberId]) return FIRST_TURNS[input.memberId];
-      const followUp = FOLLOW_UP_TURNS[input.memberId]?.[n - 1];
-      return followUp ?? genericTurn(input, n);
+
+      if (turnOptions?.onStream) {
+        turnOptions.onStream({ type: "reset" });
+        const chunks = turn.text.match(/(?:\S+\s*){1,4}/gu) ?? [turn.text];
+        for (const delta of chunks) {
+          turnOptions.signal?.throwIfAborted();
+          turnOptions.onStream({ type: "append", delta });
+          await pause(options.publicTurnChunkDelayMs ?? 0);
+        }
+      }
+      return turn;
     },
     async closingComment(input) {
       const map: Record<string, string> = {

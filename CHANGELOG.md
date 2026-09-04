@@ -26,3 +26,8 @@
 - Queued guest admission and substantive WebMCP actions on the meeting command lane, kept activity states visible through resulting turns, and returned concise state evidence for every mutation.
 - Confined handcrafted demo dialogue to the exact example briefing, grounded every arbitrary mock capability in supplied state, and carried only genuinely contributed guest evidence into answers and summaries.
 - Bounded provisional adviser speech at both the Eve relay and browser stream, with terminal completion, cooperative cancellation, and projection cleanup for malformed or failed streams.
+- Bounded every model attempt, propagated cancellation through the browser and Eve boundaries, and made failed closing/readout paths complete from the latest public evidence.
+- Kept meeting start disabled until runtime selection settles, without blocking board selection or briefing work.
+- Made the UI copy action and WebMCP retrieval return one byte-identical, meeting-timestamped readout.
+- Finished the reference-led boardroom polish: contained full-brief inspection, stable streaming scroll, durable-only live announcements, complete participant semantics, local recovery feedback, and no clipped guest seat at 1024 px.
+- Passed five consecutive fresh mock-browser rehearsals across 1024 × 800, 1280 × 800, and 1440 × 900, with no browser errors or horizontal overflow.

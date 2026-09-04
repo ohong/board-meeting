@@ -129,3 +129,39 @@ We considered topic or substring recognition so lightly edited free-tier prompts
 Public speech remains provisional until the Eve workflow returns a schema-valid turn. Both the authenticated Eve-child relay and the browser's NDJSON reader enforce the same 4,000-character ceiling. A malformed event, explicit error, oversized projection, or event after completion clears the ephemeral UI, rejects the turn, and cooperatively cancels the browser stream so no partial text becomes durable transcript state.
 
 We considered enforcing the ceiling only in the browser. That protects the visible page, but still lets unbounded child output traverse and accumulate in the server relay. Enforcing one shared limit at both trust boundaries adds a small duplicate check, while constraining memory before transport and again before projection. Reader cancellation is best-effort so a cleanup failure cannot replace the protocol error that caused it.
+
+## 2026-09-03 — Bound each runtime attempt independently
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+Every opening, public turn, directed answer, closing, synthesis, and readout attempt has the same configurable deadline. The session tracks all active abort controllers, cancels them on reset, and advances through its existing retry or evidence-grounded fallback when a runtime does not cooperate. A failed directed answer remains a failed tool result rather than reusing earlier speech.
+
+We considered one deadline for an entire meeting phase. That makes the wall-clock ceiling easy to state, but one slow member can consume the budget and starve the remaining parallel or recovery work. Per-attempt deadlines preserve equal opportunity for independently running advisers and reuse the same failure path everywhere. A non-cooperative promise may continue in the background, but its generation can no longer mutate or block the active session.
+
+## 2026-09-03 — Gate only meeting start on runtime readiness
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+Selection and briefing remain interactive while runtime status resolves. The Start action stays visibly disabled until a timely response, explicit failure, or a three-second fallback selects the runtime. If a late live response arrives while setup is still in progress, the application migrates that setup exactly; an active meeting is never replaced.
+
+We considered blocking the entire entry experience until the runtime request completed. It removes migration concerns, but turns a health check into first-interaction latency. We also considered allowing Start immediately, which can silently pin a configured visit to the mock runtime. Start-only gating keeps useful work responsive while making the runtime choice explicit at the irreversible boundary.
+
+## 2026-09-03 — Format the displayed readout once
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+One pure formatter derives meeting date, participant context, all eight sections, dissent state, and closing comments from the completed readout and its session snapshot. The UI Copy action and WebMCP retrieval return this exact same string while WebMCP also retains the structured result.
+
+We considered maintaining a compact tool payload and a separately formatted UI memo. That is convenient for each consumer but makes the requirement to retrieve the exact displayed readout unverifiable and lets timestamps drift across midnight. A shared formatter makes equality testable and anchors metadata to the meeting record rather than render time.
+
+## 2026-09-03 — Keep live detail inside stable boardroom regions
+
+**Status:** accepted
+**Decision maker:** Codex, independently following the supplied design references
+
+The agenda remains a semantic folio whose header toggles a contained scroll region; it does not become one large scrollable button. Provisional speech remains visually present but hidden from the live region until durable, while the chronological minutes log scrolls instantly during streaming and only animates completed additions when reduced motion is not requested. One semantic participant list contains advisers, chair, and guest with distinct mention actions.
+
+We considered making the entire agenda folio the toggle and letting it grow over the table. That is simpler, but clips long briefing text at laptop heights and makes reading or scrolling prone to accidental closure. The contained region preserves the spatial composition at all target sizes without sacrificing complete text or keyboard semantics.

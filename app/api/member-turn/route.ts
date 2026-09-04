@@ -4,6 +4,7 @@ import {
   hasLiveKey,
   resolveEveHost,
 } from "@/lib/runtime/live";
+import { allowsDevelopmentLiveRuntime } from "@/lib/runtime/access";
 import { memberTurnApiRequestSchema } from "@/lib/runtime/schemas";
 import type { BoardRuntime, RuntimeTurnInput } from "@/lib/types";
 
@@ -14,11 +15,16 @@ function errorResponse(status: number, code: string, error: string) {
 }
 
 type RouteDependencies = {
+  allowsLiveRuntime?: (request: Request) => boolean;
   createRuntime: (options: { eveHost: string }) => BoardRuntime;
   hasLiveKey: () => boolean;
 };
 
-const defaultDependencies: RouteDependencies = { createRuntime, hasLiveKey };
+const defaultDependencies: RouteDependencies = {
+  allowsLiveRuntime: (request) => allowsDevelopmentLiveRuntime(request.url),
+  createRuntime,
+  hasLiveKey,
+};
 
 function streamLine(value: unknown): Uint8Array {
   return new TextEncoder().encode(`${JSON.stringify(value)}\n`);
@@ -82,12 +88,12 @@ function publicTurnResponse(
 export function validateSameOrigin(request: Request): string | null {
   const requestOrigin = new URL(request.url).origin;
   const origin = request.headers.get("origin");
-  if (origin && origin !== requestOrigin) {
+  if (origin !== requestOrigin) {
     return "Cross-origin board runtime requests are not allowed.";
   }
 
   const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite && fetchSite !== "same-origin") {
+  if (fetchSite !== "same-origin") {
     return "The board runtime accepts same-origin browser requests only.";
   }
   return null;
@@ -126,6 +132,15 @@ export async function handleMemberTurnPost(
 ) {
   const sameOriginError = validateSameOrigin(request);
   if (sameOriginError) return errorResponse(403, "CROSS_ORIGIN_REQUEST", sameOriginError);
+  const liveRuntimeAllowed =
+    dependencies.allowsLiveRuntime?.(request) ?? allowsDevelopmentLiveRuntime(request.url);
+  if (!liveRuntimeAllowed) {
+    return errorResponse(
+      403,
+      "LIVE_RUNTIME_LOCAL_ONLY",
+      "Live board model calls are available only from the local demo environment.",
+    );
+  }
 
   const contentType =
     request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";

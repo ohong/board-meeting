@@ -165,3 +165,12 @@ We considered maintaining a compact tool payload and a separately formatted UI m
 The agenda remains a semantic folio whose header toggles a contained scroll region; it does not become one large scrollable button. Provisional speech remains visually present but hidden from the live region until durable, while the chronological minutes log scrolls instantly during streaming and only animates completed additions when reduced motion is not requested. One semantic participant list contains advisers, chair, and guest with distinct mention actions.
 
 We considered making the entire agenda folio the toggle and letting it grow over the table. That is simpler, but clips long briefing text at laptop heights and makes reading or scrolling prone to accidental closure. The contained region preserves the spatial composition at all target sizes without sacrificing complete text or keyboard semantics.
+
+## 2026-09-03 — Keep live model calls local until production has identity
+
+**Status:** accepted
+**Decision maker:** Codex, independently after pre-ship security review
+
+The credential-backed member-turn endpoint requires both an exact same-origin `Origin` header and `Sec-Fetch-Site: same-origin`, and a server-controlled runtime gate permits it only in Next development or tests outside Vercel when the request URL is loopback. The development script also binds the listener explicitly to `localhost`, so the browser and Next agree on the origin without exposing a server-funded model route to the LAN. Production and Vercel stay in deterministic mock mode even when a key is present.
+
+We considered treating browser provenance headers or the request hostname as authorization for a public route. Headers can be spoofed, and proxy-derived hostnames are client-influenced. Full user authentication plus abuse controls would support a public live runtime, but both are explicit MVP non-goals. Combining a server-controlled development gate, a loopback request check, and an explicit loopback listener preserves the local challenge demo without pretending request metadata is identity; production live mode is deferred until that real boundary exists.

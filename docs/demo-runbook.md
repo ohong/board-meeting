@@ -5,9 +5,9 @@ This checklist rehearses the exact two-minute path in `mvp-specs.md`. It disting
 ## Preflight
 
 - Work from a fresh browser context at 1440 × 900 when presenting.
-- Put `OPENAI_API_KEY=...` in the local `.env.local`; never paste the key into a prompt or browser field.
+- Put `OPENAI_API_KEY=...` in the local `.env.local`; never paste the key into a prompt or browser field. Live calls are intentionally loopback-only in this no-auth MVP, so run the live demo locally.
 - Run `bun run lint`, `bun run typecheck`, `bun test`, `bun run build`, `bunx eve info --json`, and `bunx eve build --skip-sandbox-prewarm`.
-- Start the app with `bun run dev` and confirm the entry footer says `Live mode · responses enabled`. `Demo mode` is useful for rehearsal but is not a live acceptance pass.
+- Start the app with `bun run dev` (the project script binds Next explicitly to `localhost`) and confirm the entry footer says `Live mode · responses enabled`. `Demo mode` is useful for rehearsal but is not a live acceptance pass. Do not substitute a LAN-bound or tunnelled dev command: the live route is intentionally limited to server-controlled development/test runtime plus loopback requests.
 - In Codex's in-app browser, confirm exactly these six Site tools are discoverable: `inspect_board_meeting`, `join_board_meeting`, `contribute_to_board_meeting`, `address_board_member`, `request_board_synthesis`, and `get_board_meeting_readout`.
 
 ## Two-minute presenter path

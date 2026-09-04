@@ -4,7 +4,7 @@ import { handleMemberTurnPost, POST } from "../app/api/member-turn/route";
 import { createMockRuntime } from "../lib/runtime/mock";
 
 function request(body: unknown, headers: Record<string, string> = {}) {
-  return new Request("https://board.test/api/member-turn", {
+  return new Request("http://localhost:3000/api/member-turn", {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -39,7 +39,7 @@ describe("member-turn API boundary", () => {
       },
     } satisfies ReturnType<typeof createMockRuntime>;
     const response = await handleMemberTurnPost(
-      request(validPublicTurnBody(), { origin: "https://board.test", "sec-fetch-site": "same-origin" }),
+      request(validPublicTurnBody(), { origin: "http://localhost:3000", "sec-fetch-site": "same-origin" }),
       { createRuntime: () => runtime, hasLiveKey: () => true },
     );
 
@@ -75,7 +75,7 @@ describe("member-turn API boundary", () => {
             boardNames: ["Daniel Ek"],
           },
         },
-        { origin: "https://board.test", "sec-fetch-site": "same-origin" },
+        { origin: "http://localhost:3000", "sec-fetch-site": "same-origin" },
       ),
       { createRuntime: () => runtime, hasLiveKey: () => true },
     );
@@ -97,11 +97,11 @@ describe("member-turn API boundary", () => {
       },
     } satisfies ReturnType<typeof createMockRuntime>;
     const controller = new AbortController();
-    const signalRequest = new Request("https://board.test/api/member-turn", {
+    const signalRequest = new Request("http://localhost:3000/api/member-turn", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "https://board.test",
+        origin: "http://localhost:3000",
         "sec-fetch-site": "same-origin",
       },
       body: JSON.stringify({
@@ -143,7 +143,7 @@ describe("member-turn API boundary", () => {
       },
     } satisfies ReturnType<typeof createMockRuntime>;
     const response = await handleMemberTurnPost(
-      request(validPublicTurnBody(), { origin: "https://board.test", "sec-fetch-site": "same-origin" }),
+      request(validPublicTurnBody(), { origin: "http://localhost:3000", "sec-fetch-site": "same-origin" }),
       { createRuntime: () => runtime, hasLiveKey: () => true },
     );
 
@@ -164,11 +164,48 @@ describe("member-turn API boundary", () => {
     await expect(response.json()).resolves.toMatchObject({ code: "CROSS_ORIGIN_REQUEST" });
   });
 
+  it("fails closed when browser provenance headers are missing", async () => {
+    const missingBoth = await POST(request({}));
+    expect(missingBoth.status).toBe(403);
+
+    const missingOrigin = await POST(request({}, { "sec-fetch-site": "same-origin" }));
+    expect(missingOrigin.status).toBe(403);
+
+    const missingFetchSite = await POST(request({}, { origin: "http://localhost:3000" }));
+    expect(missingFetchSite.status).toBe(403);
+  });
+
+  it("keeps credential-backed runtime calls unavailable when the server gate is closed", async () => {
+    const response = await handleMemberTurnPost(
+      new Request("https://board.example/api/member-turn", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://board.example",
+          "sec-fetch-site": "same-origin",
+        },
+        body: JSON.stringify(validPublicTurnBody()),
+      }),
+      {
+        allowsLiveRuntime: () => false,
+        createRuntime: () => createMockRuntime(),
+        hasLiveKey: () => true,
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "LIVE_RUNTIME_LOCAL_ONLY" });
+  });
+
   it("requires JSON content", async () => {
     const response = await POST(
-      new Request("https://board.test/api/member-turn", {
+      new Request("http://localhost:3000/api/member-turn", {
         method: "POST",
-        headers: { "content-type": "text/plain", origin: "https://board.test" },
+        headers: {
+          "content-type": "text/plain",
+          origin: "http://localhost:3000",
+          "sec-fetch-site": "same-origin",
+        },
         body: "hello",
       }),
     );
@@ -192,7 +229,7 @@ describe("member-turn API boundary", () => {
             boardNames: ["Unknown"],
           },
         },
-        { origin: "https://board.test", "sec-fetch-site": "same-origin" },
+        { origin: "http://localhost:3000", "sec-fetch-site": "same-origin" },
       ),
     );
     expect(response.status).toBe(400);
@@ -215,7 +252,7 @@ describe("member-turn API boundary", () => {
             boardNames: ["Daniel Ek"],
           },
         },
-        { origin: "https://board.test", "sec-fetch-site": "same-origin" },
+        { origin: "http://localhost:3000", "sec-fetch-site": "same-origin" },
       ),
     );
     expect(response.status).toBe(400);
@@ -224,7 +261,14 @@ describe("member-turn API boundary", () => {
 
   it("rejects oversized bodies before parsing", async () => {
     const response = await POST(
-      request({}, { origin: "https://board.test", "content-length": "999999" }),
+      request(
+        {},
+        {
+          origin: "http://localhost:3000",
+          "sec-fetch-site": "same-origin",
+          "content-length": "999999",
+        },
+      ),
     );
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toMatchObject({ code: "REQUEST_TOO_LARGE" });
@@ -249,7 +293,7 @@ describe("member-turn API boundary", () => {
               boardNames: ["Daniel Ek", "David Heinemeier Hansson", "Lulu Cheng Meservey"],
             },
           },
-          { origin: "https://board.test", "sec-fetch-site": "same-origin" },
+          { origin: "http://localhost:3000", "sec-fetch-site": "same-origin" },
         ),
       );
       expect(response.status).toBe(503);

@@ -31,3 +31,4 @@
 - Made the UI copy action and WebMCP retrieval return one byte-identical, meeting-timestamped readout.
 - Finished the reference-led boardroom polish: contained full-brief inspection, stable streaming scroll, durable-only live announcements, complete participant semantics, local recovery feedback, and no clipped guest seat at 1024 px.
 - Passed five consecutive fresh mock-browser rehearsals across 1024 × 800, 1280 × 800, and 1440 × 900, with no browser errors or horizontal overflow.
+- Kept credential-backed live model calls behind a server-controlled development/test gate, loopback request URLs, and an explicitly `localhost`-bound dev listener; public deployments stay mock-only until they have a real identity and abuse-control boundary.

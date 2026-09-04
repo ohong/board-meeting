@@ -8,6 +8,7 @@ import {
   scheduleWebMcpReceiptDismiss,
   shouldClearWebMcpReceipt,
 } from "../components/WebMcp";
+import { createDisplayedReadout } from "../lib/displayed-readout";
 import { createMockRuntime } from "../lib/runtime/mock";
 import { createMeetingSession, type MeetingSession } from "../lib/session";
 import {
@@ -148,12 +149,20 @@ describe("board WebMCP manifest", () => {
 
     expect((await session.endMeeting()).ok).toBe(true);
     const beforeReadout = session.getState();
+    if (!beforeReadout.readout) throw new Error("Expected a completed readout.");
+    const expectedReadoutText = createDisplayedReadout(
+      beforeReadout.readout,
+      beforeReadout,
+    ).readoutText;
     const readoutResult = await tool(manifest, "get_board_meeting_readout").execute({});
     expect(readoutResult).toMatchObject({
       ok: true,
       ready: true,
       readout: session.getState().readout!,
+      readoutText: expectedReadoutText,
     });
+    expect(readoutResult.readoutText).toBe(expectedReadoutText);
+    expect(readoutResult).not.toHaveProperty("transcript");
     expect(session.getState()).toEqual(beforeReadout);
 
     expect(received.map(receiptText)).toEqual([
@@ -196,10 +205,15 @@ describe("board WebMCP manifest", () => {
       ok: false,
       message: "The meeting has ended.",
     });
-    expect(await tool(manifest, "get_board_meeting_readout").execute({})).toMatchObject({
+    const beforeReadout = session.getState();
+    const readoutResult = await tool(manifest, "get_board_meeting_readout").execute({});
+    expect(readoutResult).toEqual({
       ok: false,
       ready: false,
+      message: "The final readout is not ready. The human chair must end the meeting first.",
     });
+    expect(readoutResult).not.toHaveProperty("readoutText");
+    expect(session.getState()).toEqual(beforeReadout);
 
     expect(received).toHaveLength(6);
     expect(received.every(({ outcome }) => outcome === "rejected")).toBe(true);

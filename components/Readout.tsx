@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { createDisplayedReadout, NONE_RECORDED } from "@/lib/displayed-readout";
 import type { MeetingSession, MeetingState } from "@/lib/session";
-import type { ClosingComment, ExecutiveReadout } from "@/lib/types";
+import type { ClosingComment } from "@/lib/types";
 import { Portrait } from "./Portrait";
 import styles from "./Readout.module.css";
 
 type CopyStatus = "idle" | "success" | "error";
-
-const NONE_RECORDED = "None recorded";
 
 export function Readout({
   session,
@@ -22,22 +21,12 @@ export function Readout({
 
   if (!readout) return null;
 
-  const meetingDate = new Date().toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "America/Los_Angeles",
-  });
-  const copyText = formatDisplayedReadout(readout, meetingDate, [
-    "You (chair)",
-    ...state.members.map((member) => member.name),
-    ...(state.guest.name ? [`${state.guest.name} (guest agent)`] : []),
-  ]);
+  const { meetingDate, readoutText } = createDisplayedReadout(readout, state);
 
   async function handleCopy() {
     setCopyStatus("idle");
     try {
-      await copyToClipboard(copyText);
+      await copyToClipboard(readoutText);
       setCopyStatus("success");
     } catch {
       setCopyStatus("error");
@@ -343,47 +332,6 @@ function initialsFor(name: string): string {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
-}
-
-function formatDisplayedReadout(
-  readout: ExecutiveReadout,
-  meetingDate: string,
-  participants: string[],
-): string {
-  const section = (title: string, items: string[]) => [
-    title,
-    ...(items.length ? items.map((item) => `- ${item}`) : [NONE_RECORDED]),
-  ];
-
-  return [
-    "Board readout",
-    `Meeting date: ${meetingDate}`,
-    `Participants: ${participants.join(", ")}`,
-    "",
-    "Decision under discussion",
-    readout.decision || NONE_RECORDED,
-    "",
-    "Board recommendation",
-    readout.recommendation || NONE_RECORDED,
-    readout.divided ? "The board remains divided." : "The board is aligned.",
-    "",
-    ...section("Options considered", readout.options),
-    "",
-    ...section("Key tradeoffs", readout.tradeoffs),
-    "",
-    ...section("Important assumptions", readout.assumptions),
-    "",
-    ...section("Open questions", readout.openQuestions),
-    "",
-    ...section("Recommended next actions", readout.nextActions),
-    "",
-    "Closing comments by board member",
-    ...(readout.closingComments.length
-      ? readout.closingComments.map(
-          (comment) => `- ${comment.name}: ${comment.comment || NONE_RECORDED}`,
-        )
-      : [NONE_RECORDED]),
-  ].join("\n");
 }
 
 async function copyToClipboard(text: string): Promise<void> {

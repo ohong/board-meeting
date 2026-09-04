@@ -1,3 +1,4 @@
+import { createDisplayedReadout } from "./displayed-readout";
 import type { MeetingSession } from "./session";
 
 export const BOARD_TOOL_NAMES = [
@@ -254,13 +255,17 @@ export function createBoardToolManifest(
           return invalidResult(onReceipt, "get_board_meeting_readout", parsed.message);
         }
         const result = session.getReadout();
+        const state = result.ready ? session.getState() : undefined;
         reportReceipt(
           onReceipt,
           "get_board_meeting_readout",
           result.ready,
           result.ready ? "Final readout retrieved." : result.message,
         );
-        return { ok: result.ready, ...result };
+        if (!result.ready || !result.readout || !state) return { ok: false, ...result };
+
+        const { readoutText } = createDisplayedReadout(result.readout, state);
+        return { ok: true, ...result, readoutText };
       },
     },
   ];

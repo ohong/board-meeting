@@ -14,6 +14,7 @@ import {
   memberTurnSchema,
   openingPositionSchema,
   outputSchemaForCapability,
+  PUBLIC_TURN_MAX_CHARS,
   textResultSchema,
 } from "./schemas";
 import type {
@@ -138,6 +139,13 @@ async function relayExpectedChild(
   const child = client.sessions.attach(call.data.childSessionId);
   let authenticatedChild = false;
   let visibleMessage = "";
+  const rejectOversizedMessage = (): never => {
+    onStream({ type: "reset" });
+    throw new EveRuntimeContractError(
+      "EVE_STRUCTURED_OUTPUT_INVALID",
+      `The Eve child streamed more than ${PUBLIC_TURN_MAX_CHARS} characters for a public turn.`,
+    );
+  };
   for await (const event of child.stream({ signal, startIndex: 0 })) {
     signal.throwIfAborted();
     if (!authenticatedChild && event.type !== "session.started") {
@@ -165,14 +173,17 @@ async function relayExpectedChild(
       visibleMessage = "";
       onStream({ type: "reset" });
     } else if (event.type === "message.appended") {
-      visibleMessage += event.data.messageDelta;
+      const nextMessage = visibleMessage + event.data.messageDelta;
+      if (nextMessage.length > PUBLIC_TURN_MAX_CHARS) rejectOversizedMessage();
+      visibleMessage = nextMessage;
       onStream({ type: "append", delta: event.data.messageDelta });
     } else if (
       event.type === "message.completed" &&
       event.data.finishReason !== "tool-calls" &&
-      event.data.message !== null &&
-      event.data.message !== visibleMessage
+      event.data.message !== null
     ) {
+      if (event.data.message.length > PUBLIC_TURN_MAX_CHARS) rejectOversizedMessage();
+      if (event.data.message === visibleMessage) continue;
       // Eve can retain abandoned provider-attempt deltas. The completed block
       // is authoritative, so reconcile the ephemeral projection before the
       // workflow result is validated and made durable by the caller.

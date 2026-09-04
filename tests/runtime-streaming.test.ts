@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createBrowserRuntime, readPublicTurnStream } from "../lib/runtime/browser";
 import { createMockRuntime } from "../lib/runtime/mock";
+import { PUBLIC_TURN_MAX_CHARS } from "../lib/runtime/schemas";
 import type { RuntimeTurnInput } from "../lib/types";
 
 function publicInput(): RuntimeTurnInput {
@@ -45,6 +46,71 @@ describe("browser public-turn stream", () => {
       { type: "append", delta: "A bounded " },
       { type: "append", delta: "test." },
     ]);
+  });
+
+  it.each([
+    {
+      name: "malformed JSON",
+      lines: ["not-json"],
+      expectedError: "The board runtime returned malformed JSON in its stream.",
+      cancellationFails: true,
+    },
+    {
+      name: "an explicit error",
+      lines: [JSON.stringify({ type: "error", code: "EVE_FAILED", error: "Upstream child failed." })],
+      expectedError: "Upstream child failed.",
+      cancellationFails: false,
+    },
+    {
+      name: "an event after completion",
+      lines: [
+        JSON.stringify({ type: "complete", result: { text: "Finished." } }),
+        JSON.stringify({ type: "append", delta: "Late text must not surface." }),
+      ],
+      expectedError: "The board runtime emitted a stream event after completion.",
+      cancellationFails: false,
+    },
+    {
+      name: "oversized cumulative provisional text",
+      lines: [
+        JSON.stringify({ type: "append", delta: "a".repeat(2_500) }),
+        JSON.stringify({ type: "append", delta: "b".repeat(1_501) }),
+      ],
+      expectedError: `The board runtime streamed more than ${PUBLIC_TURN_MAX_CHARS} provisional characters.`,
+      cancellationFails: false,
+    },
+  ])("cancels and clears the reader after $name", async ({
+    lines,
+    expectedError,
+    cancellationFails,
+  }) => {
+    let cancellationReason: unknown;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`${lines.join("\n")}\n`));
+      },
+      cancel(reason) {
+        cancellationReason = reason;
+        if (cancellationFails) throw new Error("Reader cancellation failed.");
+      },
+    });
+    const updates: Array<{ type: string; delta?: string }> = [];
+
+    await expect(
+      readPublicTurnStream(body, { onStream: (update) => updates.push(update) }),
+    ).rejects.toThrow(expectedError);
+    expect(cancellationReason).toBeInstanceOf(Error);
+    expect((cancellationReason as Error).message).toBe(expectedError);
+    expect(updates.at(-1)).toEqual({ type: "reset" });
+    expect(updates).not.toContainEqual({
+      type: "append",
+      delta: "Late text must not surface.",
+    });
+    expect(
+      updates
+        .filter((update) => update.type === "append")
+        .reduce((length, update) => length + (update.delta?.length ?? 0), 0),
+    ).toBeLessThanOrEqual(PUBLIC_TURN_MAX_CHARS);
   });
 
   it("passes cancellation through the browser fetch AbortSignal", async () => {

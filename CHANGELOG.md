@@ -25,3 +25,4 @@
 - Preserved in-progress selection and briefing work when a delayed runtime check upgrades the page from deterministic rehearsal to live Eve agents.
 - Queued guest admission and substantive WebMCP actions on the meeting command lane, kept activity states visible through resulting turns, and returned concise state evidence for every mutation.
 - Confined handcrafted demo dialogue to the exact example briefing, grounded every arbitrary mock capability in supplied state, and carried only genuinely contributed guest evidence into answers and summaries.
+- Bounded provisional adviser speech at both the Eve relay and browser stream, with terminal completion, cooperative cancellation, and projection cleanup for malformed or failed streams.

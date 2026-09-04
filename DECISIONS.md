@@ -120,3 +120,12 @@ We considered a separate guest-admission promise that every substantive action w
 The deterministic runtime uses the hand-authored demo trio only when the briefing exactly equals the one-click example fixture. Every other briefing routes through separate briefing- and transcript-grounded openings, turns, direct answers, synthesis, closings, and readout. Guest evidence is accepted only from an actual non-addressed guest contribution, bounded before reuse, and carried into both synthesis and readout; directed questions alone never become evidence.
 
 We considered topic or substring recognition so lightly edited free-tier prompts could retain the polished rehearsal. That convenience creates ambiguous fixture boundaries and risks introducing demo metrics into an unrelated user decision. We also considered removing scripted behavior entirely, which is maximally uniform but weakens a no-key rehearsal intended by the specification. Exact fixture equality keeps the golden path dependable while making fabricated cross-briefing facts structurally difficult.
+
+## 2026-09-03 — Bound provisional speech at both stream boundaries
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+Public speech remains provisional until the Eve workflow returns a schema-valid turn. Both the authenticated Eve-child relay and the browser's NDJSON reader enforce the same 4,000-character ceiling. A malformed event, explicit error, oversized projection, or event after completion clears the ephemeral UI, rejects the turn, and cooperatively cancels the browser stream so no partial text becomes durable transcript state.
+
+We considered enforcing the ceiling only in the browser. That protects the visible page, but still lets unbounded child output traverse and accumulate in the server relay. Enforcing one shared limit at both trust boundaries adds a small duplicate check, while constraining memory before transport and again before projection. Reader cancellation is best-effort so a cleanup failure cannot replace the protocol error that caused it.

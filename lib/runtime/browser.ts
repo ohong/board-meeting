@@ -7,7 +7,10 @@ import type {
   PublicTurnOptions,
   TranscriptEvent,
 } from "../types";
-import { publicTurnStreamEventSchema } from "./schemas";
+import {
+  PUBLIC_TURN_MAX_CHARS,
+  publicTurnStreamEventSchema,
+} from "./schemas";
 
 type BrowserRuntimeOptions = {
   fetch?: typeof fetch;
@@ -34,16 +37,34 @@ export async function readPublicTurnStream(
   const decoder = new TextDecoder();
   let buffered = "";
   let completed: MemberTurn | undefined;
+  let provisionalChars = 0;
 
   const consumeLine = (line: string) => {
     if (!line.trim()) return;
-    const parsed = publicTurnStreamEventSchema.safeParse(JSON.parse(line));
+    if (completed) {
+      throw new Error("The board runtime emitted a stream event after completion.");
+    }
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(line);
+    } catch {
+      throw new Error("The board runtime returned malformed JSON in its stream.");
+    }
+    const parsed = publicTurnStreamEventSchema.safeParse(decoded);
     if (!parsed.success) throw new Error("The board runtime returned an invalid stream event.");
     const event = parsed.data;
-    if (event.type === "reset" || event.type === "append") {
+    if (event.type === "reset") {
+      provisionalChars = 0;
+      options.onStream?.(event);
+    } else if (event.type === "append") {
+      if (provisionalChars + event.delta.length > PUBLIC_TURN_MAX_CHARS) {
+        throw new Error(
+          `The board runtime streamed more than ${PUBLIC_TURN_MAX_CHARS} provisional characters.`,
+        );
+      }
+      provisionalChars += event.delta.length;
       options.onStream?.(event);
     } else if (event.type === "complete") {
-      if (completed) throw new Error("The board runtime completed a public turn more than once.");
       completed = event.result;
     } else {
       throw new Error(event.error);
@@ -64,12 +85,23 @@ export async function readPublicTurnStream(
       if (done) break;
     }
     consumeLine(buffered);
+    if (!completed) throw new Error("The board runtime stream ended without a final turn.");
+    return completed;
+  } catch (error) {
+    try {
+      options.onStream?.({ type: "reset" });
+    } catch {
+      // Preserve the stream protocol failure if projection cleanup also fails.
+    }
+    try {
+      await reader.cancel(error);
+    } catch {
+      // Reader cancellation is best-effort; the originating failure is authoritative.
+    }
+    throw error;
   } finally {
     reader.releaseLock();
   }
-
-  if (!completed) throw new Error("The board runtime stream ended without a final turn.");
-  return completed;
 }
 
 async function streamPublicTurn(

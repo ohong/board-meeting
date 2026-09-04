@@ -13,7 +13,7 @@ import {
   type EveClientLike,
   type EveInvoker,
 } from "../lib/runtime/live";
-import { ADVISER_COUNT } from "../lib/runtime/schemas";
+import { ADVISER_COUNT, PUBLIC_TURN_MAX_CHARS } from "../lib/runtime/schemas";
 import type { RuntimeTurnInput } from "../lib/types";
 
 const priorKey = process.env.OPENAI_API_KEY;
@@ -308,6 +308,114 @@ describe("Eve-native board runtime", () => {
       code: "EVE_SUBAGENT_CALL_INVALID",
     } satisfies Partial<EveRuntimeContractError>);
     expect(updates).toEqual([]);
+  });
+
+  it("resets and rejects oversized provisional output from an authenticated child", async () => {
+    const childEvents = [
+      {
+        type: "session.started",
+        data: {
+          invocation: {
+            kind: "subagent",
+            name: "daniel-ek",
+            parentCallId: "call_adviser",
+            parentSessionId: "root_session",
+            parentTurnId: "root_turn",
+          },
+        },
+      },
+      {
+        type: "message.appended",
+        data: {
+          messageDelta: "a".repeat(2_500),
+          sequence: 0,
+          stepIndex: 0,
+          turnId: "child_turn",
+        },
+      },
+      {
+        type: "message.appended",
+        data: {
+          messageDelta: "b".repeat(1_501),
+          sequence: 0,
+          stepIndex: 0,
+          turnId: "child_turn",
+        },
+      },
+    ] as unknown as MessageStreamEvent[];
+    const client: EveClientLike = {
+      sessions: {
+        async create({ message }) {
+          const { encoded, decoded } = routingEnvelopeFrom(message);
+          const rootEvents = [
+            {
+              type: "actions.requested",
+              data: {
+                actions: [{
+                  callId: "call_workflow",
+                  input: { routingEnvelope: encoded },
+                  kind: "workflow-tool-call",
+                  toolName: "board_runtime",
+                  workflowId: "workflow_board_runtime",
+                }],
+              },
+            },
+            {
+              type: "subagent.called",
+              data: {
+                callId: "call_adviser",
+                childSessionId: "child_session",
+                name: "daniel-ek",
+                sessionId: "root_session",
+                toolName: "daniel-ek",
+                turnId: "root_turn",
+              },
+            },
+            {
+              type: "action.result",
+              data: {
+                status: "completed",
+                result: {
+                  callId: "call_workflow",
+                  kind: "tool-result",
+                  output: {
+                    capability: decoded.capability,
+                    target: decoded.target,
+                    result: { text: "This valid result must not be accepted." },
+                  },
+                  toolName: "board_runtime",
+                },
+              },
+            },
+            {
+              type: "session.waiting",
+              data: { continuationToken: "", wait: "next-user-message" },
+            },
+          ] as unknown as MessageStreamEvent[];
+          return { response: eventStream(rootEvents) };
+        },
+        attach(sessionId) {
+          expect(sessionId).toBe("child_session");
+          return { stream: () => eventStream(childEvents) };
+        },
+      },
+    };
+    const updates: Array<{ type: string; delta?: string }> = [];
+    const runtime = createLiveRuntime({
+      eveHost: "http://board.test",
+      invokeEve: createEveInvoker(() => client),
+    });
+
+    await expect(
+      runtime.publicTurn(baseInput(), { onStream: (update) => updates.push(update) }),
+    ).rejects.toMatchObject({
+      code: "EVE_STRUCTURED_OUTPUT_INVALID",
+    } satisfies Partial<EveRuntimeContractError>);
+    expect(updates).toEqual([
+      { type: "append", delta: "a".repeat(2_500) },
+      { type: "reset" },
+    ]);
+    expect(updates[0]?.delta?.length).toBeLessThanOrEqual(PUBLIC_TURN_MAX_CHARS);
   });
 
   it("cooperatively cancels the exact Eve root turn when its AbortSignal fires", async () => {

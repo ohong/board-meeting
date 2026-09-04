@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CATALOG } from "../catalog";
 
 export const ADVISER_COUNT = 36;
+export const PUBLIC_TURN_MAX_CHARS = 4_000;
 export const ADVISER_SLUGS = CATALOG.map(({ slug }) => slug);
 const adviserSlugSet = new Set(ADVISER_SLUGS);
 
@@ -56,7 +57,7 @@ export const memberTurnSchema = z
     text: z
       .string()
       .min(1)
-      .max(4_000)
+      .max(PUBLIC_TURN_MAX_CHARS)
       .refine(
         (text) => text.trim().split(/\s+/u).length <= 90,
         "Public turns must not exceed 90 words.",
@@ -70,7 +71,12 @@ export const memberTurnSchema = z
 
 export const publicTurnStreamEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("reset") }).strict(),
-  z.object({ type: z.literal("append"), delta: z.string() }).strict(),
+  z
+    .object({
+      type: z.literal("append"),
+      delta: z.string().max(PUBLIC_TURN_MAX_CHARS),
+    })
+    .strict(),
   z.object({ type: z.literal("complete"), result: memberTurnSchema }).strict(),
   z
     .object({

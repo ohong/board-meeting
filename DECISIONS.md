@@ -237,3 +237,12 @@ We considered forcing every capability through provider structured output. That 
 Decision briefs stop at 6,000 characters and chair messages at 2,000 characters in both the session contract and visible inputs. Repeated adviser turns and interim synthesis receive at most the latest 32 transcript entries and 24,000 transcript characters; when older material is excluded, a secretary marker makes that omission explicit. The complete transcript remains available to the minutes UI, inspector, fallbacks, and final readout generation.
 
 We considered trimming the session transcript itself, which would enforce one simple global ceiling but silently discard meeting evidence and weaken the final memo. We also considered sending the full record to every model call, which preserves fidelity but lets latency and context cost grow without bound. A model-only projection preserves one authoritative meeting record while bounding the calls that repeat throughout discussion.
+
+## 2026-09-04 — Improve the six stable site tools in place
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved checkpoint-integration scope
+
+The six documented WebMCP tools keep their names and authority boundaries. Every tool now has a human-readable title, explicit safety and idempotency annotations, and workflow-oriented guidance. Inspection defaults to the six newest public transcript entries and supports bounded backward paging without mutating the session. Readout retrieval still defaults to the exact memo shown to the chair, while an optional section selector lets an agent retrieve one focused part without repeating the entire artifact.
+
+We considered importing the checkpoint branch's expanded agent-management surface and shared-room APIs. Those capabilities are coupled to a different Cloudflare and Durable Objects architecture, introduce tools outside the approved six-tool MVP contract, and would make this Vercel and Eve implementation harder to review selectively. We also considered leaving the current tools unchanged, but their unbounded inspection result and sparse descriptions make correct agent use less dependable as a meeting grows. Enhancing the stable contract in place preserves compatibility while adopting the checkpoint's strongest usability idea: tools that explain what to do next and return only the context the caller requested.

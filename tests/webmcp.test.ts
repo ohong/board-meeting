@@ -13,8 +13,10 @@ import { createMockRuntime } from "../lib/runtime/mock";
 import { createMeetingSession, type MeetingSession } from "../lib/session";
 import {
   BOARD_TOOL_NAMES,
+  READOUT_SECTIONS,
   createBoardToolManifest,
   getModelContext,
+  readoutSectionToText,
   registerBoardTools,
   type BoardTool,
   type BoardToolName,
@@ -58,6 +60,7 @@ describe("board WebMCP manifest", () => {
 
     expect(manifest.map(({ name }) => name)).toEqual(BOARD_TOOL_NAMES);
     expect(new Set(manifest.map(({ name }) => name)).size).toBe(6);
+    expect(manifest.every(({ title, description }) => title && description)).toBe(true);
     expect(manifest.every(({ inputSchema }) => inputSchema.additionalProperties === false)).toBe(
       true,
     );
@@ -69,6 +72,21 @@ describe("board WebMCP manifest", () => {
       ["request_board_synthesis", false],
       ["get_board_meeting_readout", true],
     ]);
+    expect(
+      manifest.every(({ annotations }) =>
+        Object.hasOwn(annotations, "destructiveHint") &&
+        Object.hasOwn(annotations, "idempotentHint") &&
+        Object.hasOwn(annotations, "openWorldHint"),
+      ),
+    ).toBe(true);
+
+    expect(tool(manifest, "inspect_board_meeting").inputSchema).toMatchObject({
+      properties: {
+        transcript_limit: { type: "integer", minimum: 1, maximum: 12 },
+        transcript_offset: { type: "integer", minimum: 0 },
+        include_briefing: { type: "boolean" },
+      },
+    });
 
     expect(tool(manifest, "join_board_meeting").inputSchema).toMatchObject({
       required: ["name"],
@@ -83,6 +101,53 @@ describe("board WebMCP manifest", () => {
       properties: {
         member: { type: "string", minLength: 1, maxLength: 120 },
         text: { type: "string", minLength: 1, maxLength: 2000 },
+      },
+    });
+    expect(tool(manifest, "get_board_meeting_readout").inputSchema).toMatchObject({
+      properties: { section: { type: "string", enum: ["all", ...READOUT_SECTIONS] } },
+    });
+  });
+
+  it("pages a bounded transcript without changing the shared meeting", async () => {
+    const session = await started();
+    const manifest = createBoardToolManifest(session);
+    const beforeState = session.getState();
+    const beforeInspect = session.inspect();
+    const expectedWindow = beforeInspect.transcript.slice(
+      Math.max(0, beforeInspect.transcript.length - 3),
+      beforeInspect.transcript.length - 1,
+    );
+
+    const latest = await tool(manifest, "inspect_board_meeting").execute({
+      transcript_limit: 2,
+      transcript_offset: 1,
+      include_briefing: false,
+    });
+
+    expect(latest).toMatchObject({
+      ok: true,
+      meeting: {
+        transcript: expect.any(Array),
+        transcriptWindow: {
+          total: beforeInspect.transcript.length,
+          returned: expectedWindow.length,
+          offset: 1,
+          hasNewer: true,
+        },
+      },
+      hint: expect.any(String),
+    });
+    expect(latest.meeting).not.toHaveProperty("briefing");
+    expect((latest.meeting as { transcript: unknown[] }).transcript).toEqual(expectedWindow);
+    expect(session.getState()).toEqual(beforeState);
+
+    const beyondHistory = await tool(manifest, "inspect_board_meeting").execute({
+      transcript_offset: beforeInspect.transcript.length + 1,
+    });
+    expect(beyondHistory).toMatchObject({
+      meeting: {
+        transcript: [],
+        transcriptWindow: { returned: 0, start: 0, end: 0, hasNewer: true },
       },
     });
   });
@@ -165,12 +230,26 @@ describe("board WebMCP manifest", () => {
     expect(readoutResult).not.toHaveProperty("transcript");
     expect(session.getState()).toEqual(beforeReadout);
 
+    const nextActionsResult = await tool(manifest, "get_board_meeting_readout").execute({
+      section: "next_actions",
+    });
+    expect(nextActionsResult).toEqual({
+      ok: true,
+      ready: true,
+      section: "next_actions",
+      text: readoutSectionToText(beforeReadout.readout, "next_actions"),
+      hint: "Call again with section=all for the exact complete memo shown to the human chair.",
+    });
+    expect(nextActionsResult).not.toHaveProperty("readout");
+    expect(session.getState()).toEqual(beforeReadout);
+
     expect(received.map(receiptText)).toEqual([
       "Site tool inspect_board_meeting succeeded: Meeting state inspected.",
       "Site tool join_board_meeting succeeded: Join request accepted.",
       "Site tool contribute_to_board_meeting succeeded: Contribution added to the meeting.",
       "Site tool address_board_member succeeded: The addressed adviser answered.",
       "Site tool request_board_synthesis succeeded: Interim synthesis delivered.",
+      "Site tool get_board_meeting_readout succeeded: Final readout retrieved.",
       "Site tool get_board_meeting_readout succeeded: Final readout retrieved.",
     ]);
     expect(JSON.stringify(received)).not.toContain(contribution);
@@ -253,10 +332,30 @@ describe("board WebMCP manifest", () => {
     const cases: Array<[BoardToolName, unknown, string]> = [
       ["join_board_meeting", { name: 42 }, "name must be a non-empty string."],
       ["join_board_meeting", { name: "A", role: "chair" }, "Unexpected argument: role."],
+      [
+        "inspect_board_meeting",
+        { transcript_limit: 0 },
+        "transcript_limit must be an integer from 1 to 12.",
+      ],
+      [
+        "inspect_board_meeting",
+        { transcript_offset: -1 },
+        "transcript_offset must be a non-negative integer.",
+      ],
+      [
+        "inspect_board_meeting",
+        { include_briefing: "yes" },
+        "include_briefing must be a boolean.",
+      ],
       ["contribute_to_board_meeting", { text: "x".repeat(4001) }, "text must be 4000 characters or fewer."],
       ["address_board_member", { member: "", text: "Question" }, "member must be a non-empty string."],
       ["request_board_synthesis", [], "Arguments must be an object."],
       ["get_board_meeting_readout", { force: true }, "Unexpected argument: force."],
+      [
+        "get_board_meeting_readout",
+        { section: "vibes" },
+        `section must be one of: all, ${READOUT_SECTIONS.join(", ")}.`,
+      ],
     ];
 
     for (const [name, args, message] of cases) {

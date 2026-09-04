@@ -19,3 +19,4 @@
 - Rebuilt the live meeting as a dark spatial boardroom beside paper minutes, with fixed 3–6 seat compositions, legible participant states, one public stream, agent arrival, invitation, and an accessible @mention composer.
 - Made WebMCP outcome receipts transient and session-aware so a completed site-tool call never obscures later meeting or readout content.
 - Paced the browser mock through visible parallel thinking and concise, non-repeating discussion turns while keeping deterministic tests instantaneous.
+- Routed live turns through Eve-isolated adviser and secretary subagents, with immutable capability envelopes, closed output schemas, a 90-word public-turn ceiling, and fail-closed identity checks.

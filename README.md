@@ -19,7 +19,7 @@ Open http://localhost:3000. The app lands on **Choose your board**.
 
 ### Live board members
 
-Set `OPENAI_API_KEY` in the environment (local `.env.local` or Vercel project env). Without it, the app shows a setup banner and runs a deterministic mock so the room, orchestration, and WebMCP tools can still be tested.
+Set `OPENAI_API_KEY` in the environment (local `.env.local` or Vercel project env). Without it, the app identifies itself as demo mode and runs a deterministic mock so the room, orchestration, and WebMCP tools can still be tested. With a key, each capability is routed through an isolated Eve adviser or secretary subagent; same-project Vercel calls use OIDC automatically.
 
 Do not commit secrets.
 

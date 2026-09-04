@@ -4,7 +4,6 @@ import type {
   ExecutiveReadout,
   MemberTurn,
   OpeningPosition,
-  RuntimeTurnInput,
   TranscriptEvent,
 } from "../types";
 
@@ -28,7 +27,8 @@ export function createBrowserRuntime(): BoardRuntime {
       return post<OpeningPosition>({ capability: "formOpeningPosition", input });
     },
     publicTurn(input) {
-      return post<MemberTurn>({ capability: "publicTurn", input });
+      const capability = input.capability === "answerDirect" ? "answerDirect" : "publicTurn";
+      return post<MemberTurn>({ capability, input });
     },
     closingComment(input) {
       return post<string>({ capability: "closingComment", input });

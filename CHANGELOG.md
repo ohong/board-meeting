@@ -15,3 +15,4 @@
 - Added a deterministic, optimized portrait library for all 36 frozen roster members plus source and rights provenance.
 - Hardened the six WebMCP board tools with closed schemas, runtime validation, same-session authority checks, abort-safe registration, and visible success or rejection receipts.
 - Routed all 36 adviser packages directly through the OpenAI provider and disabled every inherited model-facing Eve tool so meetings can use only authored persona and supplied session context.
+- Rebuilt the executive readout as a warm-paper editorial memo with all eight required sections, explicit dissent, participant context, reliable copy feedback, and a fresh-board reset.

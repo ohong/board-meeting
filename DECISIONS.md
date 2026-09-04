@@ -48,3 +48,12 @@ We considered registering each tool inline inside the React effect. That is shor
 All 36 selectable adviser packages instantiate the direct OpenAI provider and explicitly disable Eve's seven default model-facing tools: shell, file read/write, web fetch/search, task tracking, and user questioning. A catalog-derived invariant test requires the full 36 × 7 matrix and rejects gateway-style model strings.
 
 We considered relying on persona instructions or a shared inherited override. Prompt text is not an enforcement boundary, and installed Eve discovery gives each subagent its own authored tool slots without inheriting root overrides. We also considered symlinking one shared disable directory, but Eve's disk discovery accepts regular files and directories rather than symlink entries. Explicit sentinel files create a large mechanical diff, but they are the supported, auditable boundary and make unapproved research or workspace access unavailable rather than merely prohibited.
+
+## 2026-09-03 — Present the readout as one editorial sheet
+
+**Status:** accepted
+**Decision maker:** Codex, independently following the supplied design references
+
+The final state is one warm-paper memo: the decision and recommendation establish the hierarchy, then the eight required sections proceed linearly with ruled editorial structure. The participant roster and original question remain compactly available, while divided recommendations and individual closing comments preserve dissent instead of collapsing it into a score.
+
+We considered keeping a permanent navigation or adviser rail like the denser reference. It creates a stronger application frame, but competes with the memo at 1024 px and makes the result resemble a dashboard. The single-sheet composition better fits a durable executive artifact, stays scannable across the target widths, and gives the recommendation the space it needs.

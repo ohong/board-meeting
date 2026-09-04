@@ -1,197 +1,410 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { formatReadout } from "@/lib/format";
-import { LetterMark } from "./LetterMark";
+import { useState } from "react";
 import type { MeetingSession, MeetingState } from "@/lib/session";
+import type { ClosingComment, ExecutiveReadout } from "@/lib/types";
+import { Portrait } from "./Portrait";
+import styles from "./Readout.module.css";
+
+type CopyStatus = "idle" | "success" | "error";
+
+const NONE_RECORDED = "None recorded";
 
 export function Readout({
-  session: _session,
+  session,
   state,
 }: {
   session: MeetingSession;
   state: MeetingState;
 }) {
   const readout = state.readout;
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+
   if (!readout) return null;
-  const text = formatReadout(readout);
-  const today = new Date().toLocaleDateString("en-GB", {
-    day: "numeric",
+
+  const meetingDate = new Date().toLocaleDateString("en-US", {
     month: "long",
+    day: "numeric",
     year: "numeric",
     timeZone: "America/Los_Angeles",
   });
+  const copyText = formatDisplayedReadout(readout, meetingDate, [
+    "You (chair)",
+    ...state.members.map((member) => member.name),
+    ...(state.guest.name ? [`${state.guest.name} (guest agent)`] : []),
+  ]);
+
+  async function handleCopy() {
+    setCopyStatus("idle");
+    try {
+      await copyToClipboard(copyText);
+      setCopyStatus("success");
+    } catch {
+      setCopyStatus("error");
+    }
+  }
+
+  function handleReset() {
+    session.reset();
+    window.scrollTo(0, 0);
+  }
 
   return (
-    <main className="flex-1 ledger-body min-h-screen px-10 md:px-16 py-10 flex flex-col">
-      <header className="text-center border-b border-[var(--paper-ink)] pb-4">
-        <div className="text-[11px] tracking-[0.28em] uppercase text-[var(--paper-muted)] font-[family-name:var(--font-instrument)]">
-          A personal board, in session
-        </div>
-        <h1 className="text-[34px] font-bold tracking-[-0.02em] mt-2 font-[family-name:var(--font-playfair)]">
-          The Best Board Meeting You’ve Ever Had
-        </h1>
-        <div className="flex justify-between text-xs mt-3 text-[var(--paper-muted)] font-[family-name:var(--font-instrument)]">
-          <span>Session · {today}</span>
-          <span>
-            {readout.divided ? (
-              <span className="text-[var(--dissent)] font-semibold">Board divided</span>
-            ) : (
-              <span className="text-[oklch(42%_0.11_145)] font-semibold">● Aligned</span>
-            )}
-            {" · "}
-            {state.members.length} of 6 seated
-          </span>
-          <span>You are chair</span>
-        </div>
-      </header>
+    <main className={styles.page} id="main-content">
+      <a href="#readout-decision" className={styles.skipLink}>
+        Skip to the decision
+      </a>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)_240px] gap-8 lg:gap-10 mt-8 flex-1">
-        <aside className="lg:border-r lg:border-[var(--rule)] lg:pr-5">
-          <h2 className="text-[11px] tracking-[0.18em] uppercase text-[var(--paper-muted)] mb-4 font-[family-name:var(--font-instrument)]">
-            The table
-          </h2>
-          {state.members.map((m) => (
-            <div key={m.slug} className="flex items-center gap-2.5 mb-3.5">
-              <LetterMark initials={m.initials} size="sm" onPaper />
-              <div>
-                <strong className="block text-[15px] font-[family-name:var(--font-playfair)]">
-                  {m.name}
+      <div className={styles.sheet}>
+        <header className={styles.masthead}>
+          <div className={styles.wordmark} aria-label="Board Meeting">
+            <span className={styles.wordmarkMonogram} aria-hidden="true">
+              BM
+            </span>
+            <span>Board Meeting</span>
+          </div>
+
+          <div className={styles.documentTitle}>
+            <p>Executive memo</p>
+            <h1>Board readout</h1>
+          </div>
+
+          <div className={styles.headerActions} aria-label="Readout actions">
+            <button type="button" className={styles.secondaryAction} onClick={handleReset}>
+              New board
+            </button>
+            <button
+              type="button"
+              className={styles.primaryAction}
+              onClick={() => void handleCopy()}
+              aria-describedby="copy-receipt"
+            >
+              <CopyIcon />
+              Copy readout
+            </button>
+          </div>
+        </header>
+
+        <div className={styles.metadata} aria-label="Meeting details">
+          <div>
+            <span>Meeting date</span>
+            <strong>{meetingDate}</strong>
+          </div>
+          <div className={styles.participantDetail}>
+            <span>Participants</span>
+            <strong>
+              You, chair · {state.members.length} board member
+              {state.members.length === 1 ? "" : "s"}
+              {state.guest.name ? ` · ${state.guest.name}, guest agent` : ""}
+            </strong>
+          </div>
+          <div
+            id="copy-receipt"
+            className={`${styles.copyReceipt} ${
+              copyStatus === "error" ? styles.copyReceiptError : ""
+            }`}
+            role={copyStatus === "error" ? "alert" : "status"}
+            aria-live="polite"
+          >
+            {copyStatus === "success" ? (
+              <>
+                <CheckIcon /> Readout copied
+              </>
+            ) : copyStatus === "error" ? (
+              "Couldn’t copy the readout. Check clipboard access and try again."
+            ) : (
+              "Ready to copy"
+            )}
+          </div>
+        </div>
+
+        <ul className={styles.roster} aria-label="Meeting participants">
+          <li className={styles.chairParticipant}>
+            <span className={styles.chairMark} aria-hidden="true">
+              Y
+            </span>
+            <span>
+              <strong>You</strong>
+              <small>Chair</small>
+            </span>
+          </li>
+          {state.members.map((member) => (
+            <li className={styles.participant} key={member.slug}>
+              <Portrait
+                slug={member.slug}
+                name={member.name}
+                initials={member.initials}
+                size="preview"
+              />
+              <span>
+                <strong>{member.name}</strong>
+                <small>{member.role}</small>
+              </span>
+            </li>
+          ))}
+          {state.guest.name ? (
+            <li className={`${styles.participant} ${styles.guestParticipant}`}>
+              <span className={styles.guestMark} aria-hidden="true">
+                {initialsFor(state.guest.name)}
+              </span>
+              <span>
+                <strong>{state.guest.name}</strong>
+                <small>Guest agent</small>
+              </span>
+            </li>
+          ) : null}
+        </ul>
+
+        <article className={styles.memo} aria-label="Executive board readout">
+          <section className={`${styles.section} ${styles.decision}`} id="readout-decision">
+            <SectionHeading title="Decision under discussion" />
+            <p>{readout.decision || NONE_RECORDED}</p>
+          </section>
+
+          <section className={`${styles.section} ${styles.recommendation}`}>
+            <SectionHeading title="Board recommendation" />
+            <div className={styles.recommendationSpread}>
+              <p className={styles.recommendationStatement}>
+                {readout.recommendation || NONE_RECORDED}
+              </p>
+              <div
+                className={`${styles.alignmentNote} ${
+                  readout.divided ? styles.dividedNote : ""
+                }`}
+              >
+                <span>{readout.divided ? "Meaningful dissent" : "Board position"}</span>
+                <strong>
+                  {readout.divided ? "The board remains divided." : "The board is aligned."}
                 </strong>
-                <span className="text-[11px] text-[var(--paper-muted)] font-[family-name:var(--font-instrument)]">
-                  {m.role}
-                </span>
+                <p>
+                  {readout.divided
+                    ? "The closing views below are preserved separately so the disagreement remains visible."
+                    : "The closing views below preserve each member’s basis for that position."}
+                </p>
               </div>
             </div>
-          ))}
-          <div className="flex items-center gap-2.5 mb-3.5 opacity-55">
-            <div className="w-10 h-10 rounded-full border border-dashed border-[var(--paper-muted)]" />
-            <div>
-              <strong className="block text-[15px] font-[family-name:var(--font-playfair)]">
-                {state.guest.name ?? "Your agent"}
-              </strong>
-              <span className="text-[11px] text-[var(--paper-muted)] font-[family-name:var(--font-instrument)]">
-                {state.guest.name ? "Guest" : "Empty seat"}
-              </span>
-            </div>
+          </section>
+
+          <MemoListSection
+            title="Options considered"
+            items={readout.options}
+            variant="options"
+          />
+
+          <MemoListSection
+            title="Key tradeoffs"
+            items={readout.tradeoffs}
+            variant="tradeoffs"
+          />
+
+          <div className={styles.pairedSections}>
+            <MemoListSection
+              title="Important assumptions"
+              items={readout.assumptions}
+              variant="compact"
+            />
+
+            <MemoListSection
+              title="Open questions"
+              items={readout.openQuestions}
+              variant="compact"
+            />
           </div>
-        </aside>
 
-        <article>
-          <h2 className="text-[36px] md:text-[42px] font-bold leading-[1.05] tracking-[-0.03em] mb-2 font-[family-name:var(--font-playfair)]">
-            {readout.decision.length > 90
-              ? `${readout.decision.slice(0, 87)}…`
-              : readout.decision}
-          </h2>
-          <p className="text-[18px] text-[var(--paper-muted)] mb-8 leading-snug">
-            {readout.recommendation}
-          </p>
+          <MemoListSection
+            title="Recommended next actions"
+            items={readout.nextActions}
+            variant="nextActions"
+          />
 
-          <Section title="Board recommendation">
-            {readout.recommendation}
-            {readout.divided ? (
-              <p className="text-[var(--dissent)] mt-2 font-[family-name:var(--font-instrument)] text-[13px]">
-                The board remains divided.
-              </p>
+          <section className={`${styles.section} ${styles.closingComments}`}>
+            <SectionHeading title="Closing comments by board member" />
+            {readout.closingComments.length ? (
+              <div className={styles.commentList}>
+                {readout.closingComments.map((comment, index) => (
+                  <ClosingView
+                    key={`${comment.memberId}-${index}`}
+                    comment={comment}
+                    state={state}
+                    divided={readout.divided}
+                  />
+                ))}
+              </div>
             ) : (
-              <p className="text-[var(--paper-muted)] mt-2 font-[family-name:var(--font-instrument)] text-[13px]">
-                The board is aligned.
-              </p>
+              <p className={styles.emptyState}>{NONE_RECORDED}</p>
             )}
-          </Section>
-          <Section title="Options considered" items={readout.options} />
-          <Section title="Key tradeoffs" items={readout.tradeoffs} />
-          <Section title="Important assumptions" items={readout.assumptions} />
-          <Section title="Open questions" items={readout.openQuestions} />
-          <Section title="Recommended next actions" items={readout.nextActions} />
-
-          <h2 className="text-[11px] tracking-[0.18em] uppercase mt-8 mb-3 font-[family-name:var(--font-instrument)] text-[var(--paper-muted)]">
-            Closing comments by board member
-          </h2>
-          {readout.closingComments.map((c) => (
-            <blockquote key={c.memberId} className="mb-4 text-[17px] leading-relaxed">
-              <p>{c.comment}</p>
-              <cite className="not-italic text-sm font-[family-name:var(--font-instrument)]">
-                — {c.name}
-              </cite>
-            </blockquote>
-          ))}
+          </section>
         </article>
 
-        <aside className="lg:border-l lg:border-[var(--dissent)] lg:pl-5">
-          <h2 className="text-[11px] tracking-[0.18em] uppercase text-[var(--dissent)] mb-4 font-[family-name:var(--font-instrument)]">
-            Dissent
-          </h2>
-          {readout.divided ? (
-            <>
-              {readout.closingComments.map((c) => (
-                <blockquote
-                  key={c.memberId}
-                  className="mb-4 text-[15px] leading-[1.4] text-[var(--dissent)]"
-                >
-                  <p>{c.comment}</p>
-                  <cite className="block not-italic text-[12px] mt-1 text-[var(--paper-ink)] font-[family-name:var(--font-instrument)]">
-                    {c.name}
-                  </cite>
-                </blockquote>
-              ))}
-              {readout.tradeoffs.slice(0, 2).map((t) => (
-                <p key={t} className="mb-3 text-[14px] leading-snug text-[var(--dissent)]">
-                  {t}
-                </p>
-              ))}
-            </>
-          ) : (
-            <p className="text-[15px] leading-relaxed text-[var(--dissent)]">
-              No formal dissent recorded. The table closed aligned.
-            </p>
-          )}
-        </aside>
+        <footer className={styles.footer}>
+          <span>Board readout · {meetingDate}</span>
+          <span>{readout.divided ? "Dissent preserved" : "Meeting complete"}</span>
+        </footer>
       </div>
-
-      <footer className="mt-10 pt-4 border-t border-[var(--paper-ink)] flex items-center justify-between gap-4 font-[family-name:var(--font-instrument)]">
-        <span className="text-[13px] text-[var(--paper-muted)]">
-          Executive readout · copy for your records
-        </span>
-        <button
-          type="button"
-          className="btn-ink text-sm"
-          onClick={async () => {
-            await navigator.clipboard.writeText(text);
-            setCopied(true);
-          }}
-        >
-          {copied ? "Copied readout" : "Copy readout"}
-        </button>
-      </footer>
     </main>
   );
 }
 
-function Section({
+function SectionHeading({ title }: { title: string }) {
+  return (
+    <header className={styles.sectionHeading}>
+      <h2>{title}</h2>
+    </header>
+  );
+}
+
+function MemoListSection({
   title,
-  children,
   items,
+  variant,
 }: {
   title: string;
-  children?: ReactNode;
-  items?: string[];
+  items: string[];
+  variant: "options" | "tradeoffs" | "compact" | "nextActions";
 }) {
   return (
-    <section className="mb-6">
-      <h2 className="text-[11px] tracking-[0.18em] uppercase mb-2 font-[family-name:var(--font-instrument)] text-[var(--paper-muted)]">
-        {title}
-      </h2>
-      {items ? (
-        <ul className="list-disc pl-5 space-y-1 text-[17px] leading-relaxed">
-          {items.map((item) => (
-            <li key={item}>{item}</li>
+    <section className={`${styles.section} ${styles[variant]}`}>
+      <SectionHeading title={title} />
+      {items.length ? (
+        <ol className={styles.memoList}>
+          {items.map((item, index) => (
+            <li key={`${index}-${item}`}>
+              <span className={styles.rowNumber} aria-hidden="true">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <p>{item}</p>
+            </li>
           ))}
-        </ul>
+        </ol>
       ) : (
-        <p className="text-[17px] leading-relaxed">{children}</p>
+        <p className={styles.emptyState}>{NONE_RECORDED}</p>
       )}
     </section>
   );
+}
+
+function ClosingView({
+  comment,
+  state,
+  divided,
+}: {
+  comment: ClosingComment;
+  state: MeetingState;
+  divided: boolean;
+}) {
+  const member = state.members.find((candidate) => candidate.slug === comment.memberId);
+
+  return (
+    <figure className={`${styles.closingView} ${divided ? styles.dissentView : ""}`}>
+      <div className={styles.commentIdentity}>
+        {member ? (
+          <Portrait
+            slug={member.slug}
+            name={member.name}
+            initials={member.initials}
+            size="roster"
+          />
+        ) : (
+          <span className={styles.commentMark} aria-hidden="true">
+            {initialsFor(comment.name)}
+          </span>
+        )}
+        <figcaption>
+          <strong>{comment.name}</strong>
+          <small>{member?.role ?? "Board participant"}</small>
+        </figcaption>
+      </div>
+      <blockquote>“{comment.comment || NONE_RECORDED}”</blockquote>
+    </figure>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <rect x="6.5" y="6.5" width="9" height="9" rx="1" />
+      <path d="M4.5 13.5h-1v-10h10v1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m3.5 8.2 2.7 2.7 6.3-6.3" />
+    </svg>
+  );
+}
+
+function initialsFor(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function formatDisplayedReadout(
+  readout: ExecutiveReadout,
+  meetingDate: string,
+  participants: string[],
+): string {
+  const section = (title: string, items: string[]) => [
+    title,
+    ...(items.length ? items.map((item) => `- ${item}`) : [NONE_RECORDED]),
+  ];
+
+  return [
+    "Board readout",
+    `Meeting date: ${meetingDate}`,
+    `Participants: ${participants.join(", ")}`,
+    "",
+    "Decision under discussion",
+    readout.decision || NONE_RECORDED,
+    "",
+    "Board recommendation",
+    readout.recommendation || NONE_RECORDED,
+    readout.divided ? "The board remains divided." : "The board is aligned.",
+    "",
+    ...section("Options considered", readout.options),
+    "",
+    ...section("Key tradeoffs", readout.tradeoffs),
+    "",
+    ...section("Important assumptions", readout.assumptions),
+    "",
+    ...section("Open questions", readout.openQuestions),
+    "",
+    ...section("Recommended next actions", readout.nextActions),
+    "",
+    "Closing comments by board member",
+    ...(readout.closingComments.length
+      ? readout.closingComments.map(
+          (comment) => `- ${comment.name}: ${comment.comment || NONE_RECORDED}`,
+        )
+      : [NONE_RECORDED]),
+  ].join("\n");
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    try {
+      textarea.focus();
+      textarea.select();
+      if (!document.execCommand("copy")) throw new Error("Clipboard write failed");
+    } finally {
+      textarea.remove();
+    }
+  }
 }

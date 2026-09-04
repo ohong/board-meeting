@@ -13,3 +13,4 @@
 - Rebuilt the demo trio plus Doug Leone, Torsten Reil, and Sam Altman from canonical Founders interviews, with current roles, differentiated judgment, and explicit evaluation gaps.
 - Replaced selection and briefing with the warm-paper, portrait-led 4/8 composition from the supplied design references, including an always-visible board preview and exact target-viewport layouts.
 - Added a deterministic, optimized portrait library for all 36 frozen roster members plus source and rights provenance.
+- Hardened the six WebMCP board tools with closed schemas, runtime validation, same-session authority checks, abort-safe registration, and visible success or rejection receipts.

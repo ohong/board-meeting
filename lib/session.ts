@@ -671,6 +671,16 @@ export function createMeetingSession(options: SessionOptions = {}) {
     return { ready: true, message: "Readout ready.", readout: state.readout };
   }
 
+  function recordToolReceipt(toolName: string, ok: boolean, message: string) {
+    addEvent({
+      kind: "system",
+      speakerId: "webmcp",
+      speakerName: "Site tools",
+      text: `Site tool ${toolName} ${ok ? "succeeded" : "rejected"}: ${message}`,
+    });
+    emit();
+  }
+
   async function endMeetingCore(token: number): Promise<ActionResult> {
     if (state.phase !== "meeting") return { ok: false, message: "No meeting to end." };
     state.meetingPhase = "ending";
@@ -837,6 +847,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
         message: "Session was reset before synthesis was handled.",
       }),
     getReadout: getReadoutTool,
+    recordToolReceipt,
     guestEndMeeting() {
       return {
         ok: false as const,

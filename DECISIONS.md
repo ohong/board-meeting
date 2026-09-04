@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-09-04 — Keep dependencies out of version control at every depth
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the requested Git push repair
+
+All `node_modules/` directories are ignored, including those inside export and media subprojects. Package manifests and lockfiles remain versioned so dependencies are reproducible without committing generated packages, browser binaries, or build caches.
+
+We considered removing only the two files above GitHub's 100 MB limit. That would make the immediate push pass, but it would leave thousands of generated dependency files in the repository and allow the same failure to recur as caches change. Ignoring dependency directories by path keeps intentional media assets versioned while excluding the generated source of the oversized blobs.
+
 ## 2026-09-03 — Keep persona behavior beside each Eve subagent
 
 **Status:** accepted

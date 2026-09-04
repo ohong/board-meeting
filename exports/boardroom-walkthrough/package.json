@@ -1,0 +1,17 @@
+{
+  "name": "boardroom-walkthrough",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "render": "remotion render src/index.ts BoardroomWalkthrough boardroom-walkthrough.mp4 --codec h264 --crf 18 --pixel-format yuv420p",
+    "render:highlight": "remotion render src/index.ts BoardroomHighlightReel boardroom-highlight-reel.mp4 --codec h264 --crf 18 --pixel-format yuv420p"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.520",
+    "@remotion/media": "4.0.520",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.520"
+  }
+}

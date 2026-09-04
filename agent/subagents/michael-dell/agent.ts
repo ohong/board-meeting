@@ -1,7 +1,7 @@
 import { defineAgent } from "eve";
 
 export default defineAgent({
-  description: "Michael Dell. Direct model, cash, customer closeness.",
+  description: "Michael Dell, Dell Technologies founder: use for direct customer models, inventory and cash cycles, technology transitions, scale, capital structure, and pragmatic experimentation; curious, competitive, humble, and financially exact.",
   model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

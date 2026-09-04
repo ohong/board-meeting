@@ -23,6 +23,34 @@ Set `OPENAI_API_KEY` in the environment (local `.env.local` or Vercel project en
 
 Do not commit secrets.
 
+### Local fal.ai image-to-video
+
+Create an **API**-scoped key at [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys), then add it to the repository-root `.env.local`:
+
+```dotenv
+FAL_KEY=your-key-here
+```
+
+Preview and validate a request locally without using the key or network:
+
+```bash
+bun run video:generate -- --image ./starting-frame.png --prompt "Slow first-person push toward a black-and-white boardroom table" --duration 10 --dry-run
+```
+
+Remove `--dry-run` to submit to `minimax/h3-max/image-to-video`. Local PNG, JPG, JPEG, WEBP, GIF, and AVIF files are encoded as data URIs; public HTTPS image URLs also work. Duration is 5–15 seconds, resolution is `480P` or `768P`, and `--end-image` supplies an optional final keyframe.
+
+```bash
+bun run video:generate -- --image ./first.png --end-image ./last.png --prompt "The camera glides between the advisers" --duration 10 --resolution 768P --output ./exports/fal-video/boardroom.mp4
+```
+
+The command prints and saves the request ID before polling. If it stops before the video downloads, use the printed command to resume without submitting or paying for a second generation:
+
+```bash
+bun run video:generate -- --request-id <request-id>
+```
+
+By default, the MP4 and its `.fal.json` request metadata are saved under `exports/fal-video/`. Existing MP4 files are never overwritten. Run `bun run video:generate -- --help` for every option.
+
 ```bash
 bun test
 bun run typecheck

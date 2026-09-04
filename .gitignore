@@ -20,6 +20,9 @@ node_modules/
 # production
 /build
 
+# generated teaser assets
+/teaser-video/headshots/
+
 # misc
 .DS_Store
 *.pem

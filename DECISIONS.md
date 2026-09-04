@@ -1,5 +1,27 @@
 # Decisions
 
+## 2026-09-04 — Use the fal queue HTTP API for local video generation
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the requested local fal.ai setup
+
+The local image-to-video command calls the documented fal queue HTTP endpoints with Bun's built-in fetch and filesystem APIs. It submits once, records the request ID and returned queue URLs, polls for up to 240 seconds, and supports later retrieval by request ID. Authenticated requests are restricted to `https://queue.fal.run` with redirects disabled; the generated media download carries no API key.
+
+We considered adding `@fal-ai/client`. Its subscription helper would reduce protocol code, but it would add a dependency and hide the submit/persist/resume boundary that prevents accidental duplicate paid generations. Direct HTTP keeps that boundary visible and leaves the application runtime unchanged. The tradeoff is maintaining a small amount of queue handling against fal's published OpenAPI contract.
+
+## 2026-09-04 — Let Astra direct each motion film from the product and references
+
+**Status:** accepted
+**Decision maker:** Oscar specified the creative role, reference quality bar, default 10/20/30-second films, and paid-resource approval; Codex chose the packaging and implementation workflow independently.
+
+The global `motion-video` skill uses product research, two candidate treatments, designed style frames/storyboards, editable animation, sound, and inspection. It follows the supplied formula's Dream outcome → Solution → Demo → Outro structure while giving Astra responsibility for the concept and final selection. Remotion is the preferred available compositor, with other tools chosen for specific shots; the skill does not install or assume native After Effects.
+
+We considered a fixed Remotion starter with reusable visual layouts. It would make the first render easier but encourage repeated compositions across unrelated products. A directing workflow with technical helpers preserves creative freedom and requires actual proof, temporal review, and revisions. Each duration gets its own edit rather than a sped-up or truncated long cut.
+
+The skill bundles all 12 supplied reference films and a timestamped atlas, using relative paths so other product repositories can use them. Keeping only links to this checkout would be smaller but fragile. Originals remain unchanged and reference assets are study material, not cleared footage for new films. Reference study used full-timeline frame sampling, denser transition sequences, and local transcription; direct continuous playback and listening were unavailable and are not claimed.
+
+Free sound effects may come from sources such as Pixabay with asset-specific source/license records. Any new API or paid resource needs a concrete, currently priced proposal, a reasonable cap, and user approval tied to a material improvement in the output. Ordinary local preparation proceeds without a purchase checkpoint.
+
 ## 2026-09-04 — Keep dependencies out of version control at every depth
 
 **Status:** accepted

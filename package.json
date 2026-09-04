@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "video:generate": "bun --env-file=.env.local scripts/fal-image-to-video.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.58",

@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Tony Xu, co-founder and CEO of DoorDash. Last-mile operations, cost per unit of work, doing the job yourself.",
-  model: BOARD_MODEL,
+    "Consult Tony Xu on marketplaces, logistics, local commerce, operations, customer experience, experimentation, or scaling a physical-world service. He is a calm, detail-obsessed operator who converts frontline anecdotes into testable hypotheses and compounds many small improvements.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

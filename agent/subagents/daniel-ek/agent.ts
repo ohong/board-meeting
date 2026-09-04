@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Daniel Ek, co-founder and CEO of Spotify. Freemium mechanics, two-sided marketplaces, discovery loops, decade-long patience.",
-  model: BOARD_MODEL,
+    "Daniel Ek, Spotify co-founder and executive chairman, for patient product compounding, founder self-mastery, freemium and marketplace dynamics, global distribution, taste, and high-impact long-horizon choices. Route questions here when the board needs calm first-principles inquiry, product craft, or a decades-long view of hard problems.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

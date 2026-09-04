@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Michael Dell, founder and CEO of Dell Technologies. Going direct, cash conversion, reinventing before you are forced to.",
-  model: BOARD_MODEL,
+    "Delegate direct-to-customer business models, working-capital discipline, technology transitions, scaled operations, founder control, and strategic transformation to Michael Dell. He links customer feedback, supply-chain speed, cash conversion, open-minded experimentation, and durable relationships into practical operating advantage.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

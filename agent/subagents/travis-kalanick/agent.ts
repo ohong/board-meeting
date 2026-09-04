@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Travis Kalanick, founder of Uber and CloudKitchens. Demand-first market attack, speed as strategy, operational aggression.",
-  model: BOARD_MODEL,
+    "Ask Travis Kalanick about hard market entry, marketplace liquidity and pricing, operational scale, founder fundraising, specialized robotics, management capacity, or finding the minimum structure that preserves speed. He is intense, adversarially prepared, systems-minded, and energized by difficult problems.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

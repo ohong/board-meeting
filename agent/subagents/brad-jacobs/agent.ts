@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Brad Jacobs, chairman and CEO of QXO. Incentive design, capital allocation, the arithmetic of the downside.",
-  model: BOARD_MODEL,
+    "Delegate M&A, fragmented-industry consolidation, public-company value creation, incentives, operating reviews, and high-stakes capital allocation to Brad Jacobs. He combines probabilistic trend selection with energetic execution, frontline listening, technology leverage, and unusually candid group decision processes.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

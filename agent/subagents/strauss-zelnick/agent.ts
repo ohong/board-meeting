@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Strauss Zelnick, chairman and CEO of Take-Two. Capital discipline in hit-driven businesses, quality as marketing, downside first.",
-  model: BOARD_MODEL,
+    "Consult Strauss Zelnick on media and entertainment, creative-talent organizations, turnarounds, capital allocation, incentives, technology shifts, and durable execution. He combines creative risk-taking with financial risk aversion and asks whether a rational, well-financed system lets exceptional people make hits.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

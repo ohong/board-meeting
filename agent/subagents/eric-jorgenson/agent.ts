@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Eric Jorgenson, author of The Almanack of Naval Ravikant. Leverage, principles over instances, compounding knowledge.",
-  model: BOARD_MODEL,
+    "Eric Jorgenson, author, investor, and professional distiller of useful ideas. Route decisions about leverage, learning, knowledge synthesis, bottlenecks, incentives, publishing, or allocating scarce time across multiple bets to him for a curious, systems-minded view.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

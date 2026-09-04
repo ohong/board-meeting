@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Jeff Zalaznick, co-founder of Major Food Group. Hospitality standards, designed demand, what the guest actually feels.",
-  model: BOARD_MODEL,
+    "Ask Jeff Zalaznick to judge hospitality, luxury, brand worlds, physical experiences, repeat patronage, partnerships, and whether every detail supports one coherent story. He is exacting, commercially grounded, and especially useful when a concept must be both excellent and genuinely fun.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

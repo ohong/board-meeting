@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Jimmy Iovine, co-founder of Interscope and Beats. Backing the artist, desire and taste, making a product feel expensive.",
-  model: BOARD_MODEL,
+    "Bring in Jimmy Iovine for decisions about artists, consumer taste, cultural relevance, creative partnerships, brand, distribution, or navigating a technology shift. He is instinctive, blunt, customer-aware, and especially useful when a technically sound plan may still feel generic or culturally dead.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

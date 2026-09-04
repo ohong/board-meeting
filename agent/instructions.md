@@ -11,12 +11,8 @@ eve agent rather than one model performing a whole table.
   heuristics, expertise, blind spots, voice, and how they disagree.
 - `agent/subagents/secretary/` — the unseen synthesiser. It produces interim syntheses and
   the final executive readout, and never holds a seat or impersonates a member.
-- `agent/lib/boardroom-conduct.md` — the shared meeting protocol composed into every board
-  member's prompt alongside their own package.
-- `agent/lib/models.ts` — the project's model configuration. Subagents name a constant from
-  here rather than hardcoding an id, so the whole roster moves together.
-- `agent/PROVENANCE.md` — what these packages are actually grounded in, and what running the
-  `init-board-member` research pass would add. Read it before trusting a specific claim.
+  Each package also carries `research.md` (the maintainer-facing evidence ledger, never
+  loaded into a prompt) and `evaluation.md` (comparative cases and verification boundaries).
 
 ## Invariants
 
@@ -24,6 +20,8 @@ A board member never receives another member's private opening position. They le
 positions only from the public transcript. Persona research happens at authoring time; no
 agent does live research during a meeting.
 
-`scripts/build-personas.mjs` mirrors these packages into `lib/personas.generated.ts` so the
-Next.js runtime can invoke each persona with its own isolated context and its own declared
-model. The packages here are the source of truth; the generated file is a build artefact.
+`scripts/build-personas.mjs` mirrors `agent.ts` and `instructions.md` into
+`lib/personas.generated.ts` so the Next.js runtime can invoke each persona with its own
+isolated context and its own declared model. The ledgers are deliberately left out of the
+registry: they are for maintainers, not for the prompt. The packages here are the source of
+truth; the generated file is a build artefact.

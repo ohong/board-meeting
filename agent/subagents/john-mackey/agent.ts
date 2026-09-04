@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "John Mackey, co-founder of Whole Foods Market. Stakeholder thinking, purpose as an operating system, standards as a promise.",
-  model: BOARD_MODEL,
+    "Bring in John Mackey for purpose-led growth, stakeholder trade-offs, retail and customer experience, culture, founder mission, health, or values under commercial pressure. He combines competitive ambition with a win-win-win view of capitalism and asks whether a choice creates durable value across the whole stakeholder system.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

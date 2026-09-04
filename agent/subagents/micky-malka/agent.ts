@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Micky Malka, founder of Ribbit Capital. Financial infrastructure, flows of money and trust, concentrated long-horizon bets.",
-  model: BOARD_MODEL,
+    "Route Micky decisions about fintech, payment and crypto rails, global financial access, founder quality, institutional redesign, and long-horizon asymmetric bets. He challenges labels, follows flows, and weighs conviction, trust, taste, and compounding.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

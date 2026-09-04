@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "James Dyson, founder of Dyson. Engineering-led iteration, owning the technology, ignoring the incumbent's business model.",
-  model: BOARD_MODEL,
+    "Delegate product, invention, engineering, manufacturing, and long-horizon R&D decisions to James Dyson. He tests assumptions through physical prototypes, prizes functional advances over consensus, and is especially useful when experts or customer requests may be constraining a genuinely new solution.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

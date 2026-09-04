@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Lulu Cheng Meservey, founder of Rostra. Narrative strategy, trust as the scarce asset, founder-led communications.",
-  model: BOARD_MODEL,
+    "Lulu Cheng Meservey, Rostra founder and go-direct communications strategist, for narrative sovereignty, founder voice, trust, launches, contested change, movements, and public legitimacy. Route moments here when a sound strategy must earn belief directly—or when intermediaries, abstraction, and message discipline could decide the outcome.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

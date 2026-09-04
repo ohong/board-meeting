@@ -30,7 +30,7 @@ Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 ### Checks
 
 ```bash
-bun run test        # 60 deterministic tests, no API calls
+bun run test        # 133 deterministic tests, no API calls
 bun run typecheck
 bun run lint
 bun run build
@@ -49,29 +49,27 @@ Every adviser is authored as an eve subagent:
 ```
 agent/
 ├── instructions.md               # what this agent root is for
-├── PROVENANCE.md                 # what the packages are grounded in, and what is missing
-├── lib/
-│   ├── boardroom-conduct.md      # the shared meeting protocol
-│   └── models.ts                 # the shared model configuration
 └── subagents/
     ├── daniel-ek/
     │   ├── agent.ts              # model + the description used to pick a seat
-    │   └── instructions.md       # worldview, heuristics, blind spots, voice, where they defer
+    │   ├── instructions.md       # the always-on prompt: worldview, heuristics, voice, conduct
+    │   ├── research.md           # maintainer-facing evidence ledger, never in the prompt
+    │   └── evaluation.md         # comparative cases and verification boundaries
     ├── … 35 more advisers …
     └── secretary/                # synthesis and the readout; never holds a seat
 ```
 
-Packages follow the contract in `.claude/skills/init-board-member/`. They have **not** been
-through that skill's deep-research pass — `agent/PROVENANCE.md` says exactly what that means
-and what running it would add.
+Packages are produced by `.claude/skills/init-board-member/` and grounded in each guest's
+David Senra interview transcript plus primary sources. Each is self-contained — nothing is
+appended at runtime.
 
 `scripts/build-personas.mjs` compiles those packages into `lib/personas.generated.ts`, which
 is committed so the persona text ships with the deployment instead of being read off disk at
 request time. The packages are the source of truth; `bun run test` fails if the two drift.
 
-Each board member's system prompt is their own `instructions.md` plus the shared conduct.
-No member ever receives another member's private opening position — they learn each other's
-positions only from the public transcript.
+Each board member's system prompt is their own `instructions.md`, verbatim. No member ever
+receives another member's private opening position — they learn each other's positions only
+from the public transcript.
 
 `withEve()` can additionally mount the eve runtime at `/eve/v1/*` so the same agents can be
 addressed through eve directly. It is off by default (`EVE_MOUNT=1` turns it on) because

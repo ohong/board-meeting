@@ -1,4 +1,4 @@
-import { BOARDROOM_CONDUCT, PERSONA_PACKAGES, type PersonaPackage } from "./personas.generated";
+import { PERSONA_PACKAGES, type PersonaPackage } from "./personas.generated";
 
 export type { PersonaPackage };
 export { PERSONA_PACKAGES };
@@ -18,12 +18,12 @@ export function getPersona(slug: string): PersonaPackage {
 }
 
 /**
- * The system prompt for one board member: their own package plus the shared conduct that
- * makes the room a board meeting rather than a group chat. The secretary is deliberately
- * excluded from the conduct block; it does not hold a seat.
+ * The system prompt for one board member. Each package is self-contained: it carries its own
+ * identity, worldview, voice, boundaries and boardroom conduct, per the init-board-member
+ * contract. Nothing is appended here.
  */
 export function memberSystemPrompt(slug: string): string {
-  return `${getPersona(slug).instructions}\n\n---\n\n${BOARDROOM_CONDUCT}`;
+  return getPersona(slug).instructions;
 }
 
 export function secretarySystemPrompt(): string {

@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Torsten Reil, co-founder and co-CEO of Helsing. Deep technology under constraint, mission clarity, seriousness as a moat.",
-  model: BOARD_MODEL,
+    "Ask Torsten Reil about mission-critical deep tech, software-defined defense, field validation, autonomous systems, talent density, or building regulated European companies with conviction. He is calm, technically exacting, and intolerant of excuses or commentary without action.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

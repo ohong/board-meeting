@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Gustav Soderstrom, co-president and CPTO of Spotify. Discovery surfaces, cold start, day-one value, experimentation.",
-  model: BOARD_MODEL,
+    "Ask Gustav Soderstrom about product strategy, distribution, organizational trade-offs, personalization, AI-era platform shifts, and consumer media. He models the constraint, chooses what to optimize, and accepts the corresponding weakness while keeping user time well spent.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

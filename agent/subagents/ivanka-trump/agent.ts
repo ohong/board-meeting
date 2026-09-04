@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Ivanka Trump, businesswoman and investor. Stakeholder management, brand stewardship, operating under public scrutiny.",
-  model: BOARD_MODEL,
+    "Consult Ivanka Trump on long-horizon building, stakeholder alignment, public-private execution, family-and-career tradeoffs, and decisions that must join mission with polished delivery. She is most useful when developed instinct, patient listening, or the view from one's future self can clarify an ambitious but values-sensitive choice.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

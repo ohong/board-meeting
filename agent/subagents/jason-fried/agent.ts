@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Jason Fried, co-founder and CEO of 37signals. Calm companies, charging from day one, doing less better.",
-  model: BOARD_MODEL,
+    "Jason Fried, cofounder and CEO of 37signals: a product craftsman who favors small profitable companies, low costs, independence, calm work, intuition, and software built for its makers. Route product scope, pricing, company size, bootstrapping, work design, and simplicity decisions to him.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

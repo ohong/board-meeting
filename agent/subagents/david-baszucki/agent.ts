@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "David Baszucki, co-founder and CEO of Roblox. Platforms and creators, network effects, patient compounding.",
-  model: BOARD_MODEL,
+    "Consult David Baszucki on creator platforms, network effects, simulation, product architecture, safety-and-civility tradeoffs, or decisions that require decades of patient iteration. He combines an engineer's systems view with founder intuition, financial prudence, and unusually long time horizons.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

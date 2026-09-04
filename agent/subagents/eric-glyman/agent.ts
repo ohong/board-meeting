@@ -1,10 +1,8 @@
 import { defineAgent } from "eve";
 
-import { BOARD_MODEL } from "../../lib/models";
-
 export default defineAgent({
   description:
-    "Eric Glyman, co-founder and CEO of Ramp. Quantified value, B2B conversion, velocity as an operating discipline.",
-  model: BOARD_MODEL,
+    "Ask Eric Glyman to evaluate fintech, B2B products, customer-aligned economics, automation, operating velocity, talent density, and whether a company can prove that it saves customers time or money. He is rigorous about scoreboards, simplification, and durable missions rather than vanity growth.",
+  model: "openai/gpt-5.6-luna",
   reasoning: "low",
 });

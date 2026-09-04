@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-09-04 — Rehearse the guest handoff through the public tool contract
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved prototype-port scope
+
+The deterministic runtime may offer an explicitly labeled local scripted preview while a meeting is active and the single guest seat is empty. The preview creates the ordinary six-tool manifest and calls inspect, join, contribute, address, synthesize, and inspect in order. It identifies itself as `Preview agent`, states that it adds no private context, grounds its question in the active brief, and leaves every result in the same visible seat and transcript a real personal agent would use.
+
+We considered calling session actions directly from the invitation panel. That is shorter, but would rehearse an internal path rather than the WebMCP contract and could drift from the integration being demonstrated. A small orchestration module keeps presentation state out of the session while reusing the exact public tools. The action never appears or runs in live mode, does not add a seventh tool, and cannot imply that a personal agent or private evidence was connected.
+
 ## 2026-09-04 — Treat the demo board as a setup transaction
 
 **Status:** accepted

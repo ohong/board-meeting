@@ -10,6 +10,11 @@ import {
 } from "react";
 import { AGENT_INVITATION } from "@/lib/example";
 import {
+  MOCK_AGENT_PREVIEW_LABEL,
+  getMockAgentPreviewAvailability,
+  previewMockAgentHandoff,
+} from "@/lib/mock-agent-preview";
+import {
   MAX_CHAIR_MESSAGE_CHARACTERS,
   type MeetingSession,
   type MeetingState,
@@ -246,6 +251,10 @@ export function BoardMeeting({
   const [mentionsDismissed, setMentionsDismissed] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [agentPreview, setAgentPreview] = useState<{
+    status: "idle" | "pending" | "success" | "error";
+    message: string;
+  }>({ status: "idle", message: "" });
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [sendPending, setSendPending] = useState(false);
   const [endPending, setEndPending] = useState(false);
@@ -301,6 +310,7 @@ export function BoardMeeting({
     );
   }, [mention, mentionsDismissed, state.members]);
   const mentionsOpen = Boolean(mention && mentionOptions.length);
+  const agentPreviewAvailability = getMockAgentPreviewAvailability(state);
 
   useEffect(() => {
     const log = logRef.current;
@@ -393,6 +403,23 @@ export function BoardMeeting({
       setCopyState("copied");
     } catch {
       setCopyState("error");
+    }
+  }
+
+  async function runAgentPreview() {
+    if (agentPreview.status === "pending" || !agentPreviewAvailability.available) return;
+    setAgentPreview({ status: "pending", message: "Running the six-step guest handoff…" });
+    try {
+      const result = await previewMockAgentHandoff(session);
+      setAgentPreview({
+        status: "success",
+        message: `${result.guest.name} joined, contributed, received a direct reply from ${result.addressedMember}, and requested a synthesis.`,
+      });
+    } catch (error) {
+      setAgentPreview({
+        status: "error",
+        message: error instanceof Error ? error.message : "The local preview could not finish.",
+      });
     }
   }
 
@@ -585,6 +612,39 @@ export function BoardMeeting({
                       : "The guest seat will activate when they join."}
                 </span>
               </div>
+              {agentPreviewAvailability.available || agentPreview.status !== "idle" ? (
+                <section className={styles.agentPreview} aria-labelledby="agent-preview-title">
+                  <div>
+                    <h3 id="agent-preview-title">Preview the handoff</h3>
+                    <p>{MOCK_AGENT_PREVIEW_LABEL}</p>
+                  </div>
+                  {agentPreviewAvailability.available ? (
+                    <>
+                      <p className={styles.agentPreviewWarning}>
+                        Running this rehearsal occupies the one guest seat for this session.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={agentPreview.status === "pending"}
+                        onClick={() => void runAgentPreview()}
+                      >
+                        {agentPreview.status === "pending"
+                          ? "Previewing handoff…"
+                          : "Preview guest-agent handoff"}
+                      </button>
+                    </>
+                  ) : null}
+                  {agentPreview.status !== "idle" ? (
+                    <p
+                      className={styles.agentPreviewStatus}
+                      role={agentPreview.status === "error" ? "alert" : "status"}
+                      aria-live="polite"
+                    >
+                      {agentPreview.message}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
             </aside>
           ) : null}
         </section>

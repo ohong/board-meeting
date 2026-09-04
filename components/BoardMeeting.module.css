@@ -603,6 +603,8 @@
   right: 18px;
   z-index: 30;
   width: min(430px, calc(100% - 36px));
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
   padding: 18px;
   border: 1px solid #a6a094;
   border-radius: 3px;
@@ -692,6 +694,51 @@
   font-size: 0.6875rem;
   line-height: 1.35;
 }
+
+.agentPreview {
+  margin-top: 16px;
+  padding-top: 14px;
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--paper-rule);
+}
+
+.agentPreview h3 {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.agentPreview > div > p,
+.agentPreviewWarning,
+.agentPreviewStatus {
+  margin-top: 3px;
+  color: var(--paper-muted);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.agentPreviewWarning {
+  margin-top: 0;
+  color: #6d4c2d;
+}
+
+.agentPreview > button {
+  min-height: 38px;
+  justify-self: start;
+  padding: 0 12px;
+  border: 1px solid #777168;
+  background: transparent;
+  color: #33312d;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.agentPreviewStatus {
+  min-height: 1em;
+  margin-top: 0;
+}
+
+.agentPreviewStatus[role="alert"] { color: #8b382b; }
 
 .minutes {
   position: relative;
@@ -1086,6 +1133,10 @@
   }
 
   .guestPassHeader button:hover { color: #315edb; }
+  .agentPreview > button:not(:disabled):hover {
+    border-color: #315edb;
+    color: #315edb;
+  }
   .composerField > button:not(:disabled):hover { background: #36372f; }
 
   .jumpButton:hover {
@@ -1245,6 +1296,7 @@
     position: fixed;
     top: 116px;
     right: 18px;
+    max-height: calc(100dvh - 134px);
   }
 }
 
@@ -1290,6 +1342,11 @@
 
   .minutesHeader,
   .minutesLog { padding-inline: 16px; }
+
+  .guestPass {
+    right: 12px;
+    width: calc(100% - 24px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

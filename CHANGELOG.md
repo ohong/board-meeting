@@ -17,3 +17,4 @@
 - Routed all 36 adviser packages directly through the OpenAI provider and disabled every inherited model-facing Eve tool so meetings can use only authored persona and supplied session context.
 - Rebuilt the executive readout as a warm-paper editorial memo with all eight required sections, explicit dissent, participant context, reliable copy feedback, and a fresh-board reset.
 - Rebuilt the live meeting as a dark spatial boardroom beside paper minutes, with fixed 3–6 seat compositions, legible participant states, one public stream, agent arrival, invitation, and an accessible @mention composer.
+- Made WebMCP outcome receipts transient and session-aware so a completed site-tool call never obscures later meeting or readout content.

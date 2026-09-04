@@ -1,7 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { WebMcpReceiptView } from "../components/WebMcp";
+import {
+  WEBMCP_RECEIPT_DISMISS_MS,
+  WebMcpReceiptView,
+  dismissWebMcpReceipt,
+  scheduleWebMcpReceiptDismiss,
+  shouldClearWebMcpReceipt,
+} from "../components/WebMcp";
 import { createMockRuntime } from "../lib/runtime/mock";
 import { createMeetingSession, type MeetingSession } from "../lib/session";
 import {
@@ -238,6 +244,84 @@ describe("board WebMCP manifest", () => {
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("Site tool inspect_board_meeting succeeded: Meeting state inspected.");
+  });
+
+  it("dismisses after four seconds and protects a newer receipt from a stale timer", () => {
+    let scheduled: (() => void) | undefined;
+    let delayMs: number | undefined;
+    let dismissedSequence: number | undefined;
+    const handle = 17 as unknown as ReturnType<typeof setTimeout>;
+    const receipt: BoardToolReceipt = {
+      toolName: "inspect_board_meeting",
+      outcome: "succeeded",
+      message: "Meeting state inspected.",
+    };
+    const visible = { sequence: 2, receipt };
+
+    const cleanup = scheduleWebMcpReceiptDismiss(
+      1,
+      (sequence) => {
+        dismissedSequence = sequence;
+      },
+      {
+        timer: {
+          schedule(callback, delay) {
+            scheduled = callback;
+            delayMs = delay;
+            return handle;
+          },
+          cancel(receivedHandle) {
+            expect(receivedHandle).toBe(handle);
+          },
+        },
+      },
+    );
+
+    expect(delayMs).toBe(WEBMCP_RECEIPT_DISMISS_MS);
+    expect(delayMs).toBe(4_000);
+    scheduled?.();
+    expect(dismissedSequence).toBe(1);
+    expect(dismissWebMcpReceipt(visible, 1)).toBe(visible);
+    expect(dismissWebMcpReceipt(visible, 2)).toBeNull();
+    cleanup();
+  });
+
+  it("cancels a pending receipt dismissal when registration aborts", () => {
+    let scheduled: (() => void) | undefined;
+    let cancelCount = 0;
+    let dismissed = false;
+    const handle = 18 as unknown as ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+
+    const cleanup = scheduleWebMcpReceiptDismiss(1, () => {
+      dismissed = true;
+    }, {
+      signal: controller.signal,
+      timer: {
+        schedule(callback) {
+          scheduled = callback;
+          return handle;
+        },
+        cancel(receivedHandle) {
+          expect(receivedHandle).toBe(handle);
+          cancelCount += 1;
+        },
+      },
+    });
+
+    controller.abort();
+    scheduled?.();
+    expect(dismissed).toBe(false);
+    expect(cancelCount).toBe(1);
+    cleanup();
+    expect(cancelCount).toBe(1);
+  });
+
+  it("clears a stale receipt only when the session transitions back to selection", () => {
+    expect(shouldClearWebMcpReceipt("readout", "select")).toBe(true);
+    expect(shouldClearWebMcpReceipt("meeting", "select")).toBe(true);
+    expect(shouldClearWebMcpReceipt("select", "select")).toBe(false);
+    expect(shouldClearWebMcpReceipt("meeting", "readout")).toBe(false);
   });
 });
 

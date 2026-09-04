@@ -1,171 +1,270 @@
 import { getMember } from "../catalog";
 import { EXAMPLE_QUESTION } from "../example";
+import { decisionLine, fallbackReadout, localOpeningPosition } from "./fallbacks";
 import type {
   BoardRuntime,
-  ClosingComment,
   ExecutiveReadout,
   MemberTurn,
   OpeningPosition,
+  ReadoutInput,
   RuntimeTurnInput,
-  TranscriptEvent,
+  SynthesisInput,
 } from "../types";
 
-const OPENINGS: Record<string, OpeningPosition> = {
+/**
+ * A deterministic stand-in for the live board. It exists for two reasons: the whole
+ * product flow, orchestration and WebMCP surface can be exercised in tests without an API
+ * key, and a presenter without `OPENAI_API_KEY` still gets a working room.
+ *
+ * Scripted content covers the demo trio on the demo decision. Everything else falls back
+ * to text derived from the briefing, so an arbitrary decision never gets answers about a
+ * free tier nobody asked about.
+ */
+
+const DEMO_OPENINGS: Record<string, Omit<OpeningPosition, "memberId">> = {
   "daniel-ek": {
-    memberId: "daniel-ek",
-    recommendation: "Do not kill free until you know if it is an engine or a leak.",
+    recommendation: "Do not kill free until you know whether it is an engine or a leak.",
     reasoning:
       "2.3% conversion and 38% of tickets look ugly, but 34% of paying customers arriving through free is a distribution fact, not a vibe.",
     concern: "A 14-day trial can erase the shared-workspace discovery path that actually creates enterprise accounts.",
     question: "What share of the last ten enterprise wins started as a free workspace passed between users?",
   },
   "david-heinemeier-hansson": {
-    memberId: "david-heinemeier-hansson",
-    recommendation: "Kill the free tier. Charge. Ship a 14-day trial and get your life back.",
+    recommendation: "Kill the free tier. Charge. Ship the 14-day trial and get your life back.",
     reasoning:
-      "Six thousand free workspaces feeding 38% of support is not a go-to-market. It is a hobby subsidized by 420 customers.",
-    concern: "You are training the market that the product is optional to pay for.",
-    question: "If you turned free off Monday, which actual paid workflow would get worse?",
+      "Six thousand free workspaces feeding 38% of support is not a go-to-market. It is a hobby subsidised by 420 customers.",
+    concern: "You are teaching the market that your product is optional to pay for.",
+    question: "If you turned free off on Monday, which paid workflow would actually get worse?",
   },
   "lulu-cheng-meservey": {
-    memberId: "lulu-cheng-meservey",
-    recommendation: "The economics may justify a trial, but the story will decide whether you keep trust.",
+    recommendation: "The economics may justify a trial. The story will decide whether you keep trust.",
     reasoning:
-      "Taking away a free workspace is a narrative event. If the headline is they padlocked the clubhouse, you lose.",
+      "Taking away a free workspace is a narrative event. If the headline is that you padlocked the clubhouse, you lose more than you saved.",
     concern: "Paying customers who arrived through free will feel bait-and-switched even if the numbers are honest.",
-    question: "Who is the story for, and what do you want them to tell someone tomorrow?",
+    question: "Who is the story for, and what do you want them to tell a colleague tomorrow?",
   },
 };
 
-const FIRST_TURNS: Record<string, MemberTurn> = {
+const DEMO_FIRST_TURNS: Record<string, MemberTurn> = {
   "daniel-ek": {
-    text: "I would not execute this as a binary kill. 2.3% conversion is a problem; 34% of customers arriving through free is a channel. Measure whether free workspaces that get shared convert, then shrink free rather than slam the door. A trial is cleaner ops, but it can amputate the discovery loop.",
+    text: "I would not run this as a binary kill. 2.3% conversion is a problem. Thirty-four percent of your customers arriving through free is a channel. Measure whether shared workspaces convert differently from solo ones, then narrow free rather than close the front door. A trial is cleaner operationally and it can amputate discovery.",
     reaction: "concern",
-    wantsToRespond: "david-heinemeier-hansson",
+    wantsToRespond: "David Heinemeier Hansson",
   },
   "david-heinemeier-hansson": {
-    text: "Daniel, a leaky funnel is not a strategy. You are an 18-person company hosting 6,000 tourists who generate 38% of the tickets. Charge. Fourteen days is generous. If the product is good, people talk. If they only talk when it is free, you do not have a product. You have a snack.",
+    text: "Daniel, a leaky funnel is not a strategy. You are eighteen people hosting six thousand tourists who file 38% of the tickets. Charge. Fourteen days is generous. If the product is good, people talk about it. If they only talk when it is free, you do not have a product, you have a snack.",
     addressedTo: "Daniel Ek",
     reaction: "disagree",
-    reactionFrom: "daniel-ek",
-    wantsToRespond: "lulu-cheng-meservey",
+    wantsToRespond: "Lulu Cheng Meservey",
   },
   "lulu-cheng-meservey": {
-    text: "You can kill free and still lose. The move is not the price; it is the sentence people repeat. If you say we are done hosting work we do not stand behind, that is adult. If you say we are simplifying, they hear extraction. Trust is the word-of-mouth. Price is just the stage direction.",
+    text: "You can kill free and still lose. The move is not the price, it is the sentence people repeat on Monday. Say you are done hosting work you cannot stand behind and that reads as adult. Say you are simplifying plans and they hear extraction. Trust is the word of mouth you are trying to protect.",
+    reaction: "agree",
+    addressedTo: "You",
+  },
+};
+
+const DEMO_SECOND_TURNS: Record<string, MemberTurn> = {
+  "daniel-ek": {
+    text: "David, I will give you the support number. Thirty-eight percent of tickets from people who pay nothing is indefensible. But you are pricing the funnel at zero, and it produced a third of the customers you want to protect. Narrow it to invite-only and you keep the loop and lose the crowd.",
+    addressedTo: "David Heinemeier Hansson",
+    reaction: "concern",
+  },
+  "david-heinemeier-hansson": {
+    text: "Invite-only free is still free with paperwork. Someone has to build it, gate it, and support it, and you are eighteen people. Lulu is right that the sentence matters, and the honest sentence is simple: we were wrong to give away something we could not stand behind. Ship the trial.",
+    addressedTo: "Lulu Cheng Meservey",
+    reaction: "disagree",
+    wantsToRespond: "Lulu Cheng Meservey",
+  },
+  "lulu-cheng-meservey": {
+    text: "Then say exactly that, and say it to the 6,000 before it leaks from the 420. Give ninety days, not fourteen, to anyone with real work in a workspace. The people you grandfather are the ones who tell the story for you. Cheap here costs more than the support line ever did.",
+    addressedTo: "You",
     reaction: "agree",
   },
 };
 
-function genericOpening(slug: string): OpeningPosition {
-  const m = getMember(slug);
+const DEMO_DIRECT_ANSWERS: Record<string, MemberTurn> = {
+  "lulu-cheng-meservey": {
+    text: "You explain it as a promise, not a punishment. Tell them plainly you are done pretending a workspace you cannot support is generosity. Give a clean trial, grandfather the people who already built a home there, and ask your best customers to invite others into something you will actually stand behind.",
+    addressedTo: "You",
+  },
+  "daniel-ek": {
+    text: "If seven of your last ten enterprise wins entered through a shared free workspace, that is not folklore, that is the funnel. I would not kill free. I would instrument sharing, keep a narrow invite-only free path, and put the trial on unshared tyre-kickers. Evidence beats ideology, and that is evidence.",
+  },
+};
+
+const DEMO_CLOSINGS: Record<string, string> = {
+  "daniel-ek":
+    "Measure the shared-workspace path before you burn it. If enterprise still enters through free, keep a narrow invite-free and put the trial on everyone else. You can always close the door later; you cannot reopen word of mouth.",
+  "david-heinemeier-hansson":
+    "Kill free. Charge. Fourteen days. Stop hosting six thousand people who are not the business, and spend the week you get back on the four hundred and twenty who are.",
+  "lulu-cheng-meservey":
+    "Whatever you decide, write the sentence first and send it to your best customer before you send it to everyone. If you cannot say it to her face, you are not ready to ship it.",
+};
+
+const DEMO_CONTEXT_TURNS: Record<string, MemberTurn> = {
+  "daniel-ek": {
+    text: "That changes the shape of this. Seven of ten enterprise wins entering through a shared workspace is not a rounding error, it is the top of your enterprise funnel, and it is worth 22% of ARR. Do not close the door you came in through. Gate it, instrument it, keep it.",
+    reaction: "concern",
+    wantsToRespond: "David Heinemeier Hansson",
+  },
+  "david-heinemeier-hansson": {
+    text: "Fine, that number is real and I will take it. Then keep exactly that: an invited workspace, from an existing customer, and nothing else. What dies is the open door for six thousand strangers. That is still killing the free tier, Daniel. You are just describing referrals.",
+    addressedTo: "Daniel Ek",
+    reaction: "agree",
+  },
+  "lulu-cheng-meservey": {
+    text: "And that is your announcement, handed to you. You are not removing a free tier, you are turning it into an invitation. One is a withdrawal, the other is a promotion. Same billing change, completely different Monday. Say it that way and nobody writes the padlock headline.",
+    addressedTo: "You",
+    reaction: "agree",
+  },
+};
+
+function isDemoDecision(briefing: string): boolean {
+  return briefing.toLowerCase().includes("free tier");
+}
+
+/**
+ * Whether the chair or the guest agent has put something into the room since this member
+ * last spoke. New context is a reason to speak again; its absence is a reason to pass.
+ */
+function hasNewContext(input: RuntimeTurnInput): boolean {
+  const messages = input.transcript.filter((event) => event.kind === "message");
+  const lastOwn = messages.map((event) => event.speakerId).lastIndexOf(input.memberId);
+  return messages
+    .slice(lastOwn + 1)
+    .some((event) => event.speakerId === "chair" || event.speakerId === "guest");
+}
+
+function genericTurn(input: RuntimeTurnInput): MemberTurn {
+  const decision = decisionLine(input.briefing);
+  if (input.prompt) {
+    return {
+      text: `Directly, then: on "${decision}", I would not answer from principle. Name the one fact that would flip your decision, get it this week, and let it decide. Everything else in this room is preference wearing a suit.`,
+      addressedTo: input.addressedTo ?? "You",
+    };
+  }
   return {
-    memberId: slug,
-    recommendation: "Pressure-test whether free is distribution or drag before you burn the channel.",
-    reasoning: `${m?.name ?? slug} would ask whether this decision makes the company more itself, or merely less tired this quarter.`,
-    concern: "Unexamined word of mouth and unexamined support load can both bankrupt an 18-person team.",
-    question: "What would you need to see in 30 days to know this was right?",
+    text: `Taking "${decision}" at face value, I would test the load-bearing assumption before committing. Make the smallest reversible version of this, run it for thirty days, and be explicit about what result would make you stop. Deciding on conviction alone is how a small team spends a year it does not have.`,
+    reaction: "concern",
   };
 }
 
-function genericTurn(slug: string, input: RuntimeTurnInput): MemberTurn {
-  const m = getMember(slug);
-  const mention = input.addressedTo ? "Directly: " : "";
-  return {
-    text: `${mention}${m?.name ?? slug} here. The briefing says free converts at 2.3% and eats 38% of support, while 34% of paid arrived that way. Run a 14-day trial on new workspaces, keep a narrow share path, and watch enterprise referrals for one month.`,
-  };
+export type MockOptions = {
+  /** Pause between streamed chunks. Zero in tests; a human pace in the browser. */
+  chunkDelayMs?: number;
+};
+
+/** Streams pre-written text in word-sized chunks so the UI path is identical to live. */
+async function emit(
+  text: string,
+  onDelta: ((delta: string) => void) | undefined,
+  chunkDelayMs: number,
+): Promise<void> {
+  if (!onDelta) return;
+  const chunks = text.match(/\S+\s*/g) ?? [text];
+  for (const chunk of chunks) {
+    onDelta(chunk);
+    if (chunkDelayMs) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, chunkDelayMs);
+      });
+    }
+  }
 }
 
-function fallbackReadout(
-  briefing: string,
-  closingComments: ClosingComment[],
-): ExecutiveReadout {
-  return {
-    decision: briefing.split("\n")[0]?.replace(/^Question:\s*/i, "") || EXAMPLE_QUESTION,
-    recommendation:
-      "The board is divided. DHH recommends eliminating the free tier now in favor of a 14-day trial. Daniel Ek recommends not killing free until shared-workspace discovery is measured. Lulu Cheng Meservey treats narrative and trust as the binding constraint on either path.",
-    divided: true,
-    options: [
-      "Eliminate free immediately and replace with a 14-day trial",
-      "Keep a narrowed free workspace for sharing/discovery",
-      "Grandfather current free workspaces and trial all new ones",
-    ],
-    tradeoffs: [
-      "Support load and product simplicity versus top-of-funnel discovery",
-      "Faster paid growth versus word-of-mouth from free workspaces",
-      "Honest positioning versus the risk of a bait-and-switch story",
-    ],
-    assumptions: [
-      "Free is a major source of paying-customer discovery (34%)",
-      "Free is a major source of support cost (38% of tickets)",
-      "An 18-person team cannot operate two products indefinitely",
-    ],
-    openQuestions: [
-      "What share of recent enterprise wins started as a shared free workspace?",
-      "Can a narrow share path replace an open free tier?",
-      "What sentence will customers repeat if free disappears?",
-    ],
-    nextActions: [
-      "Pull the last ten enterprise wins and tag their first workspace",
-      "Draft the public narrative before touching billing",
-      "If moving, grandfather existing free workspaces and trial new ones",
-    ],
-    closingComments,
-  };
-}
-
-export function createMockRuntime(): BoardRuntime {
+export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
+  const chunkDelayMs = options.chunkDelayMs ?? 0;
   const spoken = new Map<string, number>();
+
   return {
     id: "mock",
+
     async formOpeningPosition(input) {
-      const preset = OPENINGS[input.memberId];
-      return preset ? { ...preset, memberId: input.memberId } : genericOpening(input.memberId);
+      const preset = isDemoDecision(input.briefing) ? DEMO_OPENINGS[input.memberId] : undefined;
+      if (preset) return { memberId: input.memberId, ...preset };
+      return localOpeningPosition(input.memberId, input.briefing);
     },
-    async publicTurn(input) {
-      const n = spoken.get(input.memberId) ?? 0;
-      spoken.set(input.memberId, n + 1);
-      if (input.capability === "answerDirect" || input.prompt) {
-        if (input.memberId === "lulu-cheng-meservey") {
-          return {
-            text: "You explain a free-tier change as a promise, not a punishment. Tell them you are done pretending a workspace you cannot support is generosity. Offer a clean trial, grandfather the ones who already built a home, and ask your best customers to invite people into something you will actually stand behind.",
-            addressedTo: "You",
-          };
-        }
-        if (input.memberId === "daniel-ek") {
-          return {
-            text: "If seven of your last ten enterprise wins entered through a shared free workspace, that is not folklore, that is the funnel. I would not kill free. I would instrument sharing, keep a narrow free path for invites, and put the trial on unshared tire-kickers. Evidence beats ideology.",
-            addressedTo: input.addressedTo,
-          };
-        }
-        return {
-          text: `${getMember(input.memberId)?.name ?? "The seat"} answers directly: the evidence in the room should change the next experiment, not the personality of the company. Make the reversible test, then decide.`,
-        };
+
+    async publicTurn(input, onDelta) {
+      const count = spoken.get(input.memberId) ?? 0;
+      spoken.set(input.memberId, count + 1);
+
+      const demo = isDemoDecision(input.briefing);
+      let turn: MemberTurn;
+      if (input.prompt && demo && DEMO_DIRECT_ANSWERS[input.memberId]) {
+        turn = DEMO_DIRECT_ANSWERS[input.memberId];
+      } else if (!input.prompt && count === 0 && demo && DEMO_FIRST_TURNS[input.memberId]) {
+        turn = DEMO_FIRST_TURNS[input.memberId];
+      } else if (!input.prompt && count === 1 && demo && DEMO_SECOND_TURNS[input.memberId]) {
+        turn = DEMO_SECOND_TURNS[input.memberId];
+      } else if (!input.prompt && count >= 2 && hasNewContext(input) && demo) {
+        turn = DEMO_CONTEXT_TURNS[input.memberId] ?? genericTurn(input);
+      } else if (!input.prompt && count >= 2 && !hasNewContext(input)) {
+        // Nothing left to add without repeating itself, so it passes, as a member may.
+        turn = { text: "" };
+      } else {
+        turn = genericTurn(input);
       }
-      if (n === 0 && FIRST_TURNS[input.memberId]) return FIRST_TURNS[input.memberId];
-      return genericTurn(input.memberId, input);
+      await emit(turn.text, onDelta, chunkDelayMs);
+      return turn;
     },
+
     async closingComment(input) {
-      const map: Record<string, string> = {
-        "daniel-ek":
-          "Measure the shared-workspace path before you burn it. If enterprise still enters through free, keep a narrow invite-free; trial the rest.",
-        "david-heinemeier-hansson":
-          "Kill free. Charge. Fourteen days. Stop hosting 6,000 people who are not the business.",
-        "lulu-cheng-meservey":
-          "Whatever you do, write the sentence first. Trust is the word of mouth you are afraid to lose.",
-      };
-      return (
-        map[input.memberId] ??
-        `${getMember(input.memberId)?.name}: run a reversible test and do not confuse exhaustion with strategy.`
-      );
+      if (isDemoDecision(input.briefing) && DEMO_CLOSINGS[input.memberId]) {
+        return DEMO_CLOSINGS[input.memberId];
+      }
+      const name = getMember(input.memberId)?.name ?? input.memberId;
+      return `${name}: run the smallest reversible version of this, decide what result would stop you, and do not confuse exhaustion with strategy.`;
     },
-    async synthesis({ transcript }) {
+
+    async synthesis(input: SynthesisInput) {
       const speakers = Array.from(
-        new Set(transcript.filter((e) => e.kind === "message").map((e) => e.speakerName)),
+        new Set(input.transcript.filter((e) => e.kind === "message").map((e) => e.speakerName)),
       );
-      return `Agreement: the current free tier is operationally expensive. Disagreement: whether free is still a discovery engine (Ek) or a crowd you should stop hosting (DHH). Unresolved: the story customers will tell, which Lulu treats as the real risk. Voices so far: ${speakers.join(", ") || "the table"}.`;
+      if (isDemoDecision(input.briefing)) {
+        return `Agreement: the free tier as it stands is operationally expensive and the 2.3% conversion is not defensible. Disagreement: Ek treats free as a discovery engine worth instrumenting before touching, DHH treats it as a crowd you should stop hosting. Unresolved: what the change would cost in trust, which Lulu argues is the real exposure. Heard so far: ${speakers.join(", ") || "the table"}.`;
+      }
+      return `Agreement: the decision is real and the current position is not stable. Disagreement: whether to act now on conviction or instrument first and decide in thirty days. Unresolved: which single piece of evidence would settle it. Heard so far: ${speakers.join(", ") || "the table"}.`;
     },
-    async readout({ briefing, closingComments }) {
-      return fallbackReadout(briefing, closingComments);
+
+    async readout(input: ReadoutInput): Promise<ExecutiveReadout> {
+      if (!isDemoDecision(input.briefing)) {
+        return fallbackReadout(input.briefing, input.transcript, input.closingComments);
+      }
+      return {
+        decision: decisionLine(input.briefing) || EXAMPLE_QUESTION,
+        recommendation:
+          "The board is divided. David Heinemeier Hansson would eliminate the free tier now and replace it with a 14-day trial. Daniel Ek would not touch it until shared-workspace discovery has been measured, and shifted further that way once the enterprise-referral evidence entered the room. Lulu Cheng Meservey treats the announcement itself, not the pricing, as the binding constraint on either path.",
+        divided: true,
+        options: [
+          "Eliminate the free tier now and replace it with a 14-day trial",
+          "Keep a narrowed, invite-only free workspace for sharing and discovery",
+          "Grandfather existing free workspaces and put every new workspace on a trial",
+        ],
+        tradeoffs: [
+          "Support load and product simplicity against top-of-funnel discovery",
+          "Faster paid conversion against the word of mouth that produced 34% of current customers",
+          "A clean operational story against the risk of reading as a bait-and-switch",
+        ],
+        assumptions: [
+          "Free is a material source of paying-customer discovery (34%, and enterprise referrals raised in the room)",
+          "Free is a material source of support cost (38% of tickets)",
+          "An eighteen-person team cannot run two products indefinitely",
+        ],
+        openQuestions: [
+          "Do shared free workspaces convert differently from solo ones?",
+          "Can an invite-only free path preserve the referral loop without the support load?",
+          "What sentence will customers repeat the morning the change ships?",
+        ],
+        nextActions: [
+          "Tag the last ten enterprise wins by how the first workspace was created",
+          "Split conversion and support cost by shared versus solo workspaces before deciding",
+          "Draft and pressure-test the announcement before touching billing",
+          "If moving, grandfather existing free workspaces and trial only new ones",
+        ],
+        closingComments: input.closingComments,
+      };
     },
   };
 }

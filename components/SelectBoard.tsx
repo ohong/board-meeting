@@ -1,136 +1,170 @@
 "use client";
 
-import { LetterMark } from "./LetterMark";
-import { getMember } from "@/lib/catalog";
-import type { MeetingSession, MeetingState } from "@/lib/session";
+import { Portrait } from "./LetterMark";
+import { CATALOG_FROZEN_ON, frozenOnLabel } from "@/lib/catalog";
+import { MAX_BOARD, MIN_BOARD, type MeetingSession, type MeetingState } from "@/lib/session";
 
-const SELECT_ANGLES = [-80, -48, -16, 16, 48, 80];
-
-export function SelectBoard({
-  session,
-  state,
-}: {
-  session: MeetingSession;
-  state: MeetingState;
-}) {
+/**
+ * Paper mode, 4/8. The left field is the room being assembled — a miniature table whose
+ * places fill as advisers are chosen — and the right is the library. Selecting someone
+ * should feel like seating them, not like ticking a box.
+ */
+export function SelectBoard({ session, state }: { session: MeetingSession; state: MeetingState }) {
   const catalog = session.visibleCatalog();
-  const ready = state.selected.length >= 3 && state.selected.length <= 6;
-  const seated = state.selected
-    .map((slug) => getMember(slug))
-    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const seated = state.selected.length;
+  const ready = seated >= MIN_BOARD;
 
   return (
-    <main className="flex-1 px-8 py-7 max-w-[1400px] mx-auto w-full min-h-0 flex flex-col">
-      <header className="flex items-end justify-between gap-8 mb-6">
-        <div>
-          <div className="masthead">The Board</div>
-          <h1 className="text-[40px] leading-[1.05] mt-2 font-semibold tracking-[-0.03em]">
-            Choose your board
+    <main className="mx-auto grid w-full max-w-[1360px] grid-cols-12 gap-6 px-8 py-10 lg:px-12">
+      <section className="col-span-12 lg:col-span-4">
+        <div className="lg:sticky lg:top-10">
+          <h1 className="editorial text-[clamp(38px,4.4vw,60px)] leading-[0.98] tracking-[-0.02em]">
+            Who do you want in the room?
           </h1>
-          <p className="mt-3 text-[var(--muted)] max-w-xl text-[15px] leading-relaxed">
-            Convene three to six advisers to pressure-test a consequential decision. Every seat is a
-            distinct mind, not a costume on one model.
+          <p className="mt-5 max-w-[46ch] text-[16px] leading-[1.5] text-[var(--ink-secondary)]">
+            Choose three to six people whose judgment you want on the decision. Every seat is a
+            separate agent with its own sources and its own mind.
+          </p>
+
+          <BoardPreview session={session} state={state} />
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => session.goToBrief()}
+              className="btn-primary"
+            >
+              Brief your board
+            </button>
+            <span className="text-[13px] text-[var(--ink-secondary)]">
+              {seated < MIN_BOARD
+                ? `${MIN_BOARD - seated} more to open the room`
+                : "Ready when you are"}
+            </span>
+          </div>
+
+          {state.selectionMessage ? (
+            <p className="mt-4 text-[13px] text-[var(--human)]">{state.selectionMessage}</p>
+          ) : null}
+
+          <p className="mt-8 text-[12px] leading-[1.5] text-[var(--ink-secondary)]">
+            Roster frozen {frozenOnLabel(CATALOG_FROZEN_ON)}. Every adviser is a guest from David
+            Senra&rsquo;s interview podcast.
           </p>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-sm text-[var(--muted)] tracking-wide">
-            {state.selected.length} of 6 seated
-          </div>
-          <button
-            type="button"
-            disabled={!ready}
-            onClick={() => session.goToBrief()}
-            className="btn-brass mt-3"
-          >
-            Continue to briefing
-          </button>
-        </div>
-      </header>
+      </section>
 
-      {state.selectionMessage ? (
-        <p className="mb-3 text-[var(--brass)] text-sm">{state.selectionMessage}</p>
-      ) : null}
+      <section className="col-span-12 lg:col-span-8">
+        <label className="block">
+          <span className="sr-only">Search the roster</span>
+          <input
+            value={state.search}
+            onChange={(event) => session.setSearch(event.target.value)}
+            placeholder="Find a founder, investor, or operator"
+            className="field w-full px-4 py-3 text-[15px]"
+          />
+        </label>
 
-      <div className="flex-1 grid grid-cols-[minmax(280px,380px)_minmax(0,1fr)] gap-8 min-h-0">
-        <section className="flex flex-col min-h-0 border border-[oklch(50%_0.04_70_/_0.28)] bg-[var(--surface)]">
-          <label className="block border-b border-[oklch(50%_0.04_70_/_0.28)]">
-            <span className="sr-only">Search the roster</span>
-            <input
-              value={state.search}
-              onChange={(e) => session.setSearch(e.target.value)}
-              placeholder="Search by name or role — try DHH, Ek, Lulu"
-              className="w-full bg-transparent px-4 py-3 text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
-            />
-          </label>
-          <div className="flex-1 overflow-auto min-h-[420px] max-h-[calc(100vh-280px)]">
-            {catalog.map((member) => {
-              const selected = state.selected.includes(member.slug);
-              return (
+        {catalog.length === 0 ? (
+          <p className="mt-8 text-[15px] text-[var(--ink-secondary)]">
+            No board members match that search.
+          </p>
+        ) : null}
+
+        <ul className="mt-6 grid grid-cols-1 gap-x-10 gap-y-1 md:grid-cols-2">
+          {catalog.map((member) => {
+            const selected = state.selected.includes(member.slug);
+            return (
+              <li key={member.slug}>
                 <button
                   type="button"
-                  key={member.slug}
+                  aria-pressed={selected}
                   onClick={() => session.toggleMember(member.slug)}
-                  className={`roster-row ${selected ? "seated" : ""}`}
+                  className="group flex w-full items-center gap-3.5 border-t px-1 py-3.5 text-left transition-colors"
+                  style={{
+                    borderTopColor: selected ? "var(--human)" : "var(--rule)",
+                    background: selected ? "var(--soft-fill)" : "transparent",
+                  }}
                 >
-                  <LetterMark initials={member.initials} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-[14px] leading-tight truncate serif">
+                  <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="md" label={member.name} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-medium leading-tight">
                       {member.name}
-                    </div>
-                    <div className="text-[11px] text-[var(--muted)] mt-0.5 tracking-wide truncate">
-                      {member.role}
-                    </div>
-                  </div>
-                  {selected ? (
-                    <span className="text-[10px] tracking-[0.14em] uppercase text-[var(--brass)] shrink-0">
-                      Seated
                     </span>
-                  ) : null}
+                    <span className="mt-1 block truncate text-[13px] leading-tight text-[var(--ink-secondary)]">
+                      {member.role}
+                    </span>
+                  </span>
+                  <span
+                    className="text-[12px] font-medium"
+                    style={{ color: "var(--human)", visibility: selected ? "visible" : "hidden" }}
+                  >
+                    Seated
+                  </span>
                 </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="relative min-h-[520px] flex items-center justify-center">
-          <div className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 table-oval" />
-          {SELECT_ANGLES.map((angle, i) => {
-            const member = seated[i];
-            return (
-              <div
-                key={member?.slug ?? `empty-${i}`}
-                className="absolute w-[132px] text-center -ml-[66px]"
-                style={{
-                  left: `${50 + Math.sin((angle * Math.PI) / 180) * 34}%`,
-                  top: `${16 + (1 - Math.cos((angle * Math.PI) / 180)) * 20}%`,
-                }}
-              >
-                {member ? (
-                  <>
-                    <div className="mx-auto w-fit">
-                      <LetterMark initials={member.initials} size="md" />
-                    </div>
-                    <strong className="block text-[12px] mt-2 serif">{member.name}</strong>
-                    <em className="block not-italic text-[10px] tracking-[0.06em] uppercase text-[var(--muted)] mt-0.5">
-                      {member.role.split(",")[0]}
-                    </em>
-                  </>
-                ) : (
-                  <>
-                    <div className="empty-seat-ring" />
-                    <em className="block not-italic text-[10px] tracking-[0.1em] uppercase text-[var(--muted)] mt-2">
-                      Empty seat
-                    </em>
-                  </>
-                )}
-              </div>
+              </li>
             );
           })}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-6 text-[12px] tracking-[0.14em] uppercase text-[var(--muted)]">
-            You · Chair
-          </div>
-        </section>
-      </div>
+        </ul>
+      </section>
     </main>
+  );
+}
+
+/** The miniature table. Quiet and incomplete at first, filling as advisers are chosen. */
+function BoardPreview({ session, state }: { session: MeetingSession; state: MeetingState }) {
+  const places = Array.from({ length: Math.max(MIN_BOARD, state.selected.length) });
+
+  return (
+    <div className="mt-8 border-t border-[var(--rule)] pt-5">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-[13px] font-medium">Your board</h2>
+        <span className="text-[13px] text-[var(--ink-secondary)]">
+          {state.selected.length} of {MAX_BOARD}
+        </span>
+      </div>
+
+      <div className="mt-4 rounded-[3px] bg-[var(--soft-fill)] px-4 py-5">
+        <div className="mx-auto mb-4 h-1.5 w-[72%] rounded-full bg-[var(--rule)]" />
+        <ul className="space-y-2">
+          {places.map((_, index) => {
+            const slug = state.selected[index];
+            const member = slug ? session.catalog.find((entry) => entry.slug === slug) : undefined;
+            if (!member) {
+              return (
+                <li
+                  key={`place-${index}`}
+                  className="flex items-center gap-3 py-1 text-[13px] text-[var(--ink-secondary)]"
+                >
+                  <Portrait initials="" size="sm" variant="vacant" />
+                  <span>Open place</span>
+                </li>
+              );
+            }
+            return (
+              <li key={member.slug} className="flex items-center gap-3 py-1">
+                <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="sm" label={member.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-medium leading-tight">
+                    {member.name}
+                  </span>
+                  <span className="block truncate text-[12px] leading-tight text-[var(--ink-secondary)]">
+                    {member.house}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => session.toggleMember(member.slug)}
+                  className="px-1 text-[12px] text-[var(--ink-secondary)] hover:text-[var(--human)]"
+                >
+                  Remove<span className="sr-only"> {member.name}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }

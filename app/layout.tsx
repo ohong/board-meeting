@@ -1,22 +1,29 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import { Instrument_Sans, Newsreader, Playfair_Display } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const instrument = Instrument_Sans({
-  variable: "--font-instrument",
-  subsets: ["latin"],
-});
-
+/**
+ * Three families, per design/design-engineer-instructions.md: an editorial serif for
+ * page-defining statements, an interface sans for everything operational, and a mono
+ * reserved for short WebMCP receipts and bounded identifiers.
+ */
 const newsreader = Newsreader({
-  variable: "--font-newsreader",
+  variable: "--font-editorial",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const geist = Geist({
+  variable: "--font-interface",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-operational",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -25,17 +32,13 @@ export const metadata: Metadata = {
     "Convene a board you could never normally assemble and pressure-test a consequential decision.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${instrument.variable} ${newsreader.variable} h-full antialiased`}
+      className={`${newsreader.variable} ${geist.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--ink)]">{children}</body>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

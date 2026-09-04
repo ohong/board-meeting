@@ -1,106 +1,140 @@
-import type { MeetingSession } from "./session";
 import { formatReadout } from "./format";
+import type { MeetingSession } from "./session";
 
 type ToolResult = { content: { type: "text"; text: string }[] };
 
-function textResult(text: string): ToolResult {
-  return { content: [{ type: "text", text }] };
-}
-
-type ModelContext = {
-  registerTool: (
-    tool: {
-      name: string;
-      description: string;
-      inputSchema: Record<string, unknown>;
-      execute: (args: Record<string, unknown>) => Promise<ToolResult> | ToolResult;
-    },
-    options?: { signal?: AbortSignal },
-  ) => Promise<void> | void;
+type ToolDescriptor = {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  execute: (args: Record<string, unknown>) => Promise<ToolResult> | ToolResult;
 };
 
-export function getModelContext(): ModelContext | undefined {
-  const doc = document as Document & { modelContext?: ModelContext };
-  const nav = navigator as Navigator & { modelContext?: ModelContext };
-  return doc.modelContext ?? nav.modelContext;
+type ModelContext = {
+  registerTool: (tool: ToolDescriptor, options?: { signal?: AbortSignal }) => Promise<void> | void;
+};
+
+function text(value: string): ToolResult {
+  return { content: [{ type: "text", text: value }] };
 }
 
-export async function registerBoardTools(session: MeetingSession, signal?: AbortSignal) {
-  const modelContext = getModelContext();
-  if (!modelContext?.registerTool) return false;
+function json(value: unknown): ToolResult {
+  return text(JSON.stringify(value, null, 2));
+}
 
-  const tools = [
+function arg(args: Record<string, unknown>, key: string): string {
+  const value = args[key];
+  return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+/**
+ * `document.modelContext` is the current imperative WebMCP surface; `navigator.modelContext`
+ * is the deprecated alias still present in some builds. Both are checked so the demo works
+ * in whichever the presenter's browser exposes.
+ */
+function getModelContext(): ModelContext | undefined {
+  if (typeof document === "undefined") return undefined;
+  const fromDocument = (document as Document & { modelContext?: ModelContext }).modelContext;
+  const fromNavigator =
+    typeof navigator === "undefined"
+      ? undefined
+      : (navigator as Navigator & { modelContext?: ModelContext }).modelContext;
+  const context = fromDocument ?? fromNavigator;
+  return typeof context?.registerTool === "function" ? context : undefined;
+}
+
+/**
+ * The six site tools. Each one calls exactly the session action the human interface calls,
+ * so there is one transcript and one source of truth. Results are written for the agent
+ * reading them: they say what changed and what is now possible.
+ */
+export function boardTools(session: MeetingSession): ToolDescriptor[] {
+  return [
     {
       name: "inspect_board_meeting",
-      description: "Inspect the active board meeting: briefing, phase, participants, and transcript.",
-      inputSchema: { type: "object", properties: {} },
-      execute: () => textResult(JSON.stringify(session.inspect(), null, 2)),
+      description:
+        "Read the current state of the board meeting on this page: the chair's decision briefing, the meeting phase, who is seated, the guest seat, the public transcript, and whether a final readout exists. Read-only.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      execute: () => json(session.inspect()),
     },
     {
       name: "join_board_meeting",
-      description: "Join the guest seat using the name you know yourself by.",
-      inputSchema: {
-        type: "object",
-        properties: { name: { type: "string", description: "Your display name" } },
-        required: ["name"],
-      },
-      execute: (args: Record<string, unknown>) => {
-        const result = session.join(String(args.name ?? ""));
-        return textResult(JSON.stringify(result));
-      },
-    },
-    {
-      name: "contribute_to_board_meeting",
-      description: "Contribute relevant context or a statement to the public meeting.",
-      inputSchema: {
-        type: "object",
-        properties: { text: { type: "string" } },
-        required: ["text"],
-      },
-      execute: async (args: Record<string, unknown>) => {
-        const result = await session.contribute(String(args.text ?? ""));
-        return textResult(JSON.stringify(result));
-      },
-    },
-    {
-      name: "address_board_member",
-      description: "Address a named board member with a focused question or statement.",
+      description:
+        "Take the guest seat at the live board meeting, using the name you know yourself by. One external agent may join a meeting. You cannot end the meeting.",
       inputSchema: {
         type: "object",
         properties: {
-          member: { type: "string" },
-          text: { type: "string" },
+          name: {
+            type: "string",
+            description: "The name you know yourself by. This is shown on your seat and in the transcript.",
+          },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+      execute: (args) => json(session.join(arg(args, "name"))),
+    },
+    {
+      name: "contribute_to_board_meeting",
+      description:
+        "Add context or a statement to the public meeting record, attributed to you. Every seated adviser sees it from their next turn. Use this for context you already hold that the board is missing.",
+      inputSchema: {
+        type: "object",
+        properties: { text: { type: "string", description: "What you want the board to know." } },
+        required: ["text"],
+        additionalProperties: false,
+      },
+      execute: async (args) => json(await session.contribute(arg(args, "text"))),
+    },
+    {
+      name: "address_board_member",
+      description:
+        "Put a focused question or statement to one named adviser. They get next-turn priority and answer directly, in front of the whole room. Their answer comes back in the result.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          member: { type: "string", description: "The adviser's name, as shown on their seat." },
+          text: { type: "string", description: "The question or statement for them." },
         },
         required: ["member", "text"],
+        additionalProperties: false,
       },
-      execute: async (args: Record<string, unknown>) => {
-        const result = await session.address(String(args.member ?? ""), String(args.text ?? ""));
-        return textResult(JSON.stringify(result));
-      },
+      execute: async (args) => json(await session.address(arg(args, "member"), arg(args, "text"))),
     },
     {
       name: "request_board_synthesis",
-      description: "Request a concise interim synthesis of agreement, disagreement, and the open question.",
-      inputSchema: { type: "object", properties: {} },
-      execute: async () => {
-        const result = await session.requestSynthesis();
-        return textResult(JSON.stringify(result));
-      },
+      description:
+        "Ask the secretary for a short interim synthesis: where the board agrees, where it is divided and who holds which side, and the most important unresolved question. This does not end the meeting.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      execute: async () => json(await session.requestSynthesis()),
     },
     {
       name: "get_board_meeting_readout",
-      description: "Retrieve the final executive readout after the human chair ends the meeting.",
-      inputSchema: { type: "object", properties: {} },
+      description:
+        "Retrieve the complete executive readout after the human chair has ended the meeting. Returns a not-ready status if the meeting is still running.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
       execute: () => {
         const result = session.getReadout();
-        if (!result.ready) return textResult(JSON.stringify(result));
-        return textResult(formatReadout(result.readout!));
+        if (!result.ready || !result.readout) return json({ ready: false, message: result.message });
+        return text(formatReadout(result.readout));
       },
     },
   ];
+}
+
+export type RegistrationResult = { supported: boolean; toolNames: string[] };
+
+/** Registers the tools on the top-level page. Aborting `signal` unregisters them. */
+export async function registerBoardTools(
+  session: MeetingSession,
+  signal?: AbortSignal,
+): Promise<RegistrationResult> {
+  const modelContext = getModelContext();
+  const tools = boardTools(session);
+  if (!modelContext) return { supported: false, toolNames: tools.map((tool) => tool.name) };
 
   for (const tool of tools) {
     await modelContext.registerTool(tool, signal ? { signal } : undefined);
   }
-  return true;
+  return { supported: true, toolNames: tools.map((tool) => tool.name) };
 }

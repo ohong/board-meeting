@@ -1,7 +1,8 @@
 import { CATALOG, getMember, matchMemberByName, searchCatalog } from "./catalog";
-import { EXAMPLE_DECISION, EXAMPLE_QUESTION } from "./example";
+import { EXAMPLE_DECISION, invitationPrompt } from "./example";
 import { extractMention } from "./mentions";
 import { createMockRuntime } from "./runtime/mock";
+import { decisionLine, fallbackReadout } from "./runtime/fallbacks";
 import type {
   BoardRuntime,
   CatalogMember,
@@ -11,28 +12,55 @@ import type {
   MeetingPhase,
   OpeningPosition,
   Phase,
+  ReactionKind,
   SeatStatus,
   TranscriptEvent,
 } from "./types";
 
+export const MIN_BOARD = 3;
+export const MAX_BOARD = 6;
+
+/**
+ * How many board contributions the room produces on its own before it stops and waits for
+ * the chair. The human stays in control: any contribution from the chair or the guest
+ * agent wakes the room back up.
+ */
+const AUTO_TURN_BUDGET = 12;
+
 export type SessionOptions = {
   runtime?: BoardRuntime;
+  /** Whether the room keeps talking on its own. Off in tests so turns can be stepped. */
   autoContinue?: boolean;
   now?: () => number;
+  /** Beat between turns, so the room reads as a conversation rather than a dump. */
+  turnGapMs?: number;
+  /** How long the guest seat shows "Joining" before it settles. Zero in tests. */
+  guestJoinMs?: number;
+  sleep?: (ms: number) => Promise<void>;
 };
 
 export type MemberSeat = {
   slug: string;
   name: string;
   role: string;
+  house: string;
   initials: string;
+  portrait?: boolean;
   status: SeatStatus;
   spokenCount: number;
+  /** The last reaction this member emitted, cleared once they speak again. */
+  reaction?: ReactionKind;
 };
 
 export type GuestSeat = {
   name: string | null;
   status: GuestStatus;
+};
+
+export type AgentActivity = {
+  id: string;
+  label: string;
+  at: number;
 };
 
 export type MeetingState = {
@@ -45,39 +73,62 @@ export type MeetingState = {
   members: MemberSeat[];
   guest: GuestSeat;
   transcript: TranscriptEvent[];
+  /** Private to each member; never rendered and never sent to another member. */
   positions: Record<string, OpeningPosition>;
-  mentionQueue: string[];
   composing: boolean;
+  /** True once the room has used its turn budget and is waiting on the chair. */
+  awaitingChair: boolean;
   readout: ExecutiveReadout | null;
-  runtimeId: "mock" | "live";
-  setupMessage: string | null;
   lastError: string | null;
+  /** What the external agent has done, so its participation is visible without devtools. */
+  agentActivity: AgentActivity[];
+  readoutRetrievedBy: string | null;
 };
 
 export type InspectResult = {
   phase: Phase;
   meetingPhase: MeetingPhase;
+  chair: string;
   briefing: string;
-  board: { slug: string; name: string; status: string }[];
-  guest: GuestSeat;
-  transcript: { speaker: string; text: string }[];
+  board: { name: string; role: string; status: SeatStatus; contributions: number }[];
+  guest: { name: string | null; status: GuestStatus };
+  transcript: { speaker: string; to?: string; text: string }[];
   readoutReady: boolean;
 };
+
+export type ActionResult = { ok: boolean; message: string };
 
 type Listener = () => void;
 
 function uid(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
+
+const defaultSleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 export function createMeetingSession(options: SessionOptions = {}) {
   const runtime = options.runtime ?? createMockRuntime();
   const autoContinue = options.autoContinue ?? false;
   const now = options.now ?? (() => Date.now());
+  const turnGapMs = options.turnGapMs ?? 0;
+  const guestJoinMs = options.guestJoinMs ?? 0;
+  const sleep = options.sleep ?? defaultSleep;
   const listeners = new Set<Listener>();
-  let seq = 0;
+
+  /** Only one public message may stream at a time; every mutation queues behind this. */
+  let activeTurn: Promise<unknown> | null = null;
   let pumping = false;
   let ended = false;
+  let autoTurnsUsed = 0;
+  /** Members with next-turn priority: direct @mentions first, then requests for the floor. */
+  let mentionQueue: string[] = [];
+  let floorQueue: string[] = [];
+  let lastSpeaker: string | null = null;
+  /** Members who said they had nothing to add. Cleared when new context enters the room. */
+  let passed = new Set<string>();
 
   const state: MeetingState = {
     phase: "select",
@@ -90,32 +141,27 @@ export function createMeetingSession(options: SessionOptions = {}) {
     guest: { name: null, status: "empty" },
     transcript: [],
     positions: {},
-    mentionQueue: [],
     composing: false,
+    awaitingChair: false,
     readout: null,
-    runtimeId: runtime.id,
-    setupMessage:
-      runtime.id === "mock"
-        ? "OPENAI_API_KEY is not set. The board is running a deterministic mock so you can test the room, orchestration, and WebMCP. Add OPENAI_API_KEY to enable live OpenAI GPT board members."
-        : null,
     lastError: null,
+    agentActivity: [],
+    readoutRetrievedBy: null,
   };
 
   function emit() {
-    seq += 1;
-    for (const fn of listeners) fn();
+    for (const listener of listeners) listener();
   }
 
   function snapshot(): MeetingState {
     return {
       ...state,
       selected: [...state.selected],
-      members: state.members.map((m) => ({ ...m })),
+      members: state.members.map((member) => ({ ...member })),
       guest: { ...state.guest },
-      transcript: [...state.transcript],
+      transcript: state.transcript.map((event) => ({ ...event })),
       positions: { ...state.positions },
-      mentionQueue: [...state.mentionQueue],
-      readout: state.readout,
+      agentActivity: [...state.agentActivity],
     };
   }
 
@@ -125,441 +171,720 @@ export function createMeetingSession(options: SessionOptions = {}) {
     return event;
   }
 
-  function visibleCatalog(): CatalogMember[] {
-    return searchCatalog(state.search);
+  function updateEvent(id: string, patch: Partial<TranscriptEvent>) {
+    state.transcript = state.transcript.map((event) =>
+      event.id === id ? { ...event, ...patch } : event,
+    );
   }
 
-  function toggleMember(slug: string): { ok: boolean; message?: string } {
+  function dropEvent(id: string) {
+    state.transcript = state.transcript.filter((event) => event.id !== id);
+  }
+
+  function systemEvent(text: string) {
+    return addEvent({ kind: "system", speakerId: "system", speakerName: "Secretary", text });
+  }
+
+  function noteAgentActivity(label: string) {
+    state.agentActivity = [...state.agentActivity, { id: uid("act"), label, at: now() }].slice(-8);
+  }
+
+  function setStatus(slug: string, status: SeatStatus, reaction?: ReactionKind) {
+    state.members = state.members.map((member) =>
+      member.slug === slug ? { ...member, status, ...(reaction !== undefined ? { reaction } : {}) } : member,
+    );
+  }
+
+  function seat(slug: string): MemberSeat | undefined {
+    return state.members.find((member) => member.slug === slug);
+  }
+
+  // ---------------------------------------------------------------- selection
+
+  function toggleMember(slug: string): ActionResult {
     if (state.phase !== "select" && state.phase !== "brief") {
       return { ok: false, message: "Board membership is locked for this meeting." };
     }
     const member = getMember(slug);
-    if (!member) return { ok: false, message: "Unknown adviser." };
+    if (!member) return { ok: false, message: "No such adviser on the roster." };
+
     if (state.selected.includes(slug)) {
       state.selected = state.selected.filter((s) => s !== slug);
       state.selectionMessage = null;
       emit();
-      return { ok: true };
+      return { ok: true, message: `${member.name} left the table.` };
     }
-    if (state.selected.length >= 6) {
-      state.selectionMessage = "The table holds six advisers. Deselect someone before adding a seventh.";
+    if (state.selected.length >= MAX_BOARD) {
+      state.selectionMessage = `The table seats ${MAX_BOARD}. Free a seat before adding another adviser.`;
       emit();
       return { ok: false, message: state.selectionMessage };
     }
     state.selected = [...state.selected, slug];
     state.selectionMessage = null;
     emit();
-    return { ok: true };
+    return { ok: true, message: `${member.name} is seated.` };
   }
 
   function canStart(): boolean {
-    return state.selected.length >= 3 && state.selected.length <= 6 && state.briefing.trim().length > 0;
+    return (
+      state.selected.length >= MIN_BOARD &&
+      state.selected.length <= MAX_BOARD &&
+      state.briefing.trim().length > 0
+    );
   }
 
-  function setMemberStatus(slug: string, status: SeatStatus) {
-    state.members = state.members.map((m) => (m.slug === slug ? { ...m, status } : m));
-  }
+  // ------------------------------------------------------------ agent inputs
 
   function baseInput(slug: string) {
     const member = getMember(slug)!;
-    const own = state.transcript
-      .filter((e) => e.kind === "message" && e.speakerId === slug)
-      .map((e) => e.text);
     return {
       memberId: slug,
       memberName: member.name,
       briefing: state.briefing,
       phase: state.meetingPhase,
-      transcript: state.transcript.filter((e) => e.kind !== "system" || true),
+      // The public record only. A member never sees another member's private position.
+      transcript: state.transcript.filter((event) => !event.streaming && !event.failed),
       privatePosition: state.positions[slug],
-      ownPriorStatements: own,
-      boardNames: state.members.map((m) => m.name),
+      ownPriorStatements: state.transcript
+        .filter((event) => event.kind === "message" && event.speakerId === slug && !event.failed)
+        .map((event) => event.text),
+      boardNames: state.members.map((member) => member.name),
     };
   }
 
-  function nextSpeaker(): string | undefined {
-    const mention = state.mentionQueue.shift();
-    if (mention && state.members.some((m) => m.slug === mention)) return mention;
-    const unspoken = state.members.filter((m) => m.spokenCount === 0);
-    if (unspoken.length) return unspoken[0].slug;
-    const underTwo = state.members.filter((m) => m.spokenCount < 2);
-    const everyoneOnce = state.members.every((m) => m.spokenCount >= 1);
-    if (!everyoneOnce) {
-      const first = state.members.find((m) => m.spokenCount < 1);
-      return first?.slug;
+  /** Runs `attempt` twice at most, showing a quiet reconnecting state in between. */
+  async function withRetry<T>(slug: string | null, attempt: () => Promise<T>): Promise<T | null> {
+    try {
+      return await attempt();
+    } catch {
+      if (slug) {
+        setStatus(slug, "reconnecting");
+        emit();
+      }
+      try {
+        return await attempt();
+      } catch (error) {
+        state.lastError = error instanceof Error ? error.message : "A board agent call failed.";
+        return null;
+      }
     }
-    const pool = underTwo.length ? underTwo : state.members;
-    const idx = seq % pool.length;
-    return pool[idx]?.slug;
   }
 
-  async function runTurn(slug: string, capability: "publicTurn" | "answerDirect", prompt?: string) {
-    if (ended) return;
+  // ------------------------------------------------------- speaker selection
+
+  /**
+   * Deterministic. Direct mentions win, then a member another member asked to hear from,
+   * then anyone who has not spoken, then the least-heard voice. Nobody takes a third turn
+   * until every seat has spoken once, unless the chair or the guest called on them.
+   */
+  function nextSpeaker(): string | undefined {
+    while (mentionQueue.length) {
+      const slug = mentionQueue.shift()!;
+      if (seat(slug)) return slug;
+    }
+
+    const everyoneSpoke = state.members.every((member) => member.spokenCount >= 1);
+    const eligible = state.members.filter(
+      (member) => (everyoneSpoke || member.spokenCount < 2) && !passed.has(member.slug),
+    );
+    if (!eligible.length) return undefined;
+
+    // A member can pull someone into the conversation, but not hand the room to one voice.
+    const quietest = Math.min(...state.members.map((member) => member.spokenCount));
+    while (floorQueue.length) {
+      const slug = floorQueue.shift()!;
+      const candidate = eligible.find((member) => member.slug === slug);
+      if (candidate && slug !== lastSpeaker && candidate.spokenCount <= quietest + 1) return slug;
+    }
+
+    const unspoken = eligible.filter((member) => member.spokenCount === 0);
+    if (unspoken.length) return unspoken[0].slug;
+
+    const pool = eligible.filter((member) => member.slug !== lastSpeaker);
+    const candidates = pool.length ? pool : eligible;
+    return [...candidates].sort((a, b) => a.spokenCount - b.spokenCount)[0]?.slug;
+  }
+
+  // -------------------------------------------------------------------- turns
+
+  async function speak(
+    slug: string,
+    capability: "publicTurn" | "answerDirect",
+    prompt?: string,
+    askedBy?: string,
+  ): Promise<boolean> {
     const member = getMember(slug);
-    if (!member) return;
-    setMemberStatus(slug, "speaking");
+    if (!member || ended) return false;
+
+    setStatus(slug, "speaking", undefined);
     emit();
-    try {
-      const turn = await runtime.publicTurn({
-        ...baseInput(slug),
-        capability,
-        prompt,
-        addressedTo: capability === "answerDirect" ? prompt : undefined,
-      });
-      const seat = state.members.find((m) => m.slug === slug);
-      if (seat) seat.spokenCount += 1;
-      addEvent({
+
+    const run = async (): Promise<boolean> => {
+      const live = addEvent({
         kind: "message",
         speakerId: slug,
         speakerName: member.name,
-        text: turn.text,
-        addressedTo: turn.addressedTo,
+        text: "",
+        streaming: true,
       });
-      if (turn.reaction) {
-        addEvent({
-          kind: "reaction",
-          speakerId: turn.reactionFrom ?? slug,
-          speakerName: getMember(turn.reactionFrom ?? slug)?.name ?? member.name,
-          text: turn.reaction,
+      emit();
+
+      let streamed = "";
+      try {
+        const turn = await runtime.publicTurn(
+          { ...baseInput(slug), capability, prompt, addressedTo: askedBy },
+          (delta) => {
+            streamed += delta;
+            updateEvent(live.id, { text: streamed });
+            emit();
+          },
+        );
+
+        // An empty turn means the member had nothing to add. Nothing goes on the record.
+        if (!turn.text.trim()) {
+          dropEvent(live.id);
+          passed.add(slug);
+          setStatus(slug, "ready");
+          emit();
+          return false;
+        }
+
+        updateEvent(live.id, {
+          text: turn.text,
+          streaming: false,
+          addressedTo: turn.addressedTo,
           reaction: turn.reaction,
         });
-      }
-      if (turn.wantsToRespond) {
-        const target = state.members.find((m) => m.slug === turn.wantsToRespond);
-        if (target) {
-          setMemberStatus(target.slug, "wants_to_respond");
-          state.mentionQueue.unshift(target.slug);
+
+        const current = seat(slug);
+        if (current) {
+          state.members = state.members.map((m) =>
+            m.slug === slug
+              ? { ...m, spokenCount: m.spokenCount + 1, status: "ready", reaction: turn.reaction }
+              : m,
+          );
         }
+        lastSpeaker = slug;
+
+        if (turn.wantsToRespond) {
+          const target = matchMemberByName(turn.wantsToRespond, state.selected);
+          if (target && target.slug !== slug) {
+            floorQueue = [target.slug, ...floorQueue.filter((s) => s !== target.slug)];
+            setStatus(target.slug, "wants_to_respond");
+          }
+        }
+        emit();
+        return true;
+      } catch {
+        // Never leave a half-written bubble or a seat stuck typing.
+        dropEvent(live.id);
+        setStatus(slug, "reconnecting");
+        emit();
+        throw new Error("turn failed");
       }
-      setMemberStatus(slug, "ready");
-      emit();
+    };
+
+    try {
+      return await run();
     } catch {
-      setMemberStatus(slug, "reconnecting");
-      emit();
       try {
-        const turn = await runtime.publicTurn({
-          ...baseInput(slug),
-          capability,
-          prompt,
-        });
-        addEvent({
-          kind: "message",
-          speakerId: slug,
-          speakerName: member.name,
-          text: turn.text,
-        });
-        const seat = state.members.find((m) => m.slug === slug);
-        if (seat) seat.spokenCount += 1;
-        setMemberStatus(slug, "ready");
-      } catch (err) {
-        state.lastError = err instanceof Error ? err.message : "A board member failed to speak.";
-        setMemberStatus(slug, "ready");
+        return await run();
+      } catch (error) {
+        state.lastError =
+          error instanceof Error && error.message !== "turn failed"
+            ? error.message
+            : `${member.name} could not take that turn. The meeting continued without it.`;
+        setStatus(slug, "ready");
+        emit();
+        return false;
       }
-      emit();
     }
   }
 
-  async function pumpOnce(): Promise<boolean> {
+  /** Serialises everything that mutates the room behind the turn currently streaming. */
+  async function queued<T>(work: () => Promise<T>): Promise<T> {
+    const previous = activeTurn;
+    let release: () => void = () => {};
+    activeTurn = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      if (previous) await previous.catch(() => {});
+      return await work();
+    } finally {
+      release();
+    }
+  }
+
+  async function takeOneTurn(): Promise<boolean> {
     if (ended || state.meetingPhase !== "discussion" || state.composing) return false;
-    const slug = nextSpeaker();
-    if (!slug) return false;
-    const capability = state.mentionQueue.length ? "publicTurn" : "publicTurn";
-    await runTurn(slug, capability);
-    return true;
+    // A member may pass. Try the next voice rather than ending the discussion on one silence.
+    for (let attempt = 0; attempt < state.members.length; attempt += 1) {
+      const slug = nextSpeaker();
+      if (!slug) return false;
+      if (await speak(slug, "publicTurn")) return true;
+      if (!passed.has(slug)) return false;
+    }
+    return false;
   }
 
-  async function startMeeting(): Promise<{ ok: boolean; message?: string }> {
-    if (!canStart()) {
-      return { ok: false, message: "Select three to six advisers and describe the decision." };
-    }
-    ended = false;
-    state.phase = "meeting";
-    state.meetingPhase = "opening";
-    state.members = state.selected.map((slug) => {
-      const m = getMember(slug)!;
-      return {
-        slug,
-        name: m.name,
-        role: m.role,
-        initials: m.initials,
-        status: "thinking" as const,
-        spokenCount: 0,
-      };
-    });
-    state.guest = { name: null, status: "waiting" };
-    addEvent({
-      kind: "system",
-      speakerId: "system",
-      speakerName: "Secretary",
-      text: "Independent views are forming. The table is closed until every seat is ready.",
-    });
-    emit();
-    const openings = await Promise.all(
-      state.members.map(async (seat) => {
-        try {
-          const position = await runtime.formOpeningPosition({
-            ...baseInput(seat.slug),
-            capability: "formOpeningPosition",
-          });
-          setMemberStatus(seat.slug, "ready");
-          return [seat.slug, position] as const;
-        } catch {
-          setMemberStatus(seat.slug, "reconnecting");
-          const position = await runtime.formOpeningPosition({
-            ...baseInput(seat.slug),
-            capability: "formOpeningPosition",
-          });
-          setMemberStatus(seat.slug, "ready");
-          return [seat.slug, position] as const;
-        }
-      }),
-    );
-    state.positions = Object.fromEntries(openings);
-    state.meetingPhase = "discussion";
-    addEvent({
-      kind: "system",
-      speakerId: "system",
-      speakerName: "Secretary",
-      text: "Independent views are closed. The board is in discussion.",
-    });
-    emit();
-    if (autoContinue && !pumping) {
-      void autoPump();
-    }
-    return { ok: true };
-  }
-
-  async function autoPump() {
+  async function pump(): Promise<void> {
+    if (pumping || !autoContinue) return;
     pumping = true;
     try {
-      let turns = 0;
-      while (!ended && state.meetingPhase === "discussion" && !state.composing && turns < 12) {
-        const did = await pumpOnce();
-        if (!did) break;
-        turns += 1;
+      while (
+        !ended &&
+        state.meetingPhase === "discussion" &&
+        !state.composing &&
+        autoTurnsUsed < AUTO_TURN_BUDGET
+      ) {
+        const spoke = await queued(() => takeOneTurn());
+        if (!spoke) break;
+        autoTurnsUsed += 1;
+        if (turnGapMs) await sleep(turnGapMs);
+      }
+      if (state.meetingPhase === "discussion" && !ended && !state.composing) {
+        state.awaitingChair = true;
+        emit();
       }
     } finally {
       pumping = false;
     }
   }
 
-  async function sendUserMessage(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || state.phase !== "meeting" || ended) return;
-    addEvent({
-      kind: "message",
-      speakerId: "chair",
-      speakerName: "You",
-      text: trimmed,
-    });
-    const mentioned = extractMention(trimmed, state.selected);
-    emit();
-    if (mentioned) {
-      await runTurn(mentioned, "answerDirect", trimmed);
-    } else if (autoContinue) {
-      await pumpOnce();
-    }
+  /** Something new entered the room, so the board has a reason to keep going. */
+  function wake(extraTurns = 3) {
+    // New context is a reason to speak again, even for someone who had nothing to add before.
+    passed = new Set();
+    state.awaitingChair = false;
+    autoTurnsUsed = Math.max(0, Math.min(autoTurnsUsed, AUTO_TURN_BUDGET - extraTurns));
+    if (autoContinue) void pump();
   }
+
+  // ------------------------------------------------------------ meeting start
+
+  async function startMeeting(): Promise<ActionResult> {
+    if (!canStart()) {
+      return {
+        ok: false,
+        message: `Seat ${MIN_BOARD} to ${MAX_BOARD} advisers and describe the decision first.`,
+      };
+    }
+    ended = false;
+    autoTurnsUsed = 0;
+    mentionQueue = [];
+    floorQueue = [];
+    lastSpeaker = null;
+    passed = new Set();
+
+    state.phase = "meeting";
+    state.meetingPhase = "opening";
+    state.members = state.selected.map((slug) => {
+      const member = getMember(slug)!;
+      return {
+        slug,
+        name: member.name,
+        role: member.role,
+        house: member.house,
+        initials: member.initials,
+        portrait: member.portrait,
+        status: "thinking" as SeatStatus,
+        spokenCount: 0,
+      };
+    });
+    state.guest = { name: null, status: "waiting" };
+    systemEvent(
+      "The chair has opened the meeting. Every adviser is forming an independent position in private, so the first speaker does not anchor the room.",
+    );
+    emit();
+
+    // Independent, concurrent, and isolated: no member sees another's opening position.
+    const positions = await Promise.all(
+      state.members.map(async (member) => {
+        const position = await withRetry(member.slug, () =>
+          runtime.formOpeningPosition({ ...baseInput(member.slug), capability: "formOpeningPosition" }),
+        );
+        setStatus(member.slug, "ready");
+        emit();
+        return position;
+      }),
+    );
+
+    state.positions = Object.fromEntries(
+      positions.filter((position): position is OpeningPosition => Boolean(position)).map((p) => [p.memberId, p]),
+    );
+
+    const missing = state.members.filter((member) => !state.positions[member.slug]);
+    state.meetingPhase = "discussion";
+    systemEvent(
+      missing.length
+        ? `Independent positions are closed. ${missing
+            .map((m) => m.name)
+            .join(" and ")} will join the discussion without one. The board is in session.`
+        : "Independent positions are closed. The board is in session.",
+    );
+    emit();
+
+    if (autoContinue) void pump();
+    return { ok: true, message: "The meeting is in session." };
+  }
+
+  // ------------------------------------------------------------- chair inputs
+
+  async function sendUserMessage(text: string): Promise<ActionResult> {
+    const trimmed = text.trim();
+    if (!trimmed) return { ok: false, message: "Nothing to say." };
+    if (state.phase !== "meeting" || ended) {
+      return { ok: false, message: "There is no meeting in session." };
+    }
+
+    // The chair's words go on the record immediately, even mid-turn. Only the board's
+    // response waits for the member currently speaking to finish.
+    addEvent({ kind: "message", speakerId: "chair", speakerName: "You", text: trimmed });
+    const mentioned = extractMention(trimmed, state.selected);
+    if (mentioned) {
+      mentionQueue = [mentioned, ...mentionQueue.filter((slug) => slug !== mentioned)];
+      passed.delete(mentioned);
+    }
+    state.awaitingChair = false;
+    emit();
+
+    return queued(async () => {
+      if (mentioned) {
+        await speak(mentioned, "answerDirect", trimmed, "You");
+        mentionQueue = mentionQueue.filter((slug) => slug !== mentioned);
+      }
+      return { ok: true, message: "Sent to the board." };
+    }).then((result) => {
+      wake();
+      return result;
+    });
+  }
+
+  // ------------------------------------------------------- external agent (WebMCP)
 
   function inspect(): InspectResult {
     return {
       phase: state.phase,
       meetingPhase: state.meetingPhase,
+      chair: "You (the human chair)",
       briefing: state.briefing,
-      board: state.members.map((m) => ({ slug: m.slug, name: m.name, status: m.status })),
-      guest: { ...state.guest },
-      transcript: state.transcript.map((e) => ({ speaker: e.speakerName, text: e.text })),
+      board: state.members.map((member) => ({
+        name: member.name,
+        role: member.role,
+        status: member.status,
+        contributions: member.spokenCount,
+      })),
+      guest: { name: state.guest.name, status: state.guest.status },
+      transcript: state.transcript
+        .map((event) => ({
+          speaker: event.kind === "system" ? "Meeting record" : event.speakerName,
+          ...(event.addressedTo ? { to: event.addressedTo } : {}),
+          text: event.text,
+        })),
       readoutReady: Boolean(state.readout),
     };
   }
 
-  function join(name: string): { ok: boolean; message: string } {
-    if (state.phase !== "meeting") {
-      return { ok: false, message: "No active board meeting to join." };
+  function join(name: string): ActionResult {
+    if (state.phase !== "meeting" || ended) {
+      return { ok: false, message: "There is no meeting in session to join." };
     }
-    const display = name.trim();
+    const display = name.trim().slice(0, 40);
     if (!display) return { ok: false, message: "Provide the name you know yourself by." };
-    if (state.guest.name && state.guest.status !== "empty" && state.guest.status !== "waiting") {
-      return { ok: false, message: `The guest seat is already occupied by ${state.guest.name}.` };
+    if (state.guest.name) {
+      return {
+        ok: false,
+        message:
+          state.guest.name === display
+            ? `You are already seated as ${display}.`
+            : `The guest seat is taken by ${state.guest.name}. One external agent may join a meeting.`,
+      };
     }
+
+    // The seat is claimed at once — anything the agent does next is valid immediately — but
+    // the room gets a beat to show the arrival rather than blinking straight to seated.
     state.guest = { name: display, status: "joining" };
+    noteAgentActivity(`${display} joined the guest seat`);
     emit();
-    state.guest = { name: display, status: "joined" };
-    addEvent({
-      kind: "system",
-      speakerId: "system",
-      speakerName: "Secretary",
-      text: `${display} has taken the guest seat.`,
-    });
-    emit();
-    return { ok: true, message: `Joined as ${display}.` };
+
+    const settle = () => {
+      if (state.guest.name !== display) return;
+      state.guest = { name: display, status: "joined" };
+      systemEvent(`${display} joined the meeting through this page's site tools and took the guest seat.`);
+      emit();
+    };
+    if (guestJoinMs) setTimeout(settle, guestJoinMs);
+    else settle();
+
+    return {
+      ok: true,
+      message: `Seated as ${display}. You can contribute context, address an adviser by name, and request a synthesis. Only the human chair can end the meeting.`,
+    };
   }
 
+  /** The guest may act from the moment it claims the seat, including while it is settling. */
   function requireGuest(): { ok: false; message: string } | { ok: true; name: string } {
-    if (!state.guest.name || state.guest.status === "empty" || state.guest.status === "waiting") {
-      return { ok: false, message: "Join the meeting before contributing." };
+    if (!state.guest.name) {
+      return { ok: false, message: "Join the meeting first with join_board_meeting." };
+    }
+    if (state.phase === "readout" || ended) {
+      return { ok: false, message: "The meeting has ended. Only the readout is available now." };
     }
     return { ok: true, name: state.guest.name };
   }
 
-  async function contribute(text: string) {
+  async function contribute(text: string): Promise<ActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     const trimmed = text.trim();
     if (!trimmed) return { ok: false, message: "Nothing to contribute." };
-    state.guest.status = "contributing";
-    addEvent({
-      kind: "message",
-      speakerId: "guest",
-      speakerName: guest.name,
-      text: trimmed,
+
+    // Queued behind any turn currently streaming, then applied immediately after it.
+    const result = await queued(async () => {
+      state.guest = { ...state.guest, status: "contributing" };
+      addEvent({ kind: "message", speakerId: "guest", speakerName: guest.name, text: trimmed });
+      noteAgentActivity(`${guest.name} added context to the record`);
+      emit();
+      state.guest = { ...state.guest, status: "joined" };
+      emit();
+      return {
+        ok: true,
+        message: `Added to the public record. Every adviser sees it from their next turn. ${state.members.length} advisers are seated; the meeting is in ${state.meetingPhase}.`,
+      };
     });
-    emit();
-    state.guest.status = "joined";
-    emit();
-    if (autoContinue && state.meetingPhase === "discussion") await pumpOnce();
-    return { ok: true, message: "Context added to the public transcript." };
+    wake();
+    return result;
   }
 
-  async function address(memberName: string, text: string) {
+  async function address(memberName: string, text: string): Promise<ActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
     const member = matchMemberByName(memberName, state.selected);
-    if (!member) return { ok: false, message: `No seated adviser named ${memberName}.` };
+    if (!member) {
+      return {
+        ok: false,
+        message: `No adviser named "${memberName}" is at this table. Seated: ${state.members
+          .map((m) => m.name)
+          .join(", ")}.`,
+      };
+    }
     const trimmed = text.trim();
-    state.guest.status = "asking";
-    addEvent({
-      kind: "message",
-      speakerId: "guest",
-      speakerName: guest.name,
-      text: `@${member.name} ${trimmed}`,
-      addressedTo: member.name,
+    if (!trimmed) return { ok: false, message: "Ask them something." };
+    if (state.meetingPhase === "opening") {
+      return {
+        ok: false,
+        message: "The board is still forming independent positions. Contribute context now and ask once discussion opens.",
+      };
+    }
+
+    const result = await queued(async () => {
+      state.guest = { ...state.guest, status: "asking" };
+      addEvent({
+        kind: "message",
+        speakerId: "guest",
+        speakerName: guest.name,
+        text: `@${member.name} ${trimmed}`,
+        addressedTo: member.name,
+      });
+      mentionQueue = [member.slug, ...mentionQueue.filter((slug) => slug !== member.slug)];
+      passed.delete(member.slug);
+      noteAgentActivity(`${guest.name} put a question to ${member.name}`);
+      emit();
+
+      await speak(member.slug, "answerDirect", trimmed, guest.name);
+      mentionQueue = mentionQueue.filter((slug) => slug !== member.slug);
+      state.guest = { ...state.guest, status: "joined" };
+      emit();
+
+      const answer = [...state.transcript].reverse().find((event) => event.speakerId === member.slug);
+      return {
+        ok: true,
+        message: answer
+          ? `${member.name} answered: ${answer.text}`
+          : `${member.name} could not answer that turn.`,
+      };
     });
-    state.mentionQueue.unshift(member.slug);
-    emit();
-    await runTurn(member.slug, "answerDirect", trimmed);
-    state.guest.status = "joined";
-    emit();
-    return { ok: true, message: `${member.name} was addressed and answered.` };
+    wake();
+    return result;
   }
 
-  async function requestSynthesis() {
+  async function requestSynthesis(): Promise<ActionResult> {
     const guest = requireGuest();
     if (!guest.ok) return guest;
-    const text = await runtime.synthesis({
-      capability: "synthesis",
-      briefing: state.briefing,
-      phase: state.meetingPhase,
-      transcript: state.transcript,
-      ownPriorStatements: [],
-      boardNames: state.members.map((m) => m.name),
+
+    return queued(async () => {
+      noteAgentActivity(`${guest.name} requested an interim synthesis`);
+      const text = await withRetry(null, () =>
+        runtime.synthesis({
+          capability: "synthesis",
+          briefing: state.briefing,
+          phase: state.meetingPhase,
+          transcript: state.transcript.filter((event) => !event.streaming),
+          ownPriorStatements: [],
+          boardNames: state.members.map((member) => member.name),
+        }),
+      );
+      if (!text) {
+        emit();
+        return { ok: false, message: "The secretary could not produce a synthesis. The meeting is unaffected." };
+      }
+      addEvent({ kind: "system", speakerId: "secretary", speakerName: "Secretary", text });
+      emit();
+      return { ok: true, message: text };
     });
-    addEvent({
-      kind: "system",
-      speakerId: "secretary",
-      speakerName: "Secretary",
-      text,
-    });
-    emit();
-    return { ok: true, message: text };
   }
 
-  function getReadoutTool(): { ready: boolean; message: string; readout?: ExecutiveReadout } {
+  function getReadout(): { ready: boolean; message: string; readout?: ExecutiveReadout } {
     if (!state.readout) {
       return {
         ready: false,
-        message: "The final readout is not ready. The human chair must end the meeting first.",
+        message:
+          "The final readout does not exist yet. The human chair has to end the meeting first; only they can. Try again after that.",
       };
     }
-    return { ready: true, message: "Readout ready.", readout: state.readout };
+    if (state.guest.name && !state.readoutRetrievedBy) {
+      state.readoutRetrievedBy = state.guest.name;
+      noteAgentActivity(`${state.guest.name} retrieved the final readout`);
+      emit();
+    }
+    return { ready: true, message: "The final readout follows.", readout: state.readout };
   }
 
-  async function endMeeting(): Promise<{ ok: boolean; message?: string }> {
-    if (state.phase !== "meeting") return { ok: false, message: "No meeting to end." };
-    ended = true;
-    state.meetingPhase = "ending";
-    addEvent({
-      kind: "system",
-      speakerId: "system",
-      speakerName: "Secretary",
-      text: "The chair has ended the meeting. Closing comments are being collected.",
+  function guestEndMeeting(): ActionResult {
+    return {
+      ok: false,
+      message:
+        "Only the human chair can end this meeting. You can request an interim synthesis instead, and retrieve the readout once the chair has closed the room.",
+    };
+  }
+
+  // --------------------------------------------------------------- meeting end
+
+  async function endMeeting(): Promise<ActionResult> {
+    if (state.phase !== "meeting") return { ok: false, message: "There is no meeting to end." };
+
+    // Let the turn that is currently streaming finish cleanly rather than cutting it off.
+    await queued(async () => {
+      ended = true;
+      state.meetingPhase = "ending";
+      state.awaitingChair = false;
+      systemEvent("The chair closed the discussion and asked every adviser for a closing comment.");
+      emit();
     });
-    emit();
+
     const closingComments: ClosingComment[] = await Promise.all(
-      state.members.map(async (seat) => {
-        try {
-          const comment = await runtime.closingComment({
-            ...baseInput(seat.slug),
-            capability: "closingComment",
-          });
-          return { memberId: seat.slug, name: seat.name, comment };
-        } catch {
-          const pos = state.positions[seat.slug];
-          return {
-            memberId: seat.slug,
-            name: seat.name,
-            comment: pos?.recommendation ?? "No closing comment captured.",
-          };
-        }
+      state.members.map(async (member) => {
+        const comment = await withRetry(member.slug, () =>
+          runtime.closingComment({ ...baseInput(member.slug), capability: "closingComment" }),
+        );
+        setStatus(member.slug, "ready");
+        emit();
+        if (comment) return { memberId: member.slug, name: member.name, comment };
+        // Falling back to their most recent substantive position beats blocking the memo.
+        const position = state.positions[member.slug];
+        const lastSaid = [...state.transcript]
+          .reverse()
+          .find((event) => event.speakerId === member.slug && event.kind === "message")?.text;
+        return {
+          memberId: member.slug,
+          name: member.name,
+          comment: lastSaid ?? position?.recommendation ?? "No closing comment was captured.",
+        };
       }),
     );
-    const readout = await runtime.readout({
+
+    // Closing comments are said out loud, so every seated adviser has spoken publicly.
+    for (const comment of closingComments) {
+      addEvent({
+        kind: "message",
+        speakerId: comment.memberId,
+        speakerName: comment.name,
+        text: comment.comment,
+      });
+    }
+    emit();
+
+    const readoutInput = {
       briefing: state.briefing,
-      transcript: state.transcript,
+      transcript: state.transcript.filter((event) => !event.streaming),
       closingComments,
-      boardNames: state.members.map((m) => m.name),
-    });
-    state.readout = readout;
+      boardNames: state.members.map((member) => member.name),
+    };
+    const readout = await withRetry(null, () => runtime.readout(readoutInput));
+
+    state.readout =
+      readout ?? fallbackReadout(state.briefing, readoutInput.transcript, closingComments);
     state.phase = "readout";
     state.meetingPhase = "closed";
     emit();
-    return { ok: true };
+    return { ok: true, message: "The readout is ready." };
   }
 
   function reset() {
     ended = true;
     pumping = false;
-    state.phase = "select";
-    state.meetingPhase = "idle";
-    state.search = "";
-    state.selected = [];
-    state.selectionMessage = null;
-    state.briefing = "";
-    state.members = [];
-    state.guest = { name: null, status: "empty" };
-    state.transcript = [];
-    state.positions = {};
-    state.mentionQueue = [];
-    state.composing = false;
-    state.readout = null;
-    state.lastError = null;
+    activeTurn = null;
+    autoTurnsUsed = 0;
+    mentionQueue = [];
+    floorQueue = [];
+    lastSpeaker = null;
+    passed = new Set();
+    Object.assign(state, {
+      phase: "select" as Phase,
+      meetingPhase: "idle" as MeetingPhase,
+      search: "",
+      selected: [],
+      selectionMessage: null,
+      briefing: "",
+      members: [],
+      guest: { name: null, status: "empty" as GuestStatus },
+      transcript: [],
+      positions: {},
+      composing: false,
+      awaitingChair: false,
+      readout: null,
+      lastError: null,
+      agentActivity: [],
+      readoutRetrievedBy: null,
+    });
     emit();
   }
 
   return {
     getState: snapshot,
-    subscribe(fn: Listener) {
-      listeners.add(fn);
+    subscribe(listener: Listener) {
+      listeners.add(listener);
       return () => {
-      listeners.delete(fn);
-    };
+        listeners.delete(listener);
+      };
+    },
+
+    // selection and briefing
+    catalog: CATALOG,
+    visibleCatalog(): CatalogMember[] {
+      return searchCatalog(state.search);
     },
     setSearch(query: string) {
       state.search = query;
       emit();
     },
-    visibleCatalog,
-    catalog: CATALOG,
     toggleMember,
-    goToBrief() {
-      if (state.selected.length < 3) {
-        state.selectionMessage = "Choose at least three advisers.";
+    goToBrief(): ActionResult {
+      if (state.selected.length < MIN_BOARD) {
+        state.selectionMessage = `Seat at least ${MIN_BOARD} advisers.`;
         emit();
-        return { ok: false as const, message: state.selectionMessage };
+        return { ok: false, message: state.selectionMessage };
       }
       state.phase = "brief";
       emit();
-      return { ok: true as const };
+      return { ok: true, message: "Brief the board." };
+    },
+    goToSelect(): ActionResult {
+      if (state.phase !== "brief") return { ok: false, message: "The board is locked." };
+      state.phase = "select";
+      emit();
+      return { ok: true, message: "Back to the roster." };
     },
     setBriefing(text: string) {
       state.briefing = text;
@@ -570,34 +895,38 @@ export function createMeetingSession(options: SessionOptions = {}) {
       emit();
     },
     canStart,
+
+    // the meeting
     startMeeting,
     sendUserMessage,
     setComposing(value: boolean) {
       state.composing = value;
       emit();
+      if (!value) wake(1);
     },
-    pumpOnce,
-    pumpDiscussion: async (n: number) => {
-      for (let i = 0; i < n; i += 1) {
-        const did = await pumpOnce();
-        if (!did) break;
+    /** Steps the room by hand. Tests use this instead of the automatic pump. */
+    takeOneTurn: () => queued(() => takeOneTurn()),
+    async runDiscussion(turns: number) {
+      for (let i = 0; i < turns; i += 1) {
+        const spoke = await queued(() => takeOneTurn());
+        if (!spoke) break;
       }
     },
     endMeeting,
+    reset,
+
+    // WebMCP-facing actions, shared verbatim with the human interface
     inspect,
     join,
     contribute,
     address,
     requestSynthesis,
-    getReadout: getReadoutTool,
-    guestEndMeeting() {
-      return {
-        ok: false as const,
-        message: "Only the human chair can end the meeting.",
-      };
-    },
-    reset,
-    exampleQuestion: EXAMPLE_QUESTION,
+    getReadout,
+    guestEndMeeting,
+
+    // demo copy
+    invitationPrompt: () => invitationPrompt(state.members.map((member) => member.name)),
+    decisionTitle: () => decisionLine(state.briefing),
   };
 }
 

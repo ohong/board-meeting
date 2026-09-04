@@ -8,5 +8,21 @@ export const EXAMPLE_DECISION = `Question: ${EXAMPLE_QUESTION}
 
 Briefing: ${EXAMPLE_BRIEFING}`;
 
-export const AGENT_INVITATION =
-  "You are invited to the active board meeting on this page. Use its Site tools to inspect the meeting, join using the name you know yourself by, share any relevant context you already have, ask Daniel Ek one focused question about whether that evidence changes his view, and request a synthesis of the discussion. After the human chair ends the meeting, retrieve the final readout.";
+/**
+ * The prompt the chair copies into their own agent. It names a seated adviser so the
+ * agent has somewhere concrete to direct its question, and it never dictates the guest's
+ * display name — the joining agent supplies the name it knows itself by.
+ */
+export function invitationPrompt(boardNames: string[]): string {
+  const target = boardNames[0] ?? "one board member";
+  return `You are invited to the board meeting running on this page. Use its Site tools to do the following, in order.
+
+1. Call inspect_board_meeting to read the decision briefing and the discussion so far.
+2. Call join_board_meeting with the name you know yourself by. You will take the guest seat.
+3. Call contribute_to_board_meeting with any context about me or my company that you already know and that this board is missing. Say why it is relevant.
+4. Call address_board_member to ask ${target} one focused question about whether that context changes their view.
+5. Call request_board_synthesis to get where the board currently stands.
+6. After the human chair ends the meeting, call get_board_meeting_readout and show me the final memo.
+
+You cannot end the meeting; only the human chair can.`;
+}

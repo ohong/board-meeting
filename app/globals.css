@@ -1,232 +1,394 @@
 @import "tailwindcss";
 
+/*
+ * Tokens from design/design-engineer-instructions.md. Two semantic modes, not themes:
+ * paper mode for selection, briefing and the readout; room mode for the live meeting.
+ * The minutes rail is paper inside the room, which is what ties the two together.
+ */
 :root {
-  --bg: oklch(17% 0.025 55);
-  --surface: oklch(21% 0.028 55);
-  --ink: oklch(93% 0.02 85);
-  --muted: oklch(72% 0.03 75);
-  --brass: oklch(78% 0.08 80);
-  --brass-dim: oklch(62% 0.06 75);
-  --walnut: oklch(30% 0.055 55);
-  --cream: #f5f2ea;
-  --live: oklch(74% 0.11 145);
-  --chrome: oklch(14% 0.02 55);
-  --dissent: oklch(46% 0.16 25);
-  --oxblood: oklch(42% 0.14 25);
-  --paper: #f5f2ea;
-  --paper-ink: oklch(22% 0.03 50);
-  --paper-muted: oklch(45% 0.03 55);
-  --rule: oklch(84% 0.02 75);
-  --radius: 2px;
+  /* Paper mode */
+  --paper-canvas: #f2eee6;
+  --paper-sheet: #fbf9f5;
+  --ink: #171714;
+  --ink-secondary: #68645c;
+  --rule: #d7d0c4;
+  --soft-fill: #e8e2d8;
+
+  /* Room mode */
+  --room-canvas: #10110f;
+  --room-surface: #171916;
+  --table-top: #302f26;
+  --table-edge: #090a08;
+  --room-ink: #f2eee6;
+  --room-secondary: #aaa79f;
+  --room-rule: #34362f;
+
+  /* Semantic accents. Board members never get individual colours. */
+  --human: #b84432;
+  --human-room: #e16e57;
+  --guest: #315edb;
+  --guest-room: #7c9cff;
+  --brass: #a88952;
+
+  --radius-sheet: 3px;
+  --radius-control: 8px;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
   --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-brass: var(--brass);
-  --color-walnut: var(--walnut);
-  --color-cream: var(--cream);
-  --color-live: var(--live);
-  --color-dissent: var(--dissent);
-  --color-paper: var(--paper);
-  --color-paper-ink: var(--paper-ink);
-  --font-sans: var(--font-instrument);
-  --font-serif: var(--font-playfair);
-  --font-ledger: var(--font-newsreader);
+  --color-paper: var(--paper-canvas);
+  --color-sheet: var(--paper-sheet);
+  --color-human: var(--human);
+  --color-guest: var(--guest);
+  --font-sans: var(--font-interface);
+  --font-serif: var(--font-editorial);
+  --font-mono: var(--font-operational);
 }
 
-* { box-sizing: border-box; }
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-html, body {
-  min-height: 100%;
-  background: var(--bg);
-  color: var(--ink);
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    background: var(--paper-canvas);
+    color: var(--ink);
+    font-family: var(--font-interface), ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .editorial {
+    font-family: var(--font-editorial), Newsreader, Georgia, serif;
+  }
+
+  .operational {
+    font-family: var(--font-operational), ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  textarea,
+  input {
+    font-family: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--human);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--soft-fill);
+  }
 }
 
-body {
-  font-family: var(--font-instrument), "Instrument Sans", sans-serif;
+@layer components {
+  /* ------------------------------------------------------------------ modes */
+
+  .room {
+    background: var(--room-canvas);
+    color: var(--room-ink);
+  }
+  /* One low-contrast neutral field implies the light over the table. */
+  .room-field {
+    background: radial-gradient(
+      58% 50% at 50% 46%,
+      oklch(32% 0.01 100 / 0.7),
+      transparent 74%
+    );
+  }
+  .room :focus-visible {
+    outline-color: var(--human-room);
+  }
+
+  .sheet {
+    background: var(--paper-sheet);
+    color: var(--ink);
+    border-radius: var(--radius-sheet);
+  }
+
+  /* ----------------------------------------------------------------- controls */
+
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper-sheet);
+    border-radius: var(--radius-control);
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 140ms ease, opacity 140ms ease;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--human);
+  }
+  .btn-primary:disabled {
+    opacity: 0.32;
+  }
+
+  .btn-secondary {
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    padding: 9px 16px;
+    font-size: 14px;
+    color: var(--ink);
+    background: transparent;
+    transition: background 140ms ease, border-color 140ms ease;
+  }
+  .btn-secondary:hover {
+    background: var(--soft-fill);
+  }
+
+  .room .btn-room {
+    border: 1px solid var(--room-rule);
+    border-radius: var(--radius-control);
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--room-secondary);
+    background: transparent;
+    transition: color 140ms ease, border-color 140ms ease;
+  }
+  .room .btn-room:hover {
+    color: var(--room-ink);
+    border-color: var(--room-secondary);
+  }
+  /* End meeting stays available without shouting; danger appears on intent. */
+  .room .btn-end:hover {
+    color: var(--human-room);
+    border-color: var(--human-room);
+  }
+
+  .field {
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 140ms ease;
+  }
+  .field:focus {
+    border-color: var(--ink-secondary);
+  }
+  .field::placeholder {
+    color: var(--ink-secondary);
+  }
+
+  /* ---------------------------------------------------------------- identity */
+
+  /*
+   * One portrait frame for everyone. No portraits exist for the roster, so the frame
+   * holds a typographic monogram; the treatment is identical for every adviser because
+   * the design forbids per-person colour.
+   */
+  .portrait {
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-editorial), Newsreader, Georgia, serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    background: var(--soft-fill);
+    color: var(--ink-secondary);
+    border: 1px solid var(--rule);
+    user-select: none;
+    flex: none;
+  }
+  .room .portrait {
+    background: #23241f;
+    color: var(--room-secondary);
+    border-color: var(--room-rule);
+    transition: color 200ms ease, background 200ms ease, border-color 200ms ease;
+  }
+
+  /* One crop and one tonal treatment, so mismatched source photography does not
+     fragment the room. The speaking seat gains luminance rather than colour. */
+  .portrait-photo {
+    object-fit: cover;
+    filter: grayscale(1) contrast(1.02) brightness(0.94) sepia(0.12);
+    transition: filter 200ms ease, border-color 200ms ease;
+  }
+  .room .portrait-photo {
+    filter: grayscale(1) contrast(0.95) brightness(0.72) sepia(0.12);
+  }
+  .room .seat[data-state="speaking"] .portrait-photo {
+    filter: grayscale(1) contrast(1.05) brightness(1) sepia(0.08);
+  }
+  .room .seat[data-state="thinking"] .portrait-photo {
+    filter: grayscale(1) contrast(0.9) brightness(0.6) sepia(0.12);
+  }
+
+  .portrait-xs { width: 30px; height: 30px; font-size: 11px; }
+  .portrait-sm { width: 36px; height: 36px; font-size: 13px; }
+  .portrait-md { width: 44px; height: 44px; font-size: 15px; }
+  .portrait-lg { width: 54px; height: 54px; font-size: 18px; }
+
+  .portrait-guest {
+    border-color: var(--guest);
+    color: var(--guest);
+  }
+  .room .portrait-guest {
+    border-color: var(--guest-room);
+    color: var(--guest-room);
+  }
+  .portrait-vacant {
+    border-style: dashed;
+    background: transparent;
+  }
+
+  /* --------------------------------------------------------------- the table */
+
+  .table-top {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--table-top), #1d1c17);
+    box-shadow:
+      0 40px 80px -20px rgba(0, 0, 0, 0.8),
+      0 2px 0 var(--table-edge);
+  }
+  /* One thin brass inlay. Material detail, never a status. */
+  .table-top::after {
+    content: "";
+    position: absolute;
+    inset: 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(168, 137, 82, 0.22);
+  }
+
+  .nameplate {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 2px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--room-ink);
+    background: #1e201b;
+    border: 1px solid var(--room-rule);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    /* Long names wrap onto a second line. Never abbreviate a person's name to fit. */
+    max-width: 138px;
+    text-wrap: balance;
+  }
+
+  .seat {
+    position: absolute;
+    width: 146px;
+    margin-left: -73px;
+    text-align: center;
+    transition: transform 220ms ease;
+  }
+
+  /* Speaking: the nameplate lifts, the portrait gains luminance. No halo. */
+  .seat[data-state="speaking"] .nameplate {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 12px -4px rgba(0, 0, 0, 0.7);
+    border-color: var(--human-room);
+  }
+  .room .seat[data-state="speaking"] .portrait {
+    background: #35362e;
+    color: var(--room-ink);
+    border-color: var(--room-secondary);
+  }
+  .seat[data-state="wants_to_respond"] {
+    transform: translateY(-3px);
+  }
+  .room .seat[data-state="reconnecting"] .portrait,
+  .room .seat[data-state="reconnecting"] .nameplate {
+    opacity: 0.55;
+  }
+  .room .seat[data-state="thinking"] .portrait {
+    opacity: 0.72;
+  }
+
+  /* A restrained sweep under a seat still forming its own position. */
+  .considering {
+    display: block;
+    width: 34px;
+    height: 1px;
+    margin: 6px auto 0;
+    background: var(--room-rule);
+    position: relative;
+    overflow: hidden;
+  }
+  .considering::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--room-secondary);
+    transform: translateX(-100%);
+    animation: considering-sweep 1.6s ease-in-out infinite;
+  }
+  @keyframes considering-sweep {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  .seat-guest-arrive {
+    animation: guest-arrive 820ms cubic-bezier(0.16, 0.84, 0.28, 1) both;
+  }
+  @keyframes guest-arrive {
+    from {
+      opacity: 0;
+      transform: translateX(26px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* -------------------------------------------------------------- the folio */
+
+  .agenda-folio {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--paper-sheet);
+    color: var(--ink);
+    border-radius: var(--radius-sheet);
+    box-shadow: 0 18px 32px -14px rgba(0, 0, 0, 0.75);
+    text-align: left;
+  }
+
+  /* -------------------------------------------------------------- the minutes */
+
+  .minutes-entry + .minutes-entry {
+    margin-top: 24px;
+  }
+
+  .accent-rule {
+    width: 2px;
+    border-radius: 1px;
+    flex: none;
+  }
 }
 
-h1, h2, .serif {
-  font-family: var(--font-playfair), "Playfair Display", Georgia, serif;
-}
-
-button { cursor: pointer; font-family: inherit; }
-
-.label {
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.masthead {
-  color: var(--brass);
-  font-size: 11px;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.letter-mark {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background:
-    radial-gradient(circle at 30% 25%, oklch(55% 0.07 70), oklch(28% 0.05 55) 62%, oklch(22% 0.04 50));
-  color: var(--cream);
-  font-family: var(--font-playfair), "Playfair Display", Georgia, serif;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px oklch(55% 0.04 70 / 0.55);
-}
-
-.letter-mark.sm { width: 40px; height: 40px; font-size: 12px; }
-.letter-mark.md { width: 52px; height: 52px; font-size: 15px; }
-.letter-mark.lg { width: 72px; height: 72px; font-size: 20px; }
-
-.letter-mark.dashed {
-  background: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 5px,
-    oklch(78% 0.08 80 / 0.12) 5px,
-    oklch(78% 0.08 80 / 0.12) 6px
-  );
-  border: 1px dashed oklch(78% 0.08 80 / 0.45);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px oklch(78% 0.08 80 / 0.35);
-  color: var(--brass);
-}
-
-.letter-mark.on-paper {
-  box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px oklch(55% 0.04 70 / 0.35);
-}
-
-.table-oval {
-  width: min(620px, 52vw);
-  height: 340px;
-  border-radius: 50%;
-  background:
-    radial-gradient(ellipse at 50% 30%, oklch(38% 0.06 60), var(--walnut) 55%, oklch(22% 0.04 50));
-  box-shadow:
-    inset 0 0 0 1px oklch(50% 0.06 70 / 0.45),
-    0 18px 40px oklch(10% 0.02 55 / 0.5);
-  position: relative;
-}
-
-.table-oval::after {
-  content: "";
-  position: absolute;
-  inset: 28px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px oklch(78% 0.08 80 / 0.18);
-}
-
-.table-oval.compact {
-  width: min(420px, 100%);
-  height: 240px;
-}
-
-.seat-speaking .letter-mark {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--brass);
-}
-
-.speaking-tag {
-  display: inline-block;
-  margin-top: 6px;
-  background: var(--brass);
-  color: oklch(18% 0.03 55);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 3px 8px;
-  border-radius: 2px;
-  font-weight: 600;
-}
-
-.paper-card {
-  background: var(--cream);
-  color: var(--paper-ink);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 28px oklch(10% 0.02 55 / 0.4);
-}
-
-.btn-brass {
-  background: var(--brass);
-  color: oklch(18% 0.03 55);
-  font-weight: 600;
-  border-radius: var(--radius);
-  border: 0;
-  padding: 12px 18px;
-}
-
-.btn-brass:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-ink {
-  background: var(--paper-ink);
-  color: var(--paper);
-  font-weight: 600;
-  border-radius: var(--radius);
-  border: 1px solid var(--paper-ink);
-  padding: 10px 16px;
-}
-
-.ledger-body {
-  background: var(--paper);
-  color: var(--paper-ink);
-  font-family: var(--font-newsreader), Newsreader, serif;
-}
-
-.minutes-panel {
-  background: oklch(15% 0.02 55);
-  border: 1px solid oklch(50% 0.04 70 / 0.22);
-  border-radius: var(--radius);
-}
-
-.hairline {
-  border-color: oklch(50% 0.04 70 / 0.28);
-}
-
-.roster-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid oklch(50% 0.04 70 / 0.18);
-  background: transparent;
-  color: inherit;
-  transition: background 0.12s ease;
-}
-
-.roster-row:hover {
-  background: oklch(24% 0.03 55);
-}
-
-.roster-row.seated {
-  background: oklch(24% 0.03 55);
-  box-shadow: inset 2px 0 0 var(--brass);
-}
-
-.empty-seat-ring {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 1px dashed oklch(78% 0.08 80 / 0.4);
-  background: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 4px,
-    oklch(78% 0.08 80 / 0.1) 4px,
-    oklch(78% 0.08 80 / 0.1) 5px
-  );
-  margin: 0 auto;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

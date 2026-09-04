@@ -8,6 +8,8 @@ five times in a row against a fresh session.
 - [ ] `OPENAI_API_KEY` set in the environment you are demoing (or accept the stand-in
       banner — the full flow works either way).
 - [ ] Browser window at roughly 1440×900. The room is designed for a laptop, not a phone.
+- [ ] The demo trio all have real portraits, so the table reads as people rather than
+      initials. Twenty-four of the thirty-six advisers still fall back to a monogram.
 - [ ] The page freshly loaded. A refresh is a new meeting; there is no state to clear.
 - [ ] Your agent (Codex or another WebMCP-capable assistant) open in a second window, on
       this page, already holding this private context — **do not paste it into the app**:

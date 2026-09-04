@@ -110,6 +110,18 @@ transcript. The guest cannot change the roster, edit prior messages, impersonate
 end the meeting. **Invite your agent** generates a copyable prompt that names a seated
 adviser and never dictates the guest's display name.
 
+## Portraits
+
+Twelve advisers, including the demo trio, have a bundled portrait in `public/guests/`,
+carried over from the `site/` prototype. They are normalised to one low-saturation
+treatment so mismatched source photography does not fragment the room, and the speaking
+seat gains luminance rather than colour. The other twenty-four fall back to a typographic
+monogram in the same frame.
+
+Those images have no explicit reuse licence — `site/DECISIONS.md` records the same caveat.
+They are fine for evaluating the concept; get permission or replace them before any public
+launch.
+
 ## Design
 
 The visual system follows `design/design-engineer-instructions.md`: paper mode for

@@ -45,6 +45,7 @@ export type MemberSeat = {
   role: string;
   house: string;
   initials: string;
+  portrait?: boolean;
   status: SeatStatus;
   spokenCount: number;
   /** The last reaction this member emitted, cleared once they speak again. */
@@ -486,6 +487,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
         role: member.role,
         house: member.house,
         initials: member.initials,
+        portrait: member.portrait,
         status: "thinking" as SeatStatus,
         spokenCount: 0,
       };

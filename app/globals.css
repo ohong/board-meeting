@@ -215,6 +215,23 @@
     transition: color 200ms ease, background 200ms ease, border-color 200ms ease;
   }
 
+  /* One crop and one tonal treatment, so mismatched source photography does not
+     fragment the room. The speaking seat gains luminance rather than colour. */
+  .portrait-photo {
+    object-fit: cover;
+    filter: grayscale(1) contrast(1.02) brightness(0.94) sepia(0.12);
+    transition: filter 200ms ease, border-color 200ms ease;
+  }
+  .room .portrait-photo {
+    filter: grayscale(1) contrast(0.95) brightness(0.72) sepia(0.12);
+  }
+  .room .seat[data-state="speaking"] .portrait-photo {
+    filter: grayscale(1) contrast(1.05) brightness(1) sepia(0.08);
+  }
+  .room .seat[data-state="thinking"] .portrait-photo {
+    filter: grayscale(1) contrast(0.9) brightness(0.6) sepia(0.12);
+  }
+
   .portrait-xs { width: 30px; height: 30px; font-size: 11px; }
   .portrait-sm { width: 36px; height: 36px; font-size: 13px; }
   .portrait-md { width: 44px; height: 44px; font-size: 15px; }

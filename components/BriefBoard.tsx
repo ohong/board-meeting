@@ -33,7 +33,7 @@ export function BriefBoard({ session, state }: { session: MeetingSession; state:
                   key={slug}
                   className="flex items-center gap-3 border-b border-[var(--rule)] py-3"
                 >
-                  <Portrait initials={member.initials} size="sm" label={member.name} />
+                  <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="sm" label={member.name} />
                   <span className="min-w-0">
                     <span className="block truncate text-[14px] font-medium leading-tight">
                       {member.name}

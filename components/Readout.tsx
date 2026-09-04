@@ -29,7 +29,7 @@ export function Readout({ state }: { state: MeetingState }) {
           <ul className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             {state.members.map((member) => (
               <li key={member.slug} className="flex items-center gap-2">
-                <Portrait initials={member.initials} size="xs" label={member.name} />
+                <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="xs" label={member.name} />
                 <span className="text-[13px]">{member.name}</span>
               </li>
             ))}
@@ -168,7 +168,7 @@ export function Readout({ state }: { state: MeetingState }) {
                   {comment.comment}
                 </blockquote>
                 <figcaption className="mt-3 flex items-center gap-2">
-                  <Portrait initials={member?.initials ?? ""} size="xs" label={comment.name} />
+                  <Portrait initials={member?.initials ?? ""} slug={member?.portrait ? member.slug : undefined} size="xs" label={comment.name} />
                   <span className="text-[13px] font-medium">{comment.name}</span>
                 </figcaption>
               </figure>

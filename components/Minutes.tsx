@@ -15,7 +15,7 @@ export function Minutes({
   members,
 }: {
   transcript: TranscriptEvent[];
-  members: { slug: string; name: string; initials: string }[];
+  members: { slug: string; name: string; initials: string; portrait?: boolean }[];
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
@@ -89,6 +89,7 @@ export function Minutes({
               {accent ? <span className="accent-rule" style={{ background: accent }} /> : null}
               <Portrait
                 initials={initials}
+                slug={member?.portrait ? member.slug : undefined}
                 size="xs"
                 variant={isGuest ? "guest" : "member"}
                 label={event.speakerName}

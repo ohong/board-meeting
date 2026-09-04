@@ -32,6 +32,8 @@ export type CatalogMember = {
   /** Short organisation name, engraved on the nameplate at the table. */
   house: string;
   initials: string;
+  /** True when public/guests/<slug>.webp exists; otherwise the monogram stands in. */
+  portrait?: boolean;
   /** Surfaced first in the roster so the demo trio is easy to find without a hidden list. */
   featured?: boolean;
 };

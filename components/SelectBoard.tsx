@@ -87,7 +87,7 @@ export function SelectBoard({ session, state }: { session: MeetingSession; state
                     background: selected ? "var(--soft-fill)" : "transparent",
                   }}
                 >
-                  <Portrait initials={member.initials} size="md" />
+                  <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="md" label={member.name} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-medium leading-tight">
                       {member.name}
@@ -144,7 +144,7 @@ function BoardPreview({ session, state }: { session: MeetingSession; state: Meet
             }
             return (
               <li key={member.slug} className="flex items-center gap-3 py-1">
-                <Portrait initials={member.initials} size="sm" label={member.name} />
+                <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="sm" label={member.name} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-medium leading-tight">
                     {member.name}

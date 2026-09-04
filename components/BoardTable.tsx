@@ -102,7 +102,7 @@ export function BoardTable({
             title={`${member.name} — ${member.role}`}
           >
             <div className="mx-auto w-fit">
-              <Portrait initials={member.initials} size="lg" />
+              <Portrait initials={member.initials} slug={member.portrait ? member.slug : undefined} size="lg" label={member.name} />
             </div>
             <div className="mt-2.5">
               <span className="nameplate">{member.name}</span>

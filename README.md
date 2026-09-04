@@ -30,7 +30,7 @@ Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 ### Checks
 
 ```bash
-bun run test        # 59 deterministic tests, no API calls
+bun run test        # 60 deterministic tests, no API calls
 bun run typecheck
 bun run lint
 bun run build
@@ -49,14 +49,21 @@ Every adviser is authored as an eve subagent:
 ```
 agent/
 ├── instructions.md               # what this agent root is for
-├── lib/boardroom-conduct.md      # the shared meeting protocol
+├── PROVENANCE.md                 # what the packages are grounded in, and what is missing
+├── lib/
+│   ├── boardroom-conduct.md      # the shared meeting protocol
+│   └── models.ts                 # the shared model configuration
 └── subagents/
     ├── daniel-ek/
     │   ├── agent.ts              # model + the description used to pick a seat
-    │   └── instructions.md       # worldview, decision heuristics, blind spots, voice
+    │   └── instructions.md       # worldview, heuristics, blind spots, voice, where they defer
     ├── … 35 more advisers …
     └── secretary/                # synthesis and the readout; never holds a seat
 ```
+
+Packages follow the contract in `.claude/skills/init-board-member/`. They have **not** been
+through that skill's deep-research pass — `agent/PROVENANCE.md` says exactly what that means
+and what running it would add.
 
 `scripts/build-personas.mjs` compiles those packages into `lib/personas.generated.ts`, which
 is committed so the persona text ships with the deployment instead of being read off disk at

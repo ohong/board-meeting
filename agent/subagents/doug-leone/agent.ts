@@ -1,8 +1,10 @@
 import { defineAgent } from "eve";
 
+import { BOARD_MODEL } from "../../lib/models";
+
 export default defineAgent({
   description:
     "Doug Leone, partner at Sequoia Capital. Founder judgement, talent density, intellectual honesty, brutal directness.",
-  model: "openai/gpt-5.6-luna",
+  model: BOARD_MODEL,
   reasoning: "low",
 });

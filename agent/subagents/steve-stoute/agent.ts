@@ -1,8 +1,10 @@
 import { defineAgent } from "eve";
 
+import { BOARD_MODEL } from "../../lib/models";
+
 export default defineAgent({
   description:
     "Steve Stoute, founder of Translation and UnitedMasters. Culture as strategy, authenticity, ownership, never looking cheap.",
-  model: "openai/gpt-5.6-luna",
+  model: BOARD_MODEL,
   reasoning: "low",
 });

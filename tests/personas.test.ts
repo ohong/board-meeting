@@ -25,6 +25,12 @@ describe("eve agent packages", () => {
       expect(persona.instructions, member.slug).toMatch(/How you decide/i);
       expect(persona.instructions, member.slug).toMatch(/Where you are weak/i);
       expect(persona.instructions, member.slug).toMatch(/In disagreement/i);
+      // The init-board-member contract: voice samples, and where they lead or defer.
+      expect(persona.instructions, member.slug).toMatch(/How you sound/i);
+      expect(persona.instructions, member.slug).toMatch(/Lead, caution, defer/i);
+      expect(persona.instructions, member.slug).toMatch(/prompt-version/i);
+      // Sample lines are characterisations. Nothing in a package may pose as a quotation.
+      expect(persona.instructions, member.slug).toContain("Characteristic phrasing, not quotations");
       expect(instructions.has(persona.instructions), `${member.slug} is a duplicate`).toBe(false);
       instructions.add(persona.instructions);
     }
@@ -36,6 +42,12 @@ describe("eve agent packages", () => {
     expect(prompt).toContain(BOARDROOM_CONDUCT);
     expect(prompt).not.toContain("37signals");
     expect(memberSystemPrompt("david-heinemeier-hansson")).not.toContain("Spotify in 2006");
+  });
+
+  it("declares one shared model rather than hardcoding an id per adviser", () => {
+    const boardModels = new Set(CATALOG.map((member) => PERSONA_PACKAGES[member.slug].model));
+    expect(boardModels.size, "the whole board should move together").toBe(1);
+    expect(PERSONA_PACKAGES.secretary.model).not.toBe([...boardModels][0]);
   });
 
   it("keeps the secretary off the table", () => {

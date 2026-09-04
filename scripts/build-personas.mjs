@@ -17,7 +17,8 @@ const subagentsDir = join(root, "agent", "subagents");
 const OUT = join(root, "lib", "personas.generated.ts");
 
 const DESCRIPTION_RE = /description:\s*\n?\s*"((?:[^"\\]|\\.)*)"/;
-const MODEL_RE = /model:\s*"([^"]+)"/;
+const MODEL_RE = /model:\s*([A-Z_]+|"[^"]+")/;
+const MODEL_CONSTANT_RE = /export const ([A-Z_]+) = "([^"]+)"/g;
 
 function read(path) {
   return readFileSync(path, "utf8");
@@ -26,6 +27,12 @@ function read(path) {
 export function buildRegistry() {
   const conduct = read(join(root, "agent", "lib", "boardroom-conduct.md")).trim();
 
+  // Models are declared once in agent/lib/models.ts; each subagent names one of them.
+  const modelSource = read(join(root, "agent", "lib", "models.ts"));
+  const models = new Map(
+    [...modelSource.matchAll(MODEL_CONSTANT_RE)].map(([, name, value]) => [name, value]),
+  );
+
   const slugs = readdirSync(subagentsDir)
     .filter((name) => statSync(join(subagentsDir, name)).isDirectory())
     .sort();
@@ -33,9 +40,11 @@ export function buildRegistry() {
   const packages = slugs.map((slug) => {
     const agentSource = read(join(subagentsDir, slug, "agent.ts"));
     const description = DESCRIPTION_RE.exec(agentSource)?.[1];
-    const model = MODEL_RE.exec(agentSource)?.[1];
+    const modelRef = MODEL_RE.exec(agentSource)?.[1];
     if (!description) throw new Error(`${slug}/agent.ts is missing a description`);
-    if (!model) throw new Error(`${slug}/agent.ts is missing a model`);
+    if (!modelRef) throw new Error(`${slug}/agent.ts is missing a model`);
+    const model = modelRef.startsWith('"') ? modelRef.slice(1, -1) : models.get(modelRef);
+    if (!model) throw new Error(`${slug}/agent.ts names an unknown model ${modelRef}`);
     const instructions = read(join(subagentsDir, slug, "instructions.md")).trim();
     if (instructions.length < 200 && slug !== "secretary") {
       throw new Error(`${slug}/instructions.md is too thin to be a persona package`);

@@ -13,6 +13,10 @@ eve agent rather than one model performing a whole table.
   the final executive readout, and never holds a seat or impersonates a member.
 - `agent/lib/boardroom-conduct.md` — the shared meeting protocol composed into every board
   member's prompt alongside their own package.
+- `agent/lib/models.ts` — the project's model configuration. Subagents name a constant from
+  here rather than hardcoding an id, so the whole roster moves together.
+- `agent/PROVENANCE.md` — what these packages are actually grounded in, and what running the
+  `init-board-member` research pass would add. Read it before trusting a specific claim.
 
 ## Invariants
 

@@ -1,8 +1,10 @@
 import { defineAgent } from "eve";
 
+import { BOARD_MODEL } from "../../lib/models";
+
 export default defineAgent({
   description:
     "Scott Wu, co-founder and CEO of Cognition. Software that does the work, talent density, capability curves.",
-  model: "openai/gpt-5.6-luna",
+  model: BOARD_MODEL,
   reasoning: "low",
 });

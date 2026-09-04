@@ -36,7 +36,7 @@ Daniel Ek and David Heinemeier Hansson use CC BY 2.0 images. Lulu Cheng Meservey
 **Status:** accepted
 **Decision maker:** Codex, independently within the approved MVP implementation
 
-The browser integration declares exactly six tools in one manifest and registers them through the documented top-level `document.modelContext` API. Every schema rejects unknown fields, every handler repeats validation at runtime, and all calls use the same in-memory meeting session as the human interface. Tool outcomes add metadata-only receipts to the public transcript and an accessible live status without echoing private arguments.
+The browser integration declares exactly six tools in one manifest and registers them through the documented top-level `document.modelContext` API. Every schema rejects unknown fields, every handler repeats validation at runtime, and all stateful calls use the same in-memory meeting session as the human interface. Tool outcomes flow through a bridge-local callback to an accessible live status without echoing private arguments or polluting the meeting record. The inspect and final-readout tools remain side-effect free with respect to session state.
 
 We considered registering each tool inline inside the React effect. That is shorter at the call site, but makes exact inventory, schemas, handlers, and cleanup behavior harder to test independently. The manifest-and-adapter split adds one abstraction while making the six-tool contract directly assertable and keeping Strict Mode abort handling at the browser boundary.
 

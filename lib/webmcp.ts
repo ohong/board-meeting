@@ -11,6 +11,12 @@ export const BOARD_TOOL_NAMES = [
 
 export type BoardToolName = (typeof BOARD_TOOL_NAMES)[number];
 export type BoardToolResult = Record<string, unknown>;
+export type BoardToolReceipt = Readonly<{
+  toolName: BoardToolName;
+  outcome: "succeeded" | "rejected";
+  message: string;
+}>;
+export type BoardToolReceiptHandler = (receipt: BoardToolReceipt) => void;
 
 export type BoardTool = {
   name: BoardToolName;
@@ -83,32 +89,32 @@ function parseNoArguments(args: unknown): { ok: true } | { ok: false; message: s
     : { ok: true };
 }
 
-function receipt(
-  session: MeetingSession,
+function reportReceipt(
+  onReceipt: BoardToolReceiptHandler | undefined,
   toolName: BoardToolName,
   ok: boolean,
   message: string,
 ) {
-  session.recordToolReceipt(toolName, ok, message);
+  onReceipt?.({ toolName, outcome: ok ? "succeeded" : "rejected", message });
 }
 
 function invalidResult(
-  session: MeetingSession,
+  onReceipt: BoardToolReceiptHandler | undefined,
   toolName: BoardToolName,
   message: string,
 ): BoardToolResult {
-  receipt(session, toolName, false, message);
+  reportReceipt(onReceipt, toolName, false, message);
   return { ok: false, message };
 }
 
 function actionResult(
-  session: MeetingSession,
+  onReceipt: BoardToolReceiptHandler | undefined,
   toolName: BoardToolName,
   result: { ok: boolean; message?: string },
   successMessage: string,
 ): BoardToolResult {
   const message = result.ok ? successMessage : (result.message ?? "The action was rejected.");
-  receipt(session, toolName, result.ok, message);
+  reportReceipt(onReceipt, toolName, result.ok, message);
   return { ...result, message: result.message ?? message };
 }
 
@@ -118,7 +124,10 @@ const NO_ARGUMENTS_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
+export function createBoardToolManifest(
+  session: MeetingSession,
+  onReceipt?: BoardToolReceiptHandler,
+): BoardTool[] {
   return [
     {
       name: "inspect_board_meeting",
@@ -127,9 +136,9 @@ export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
       annotations: { readOnlyHint: true },
       execute: (args) => {
         const parsed = parseNoArguments(args);
-        if (!parsed.ok) return invalidResult(session, "inspect_board_meeting", parsed.message);
+        if (!parsed.ok) return invalidResult(onReceipt, "inspect_board_meeting", parsed.message);
         const meeting = session.inspect();
-        receipt(session, "inspect_board_meeting", true, "Meeting state inspected.");
+        reportReceipt(onReceipt, "inspect_board_meeting", true, "Meeting state inspected.");
         return { ok: true, meeting };
       },
     },
@@ -154,9 +163,9 @@ export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
         const parsed = parseStrings(args, [
           { name: "name", label: "name", maxLength: 80 },
         ]);
-        if (!parsed.ok) return invalidResult(session, "join_board_meeting", parsed.message);
+        if (!parsed.ok) return invalidResult(onReceipt, "join_board_meeting", parsed.message);
         return actionResult(
-          session,
+          onReceipt,
           "join_board_meeting",
           session.join(parsed.values.name),
           "Join request accepted.",
@@ -178,10 +187,10 @@ export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
           { name: "text", label: "text", maxLength: 4000 },
         ]);
         if (!parsed.ok) {
-          return invalidResult(session, "contribute_to_board_meeting", parsed.message);
+          return invalidResult(onReceipt, "contribute_to_board_meeting", parsed.message);
         }
         return actionResult(
-          session,
+          onReceipt,
           "contribute_to_board_meeting",
           await session.contribute(parsed.values.text),
           "Contribution added to the meeting.",
@@ -206,9 +215,9 @@ export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
           { name: "member", label: "member", maxLength: 120 },
           { name: "text", label: "text", maxLength: 2000 },
         ]);
-        if (!parsed.ok) return invalidResult(session, "address_board_member", parsed.message);
+        if (!parsed.ok) return invalidResult(onReceipt, "address_board_member", parsed.message);
         return actionResult(
-          session,
+          onReceipt,
           "address_board_member",
           await session.address(parsed.values.member, parsed.values.text),
           "The addressed adviser answered.",
@@ -222,9 +231,11 @@ export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
       annotations: { readOnlyHint: false },
       execute: async (args) => {
         const parsed = parseNoArguments(args);
-        if (!parsed.ok) return invalidResult(session, "request_board_synthesis", parsed.message);
+        if (!parsed.ok) {
+          return invalidResult(onReceipt, "request_board_synthesis", parsed.message);
+        }
         return actionResult(
-          session,
+          onReceipt,
           "request_board_synthesis",
           await session.requestSynthesis(),
           "Interim synthesis delivered.",
@@ -238,10 +249,12 @@ export function createBoardToolManifest(session: MeetingSession): BoardTool[] {
       annotations: { readOnlyHint: true },
       execute: (args) => {
         const parsed = parseNoArguments(args);
-        if (!parsed.ok) return invalidResult(session, "get_board_meeting_readout", parsed.message);
+        if (!parsed.ok) {
+          return invalidResult(onReceipt, "get_board_meeting_readout", parsed.message);
+        }
         const result = session.getReadout();
-        receipt(
-          session,
+        reportReceipt(
+          onReceipt,
           "get_board_meeting_readout",
           result.ready,
           result.ready ? "Final readout retrieved." : result.message,
@@ -261,14 +274,21 @@ export function isAbortError(error: unknown): boolean {
   );
 }
 
+export type RegisterBoardToolsOptions = {
+  signal?: AbortSignal;
+  modelContext?: ModelContext;
+  onReceipt?: BoardToolReceiptHandler;
+};
+
 export async function registerBoardTools(
   session: MeetingSession,
-  signal?: AbortSignal,
-  modelContext = getModelContext(),
+  options: RegisterBoardToolsOptions = {},
 ) {
+  const { signal, onReceipt } = options;
+  const modelContext = options.modelContext ?? getModelContext();
   if (!modelContext?.registerTool || signal?.aborted) return false;
 
-  for (const tool of createBoardToolManifest(session)) {
+  for (const tool of createBoardToolManifest(session, onReceipt)) {
     if (signal?.aborted) return false;
     try {
       await modelContext.registerTool(tool, signal ? { signal } : undefined);

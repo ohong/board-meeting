@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { WebMcpBridge } from "../components/WebMcp";
+import { WebMcpReceiptView } from "../components/WebMcp";
 import { createMockRuntime } from "../lib/runtime/mock";
 import { createMeetingSession, type MeetingSession } from "../lib/session";
 import {
@@ -11,6 +11,7 @@ import {
   registerBoardTools,
   type BoardTool,
   type BoardToolName,
+  type BoardToolReceipt,
   type ModelContext,
 } from "../lib/webmcp";
 
@@ -39,10 +40,8 @@ function tool(manifest: BoardTool[], name: BoardToolName) {
   return found;
 }
 
-function receipts(session: MeetingSession) {
-  return session
-    .getState()
-    .transcript.filter((event) => event.kind === "system" && event.speakerId === "webmcp");
+function receiptText(receipt: BoardToolReceipt) {
+  return `Site tool ${receipt.toolName} ${receipt.outcome}: ${receipt.message}`;
 }
 
 describe("board WebMCP manifest", () => {
@@ -81,17 +80,20 @@ describe("board WebMCP manifest", () => {
     });
   });
 
-  it("uses the shared session for every successful interaction and records metadata-only receipts", async () => {
+  it("uses the shared session for stateful actions and reports metadata-only receipts", async () => {
     const session = await started();
-    const manifest = createBoardToolManifest(session);
+    const received: BoardToolReceipt[] = [];
+    const manifest = createBoardToolManifest(session, (receipt) => received.push(receipt));
     const contribution = "Seven of ten enterprise wins began in shared free workspaces.";
     const question = "Does that evidence change your recommendation?";
 
+    const beforeInspect = session.getState();
     const inspected = await tool(manifest, "inspect_board_meeting").execute({});
     expect(inspected).toMatchObject({
       ok: true,
       meeting: { meetingPhase: "discussion", readoutReady: false },
     });
+    expect(session.getState()).toEqual(beforeInspect);
 
     expect(await tool(manifest, "join_board_meeting").execute({ name: " Codex " })).toMatchObject({
       ok: true,
@@ -121,14 +123,16 @@ describe("board WebMCP manifest", () => {
     ).toHaveLength(1);
 
     expect((await session.endMeeting()).ok).toBe(true);
+    const beforeReadout = session.getState();
     const readoutResult = await tool(manifest, "get_board_meeting_readout").execute({});
     expect(readoutResult).toMatchObject({
       ok: true,
       ready: true,
       readout: session.getState().readout!,
     });
+    expect(session.getState()).toEqual(beforeReadout);
 
-    expect(receipts(session).map(({ text }) => text)).toEqual([
+    expect(received.map(receiptText)).toEqual([
       "Site tool inspect_board_meeting succeeded: Meeting state inspected.",
       "Site tool join_board_meeting succeeded: Join request accepted.",
       "Site tool contribute_to_board_meeting succeeded: Contribution added to the meeting.",
@@ -136,16 +140,16 @@ describe("board WebMCP manifest", () => {
       "Site tool request_board_synthesis succeeded: Interim synthesis delivered.",
       "Site tool get_board_meeting_readout succeeded: Final readout retrieved.",
     ]);
-    expect(receipts(session).map(({ text }) => text).join("\n")).not.toContain(contribution);
-    expect(receipts(session).map(({ text }) => text).join("\n")).not.toContain(question);
-    expect(receipts(session).map(({ text }) => text).join("\n")).not.toContain(
-      session.getState().readout!.recommendation,
-    );
+    expect(JSON.stringify(received)).not.toContain(contribution);
+    expect(JSON.stringify(received)).not.toContain(question);
+    expect(JSON.stringify(received)).not.toContain(session.getState().readout!.recommendation);
+    expect(session.getState().transcript.some((event) => event.speakerId === "webmcp")).toBe(false);
   });
 
   it("rejects gated and invalid calls clearly while leaving a receipt for each", async () => {
     const session = createMeetingSession({ runtime: createMockRuntime(), autoContinue: false });
-    const manifest = createBoardToolManifest(session);
+    const received: BoardToolReceipt[] = [];
+    const manifest = createBoardToolManifest(session, (receipt) => received.push(receipt));
 
     expect(await tool(manifest, "inspect_board_meeting").execute({ extra: true })).toMatchObject({
       ok: false,
@@ -173,8 +177,8 @@ describe("board WebMCP manifest", () => {
       ready: false,
     });
 
-    expect(receipts(session)).toHaveLength(6);
-    expect(receipts(session).every(({ text }) => /rejected/.test(text))).toBe(true);
+    expect(received).toHaveLength(6);
+    expect(received.every(({ outcome }) => outcome === "rejected")).toBe(true);
     expect(session.guestEndMeeting()).toEqual({
       ok: false,
       message: "Only the human chair can end the meeting.",
@@ -183,7 +187,8 @@ describe("board WebMCP manifest", () => {
 
   it("enforces one guest and does not expose roster or end-meeting authority", async () => {
     const session = await started();
-    const manifest = createBoardToolManifest(session);
+    const received: BoardToolReceipt[] = [];
+    const manifest = createBoardToolManifest(session, (receipt) => received.push(receipt));
 
     expect(await tool(manifest, "join_board_meeting").execute({ name: "Codex" })).toMatchObject({
       ok: true,
@@ -196,12 +201,16 @@ describe("board WebMCP manifest", () => {
     expect(manifest.some(({ name }) => /end|roster|member/.test(name) && name !== "address_board_member"))
       .toBe(false);
     expect(session.getState().guest.name).toBe("Codex");
-    expect(receipts(session).at(-1)?.text).toMatch(/join_board_meeting rejected/);
+    expect(received.at(-1)).toMatchObject({
+      toolName: "join_board_meeting",
+      outcome: "rejected",
+    });
   });
 
   it("validates every field at runtime even when browser schema validation is bypassed", async () => {
     const session = await started();
-    const manifest = createBoardToolManifest(session);
+    const received: BoardToolReceipt[] = [];
+    const manifest = createBoardToolManifest(session, (receipt) => received.push(receipt));
 
     const cases: Array<[BoardToolName, unknown, string]> = [
       ["join_board_meeting", { name: 42 }, "name must be a non-empty string."],
@@ -215,14 +224,17 @@ describe("board WebMCP manifest", () => {
     for (const [name, args, message] of cases) {
       expect(await tool(manifest, name).execute(args)).toEqual({ ok: false, message });
     }
-    expect(receipts(session)).toHaveLength(cases.length);
+    expect(received).toHaveLength(cases.length);
   });
 
   it("renders the latest receipt as a visible live status", () => {
-    const session = createMeetingSession();
-    session.recordToolReceipt("inspect_board_meeting", true, "Meeting state inspected.");
+    const receipt: BoardToolReceipt = {
+      toolName: "inspect_board_meeting",
+      outcome: "succeeded",
+      message: "Meeting state inspected.",
+    };
 
-    const html = renderToStaticMarkup(createElement(WebMcpBridge, { session }));
+    const html = renderToStaticMarkup(createElement(WebMcpReceiptView, { receipt }));
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("Site tool inspect_board_meeting succeeded: Meeting state inspected.");
@@ -238,14 +250,28 @@ describe("board WebMCP registration", () => {
 
   it("registers exactly the manifest on the imperative model context", async () => {
     const registered: BoardTool[] = [];
+    const received: BoardToolReceipt[] = [];
     const modelContext: ModelContext = {
       registerTool(candidate) {
         registered.push(candidate);
       },
     };
 
-    expect(await registerBoardTools(createMeetingSession(), undefined, modelContext)).toBe(true);
+    expect(
+      await registerBoardTools(createMeetingSession(), {
+        modelContext,
+        onReceipt: (receipt) => received.push(receipt),
+      }),
+    ).toBe(true);
     expect(registered.map(({ name }) => name)).toEqual(BOARD_TOOL_NAMES);
+    await tool(registered, "inspect_board_meeting").execute({});
+    expect(received).toEqual([
+      {
+        toolName: "inspect_board_meeting",
+        outcome: "succeeded",
+        message: "Meeting state inspected.",
+      },
+    ]);
   });
 
   it("is StrictMode-safe: aborted setup is removed before the replacement registers", async () => {
@@ -264,14 +290,22 @@ describe("board WebMCP registration", () => {
     };
     const session = createMeetingSession();
     const first = new AbortController();
-    const firstSetup = registerBoardTools(session, first.signal, modelContext);
+    const firstSetup = registerBoardTools(session, {
+      signal: first.signal,
+      modelContext,
+    });
 
     first.abort();
     expect(await firstSetup).toBe(false);
     expect(active.size).toBe(0);
 
     const replacement = new AbortController();
-    expect(await registerBoardTools(session, replacement.signal, modelContext)).toBe(true);
+    expect(
+      await registerBoardTools(session, {
+        signal: replacement.signal,
+        modelContext,
+      }),
+    ).toBe(true);
     expect([...active.keys()]).toEqual(BOARD_TOOL_NAMES);
     replacement.abort();
     expect(active.size).toBe(0);
@@ -290,7 +324,10 @@ describe("board WebMCP registration", () => {
       },
     };
     const controller = new AbortController();
-    const setup = registerBoardTools(createMeetingSession(), controller.signal, modelContext);
+    const setup = registerBoardTools(createMeetingSession(), {
+      signal: controller.signal,
+      modelContext,
+    });
 
     controller.abort();
     await expect(setup).resolves.toBe(false);

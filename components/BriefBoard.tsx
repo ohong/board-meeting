@@ -1,7 +1,11 @@
 "use client";
 
 import { getMember } from "@/lib/catalog";
-import type { MeetingSession, MeetingState } from "@/lib/session";
+import {
+  MAX_BRIEFING_CHARACTERS,
+  type MeetingSession,
+  type MeetingState,
+} from "@/lib/session";
 import { BoardPreview } from "./BoardPreview";
 import { MeetingProgress } from "./MeetingProgress";
 
@@ -84,6 +88,8 @@ export function BriefBoard({
             <textarea
               id="board-briefing"
               value={state.briefing}
+              maxLength={MAX_BRIEFING_CHARACTERS}
+              aria-describedby="briefing-status"
               onChange={(event) => session.setBriefing(event.target.value)}
               placeholder="Describe the decision, what has led you here, and what the board should challenge."
               rows={14}
@@ -91,7 +97,9 @@ export function BriefBoard({
           </label>
 
           <div className="decision-actions">
-            <p>
+            <p id="briefing-status">
+              {state.briefing.length.toLocaleString()} /{" "}
+              {MAX_BRIEFING_CHARACTERS.toLocaleString()} characters · {" "}
               {!runtimeReady
                 ? "Checking whether live responses are available."
                 : state.briefing.trim()

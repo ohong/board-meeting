@@ -89,6 +89,13 @@ type SynthesisActionResult = ActionResult & {
   meetingPhase?: MeetingPhase;
 };
 
+export const MAX_BRIEFING_CHARACTERS = 6_000;
+export const MAX_CHAIR_MESSAGE_CHARACTERS = 2_000;
+export const MAX_MODEL_CONTEXT_ENTRIES = 32;
+export const MAX_MODEL_CONTEXT_CHARACTERS = 24_000;
+export const OMITTED_MODEL_CONTEXT_TEXT =
+  "Earlier transcript entries were omitted from this turn's context.";
+
 const MAX_AUTOMATIC_TURNS = 12;
 const DEFAULT_RUNTIME_DEADLINE_MS = 30_000;
 
@@ -118,6 +125,49 @@ function boundedEvidence(text: string, maxCharacters = 240): string {
   const prefix = normalized.slice(0, maxCharacters - 1);
   const boundary = prefix.lastIndexOf(" ");
   return `${prefix.slice(0, boundary > maxCharacters / 2 ? boundary : undefined)}…`;
+}
+
+/** Bound repeated model calls without mutating the complete meeting record. */
+export function compactTranscriptForModel(transcript: TranscriptEvent[]): TranscriptEvent[] {
+  const totalCharacters = transcript.reduce((sum, event) => sum + event.text.length, 0);
+  if (
+    transcript.length <= MAX_MODEL_CONTEXT_ENTRIES &&
+    totalCharacters <= MAX_MODEL_CONTEXT_CHARACTERS
+  ) {
+    return transcript.map((event) => ({ ...event }));
+  }
+
+  const selected: TranscriptEvent[] = [];
+  let charactersLeft = MAX_MODEL_CONTEXT_CHARACTERS - OMITTED_MODEL_CONTEXT_TEXT.length;
+
+  for (
+    let index = transcript.length - 1;
+    index >= 0 && selected.length < MAX_MODEL_CONTEXT_ENTRIES - 1 && charactersLeft > 0;
+    index -= 1
+  ) {
+    const event = transcript[index];
+    const text =
+      event.text.length > charactersLeft
+        ? charactersLeft === 1
+          ? "…"
+          : `${event.text.slice(0, charactersLeft - 1).trimEnd()}…`
+        : event.text;
+    selected.push({ ...event, text });
+    charactersLeft -= text.length;
+  }
+
+  selected.reverse();
+  return [
+    {
+      id: "model-context-omission",
+      kind: "system",
+      speakerId: "system",
+      speakerName: "Secretary",
+      text: OMITTED_MODEL_CONTEXT_TEXT,
+      createdAt: selected[0]?.createdAt ?? transcript.at(-1)?.createdAt ?? 0,
+    },
+    ...selected,
+  ];
 }
 
 function readoutFallback(
@@ -372,7 +422,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       memberName: member.name,
       briefing: state.briefing,
       phase: state.meetingPhase,
-      transcript: state.transcript.map((event) => ({ ...event })),
+      transcript: compactTranscriptForModel(state.transcript),
       privatePosition: state.positions[slug],
       ownPriorStatements: own,
       boardNames: state.members.map((m) => m.name),
@@ -687,6 +737,12 @@ export function createMeetingSession(options: SessionOptions = {}) {
   async function sendUserMessageCore(token: number, text: string): Promise<ActionResult> {
     const trimmed = text.trim();
     if (!trimmed) return { ok: false, message: "Nothing to contribute." };
+    if (trimmed.length > MAX_CHAIR_MESSAGE_CHARACTERS) {
+      return {
+        ok: false,
+        message: `Keep chair messages to ${MAX_CHAIR_MESSAGE_CHARACTERS.toLocaleString()} characters.`,
+      };
+    }
     if (state.phase !== "meeting" || ended) return { ok: false, message: "No active meeting." };
     addEvent({
       kind: "message",
@@ -855,7 +911,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
               capability: "synthesis",
               briefing: state.briefing,
               phase: state.meetingPhase,
-              transcript: state.transcript.map((event) => ({ ...event })),
+              transcript: compactTranscriptForModel(state.transcript),
               ownPriorStatements: [],
               boardNames: state.members.map((m) => m.name),
             },
@@ -1051,7 +1107,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       return { ok: true as const };
     },
     setBriefing(text: string) {
-      state.briefing = text;
+      state.briefing = text.slice(0, MAX_BRIEFING_CHARACTERS);
       emit();
     },
     useExampleDecision() {

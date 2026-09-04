@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { EXAMPLE_DECISION } from "../lib/example";
 import { createMockRuntime } from "../lib/runtime/mock";
-import { createMeetingSession, type MeetingSession } from "../lib/session";
-import type { BoardRuntime, RuntimeTurnInput } from "../lib/types";
+import {
+  compactTranscriptForModel,
+  createMeetingSession,
+  MAX_BRIEFING_CHARACTERS,
+  MAX_CHAIR_MESSAGE_CHARACTERS,
+  MAX_MODEL_CONTEXT_CHARACTERS,
+  MAX_MODEL_CONTEXT_ENTRIES,
+  OMITTED_MODEL_CONTEXT_TEXT,
+  type MeetingSession,
+} from "../lib/session";
+import type { BoardRuntime, RuntimeTurnInput, TranscriptEvent } from "../lib/types";
 
 function selectDemo(session: MeetingSession) {
   session.toggleMember("daniel-ek");
@@ -54,6 +63,79 @@ function derivedRuntime(overrides: Partial<BoardRuntime> = {}): BoardRuntime {
 }
 
 describe("meeting session serialization and recovery", () => {
+  it("caps chair-authored inputs at the session boundary", async () => {
+    const session = createMeetingSession({ runtime: derivedRuntime(), autoContinue: false });
+    selectDemo(session);
+    session.setBriefing("b".repeat(MAX_BRIEFING_CHARACTERS + 1));
+    expect(session.getState().briefing).toHaveLength(MAX_BRIEFING_CHARACTERS);
+    expect((await session.startMeeting()).ok).toBe(true);
+
+    await expect(
+      session.sendUserMessage("m".repeat(MAX_CHAIR_MESSAGE_CHARACTERS + 1)),
+    ).resolves.toMatchObject({ ok: false });
+    expect(session.getState().transcript.some((event) => event.speakerId === "chair")).toBe(false);
+  });
+
+  it("compacts only the model-facing transcript with an explicit omission marker", () => {
+    const transcript: TranscriptEvent[] = Array.from({ length: 60 }, (_, index) => ({
+      id: `event-${index}`,
+      kind: "message",
+      speakerId: `member-${index}`,
+      speakerName: `Member ${index}`,
+      text: `${index}: ${"x".repeat(2_500)}`,
+      createdAt: index,
+    }));
+
+    const compact = compactTranscriptForModel(transcript);
+
+    expect(compact.length).toBeLessThanOrEqual(MAX_MODEL_CONTEXT_ENTRIES);
+    expect(compact.reduce((sum, event) => sum + event.text.length, 0)).toBeLessThanOrEqual(
+      MAX_MODEL_CONTEXT_CHARACTERS,
+    );
+    expect(compact[0]).toMatchObject({
+      kind: "system",
+      speakerId: "system",
+      text: OMITTED_MODEL_CONTEXT_TEXT,
+    });
+    expect(compact.at(-1)?.speakerName).toBe("Member 59");
+    expect(transcript).toHaveLength(60);
+    expect(transcript[0]?.text).toHaveLength(2_503);
+  });
+
+  it("bounds turn and interim synthesis context but gives the readout the complete record", async () => {
+    let lastTurnTranscript: TranscriptEvent[] = [];
+    let synthesisTranscript: TranscriptEvent[] = [];
+    let readoutTranscript: TranscriptEvent[] = [];
+    const runtime = derivedRuntime({
+      async publicTurn(input) {
+        lastTurnTranscript = input.transcript;
+        return { text: `${input.memberName} considered the full discussion.` };
+      },
+      async synthesis(input) {
+        synthesisTranscript = input.transcript;
+        return "Interim synthesis.";
+      },
+      async readout(input) {
+        readoutTranscript = input.transcript;
+        return createMockRuntime().readout(input);
+      },
+    });
+    const session = await started(runtime, { joinDelayMs: 0 });
+    await session.pumpDiscussion(40);
+    expect(session.join("Codex").ok).toBe(true);
+    await waitUntil(() => session.getState().guest.status === "joined", "guest did not join");
+    expect((await session.requestSynthesis()).ok).toBe(true);
+    expect((await session.endMeeting()).ok).toBe(true);
+
+    expect(lastTurnTranscript.length).toBeLessThanOrEqual(MAX_MODEL_CONTEXT_ENTRIES);
+    expect(lastTurnTranscript[0]?.text).toBe(OMITTED_MODEL_CONTEXT_TEXT);
+    expect(synthesisTranscript.length).toBeLessThanOrEqual(MAX_MODEL_CONTEXT_ENTRIES);
+    expect(synthesisTranscript[0]?.text).toBe(OMITTED_MODEL_CONTEXT_TEXT);
+    expect(readoutTranscript).toEqual(session.getState().transcript);
+    expect(readoutTranscript[0]?.text).toMatch(/independent views are forming/i);
+    expect(readoutTranscript.length).toBeGreaterThan(MAX_MODEL_CONTEXT_ENTRIES);
+  });
+
   it("bounds hung opening attempts without serializing the board", async () => {
     let active = 0;
     let maxActive = 0;

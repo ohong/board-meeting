@@ -9,7 +9,12 @@ import {
   useState,
 } from "react";
 import { AGENT_INVITATION } from "@/lib/example";
-import type { MeetingSession, MeetingState, MemberSeat } from "@/lib/session";
+import {
+  MAX_CHAIR_MESSAGE_CHARACTERS,
+  type MeetingSession,
+  type MeetingState,
+  type MemberSeat,
+} from "@/lib/session";
 import type { TranscriptEvent } from "@/lib/types";
 import { Portrait } from "./Portrait";
 import styles from "./BoardMeeting.module.css";
@@ -688,11 +693,13 @@ export function BoardMeeting({
                 id="chair-message"
                 value={draft}
                 rows={2}
+                maxLength={MAX_CHAIR_MESSAGE_CHARACTERS}
                 disabled={composerDisabled}
                 placeholder="Add context or call on someone with @"
                 role="combobox"
                 aria-autocomplete="list"
                 aria-expanded={mentionsOpen}
+                aria-describedby="chair-message-help"
                 aria-controls={mentionsOpen ? "board-mention-list" : undefined}
                 aria-activedescendant={
                   mentionsOpen ? `mention-${mentionOptions[mentionIndex]?.slug}` : undefined
@@ -712,7 +719,9 @@ export function BoardMeeting({
                 {sendPending ? "Sending…" : "Send"}
               </button>
             </div>
-            <p className={styles.composerHelp}>
+            <p id="chair-message-help" className={styles.composerHelp}>
+              {draft.length.toLocaleString()} /{" "}
+              {MAX_CHAIR_MESSAGE_CHARACTERS.toLocaleString()} characters · {" "}
               {meetingClosing
                 ? "Closing comments are being collected."
                 : publicTurnBusy

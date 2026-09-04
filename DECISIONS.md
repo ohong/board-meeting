@@ -225,6 +225,15 @@ We considered serializing all model calls. Serialization avoids shared-connectio
 **Status:** accepted
 **Decision maker:** Codex, independently after repeated live-output verification
 
-Private opening positions and the executive readout remain provider-validated structured values. Public turns, direct answers, closing comments, and interim syntheses are generated as plain speech and wrapped into application schemas at the workflow boundary. Public speech is deterministically constrained to 90 words even when a model ignores the requested limit. The secretary receives the complete transcript for the final readout; adviser turns receive the most recent 24 public events with transport-only ids and timestamps removed.
+Private opening positions and the executive readout remain provider-validated structured values. Public turns, direct answers, closing comments, and interim syntheses are generated as plain speech and wrapped into application schemas at the workflow boundary. Public speech is deterministically constrained to 90 words even when a model ignores the requested limit. The secretary receives the complete transcript for the final readout; repeated adviser and interim-synthesis calls receive the bounded transcript projection documented below.
 
 We considered forcing every capability through provider structured output. That gives a uniform implementation but introduced avoidable structured-output failures for values that are semantically just text. We also considered sending every agent the entire raw transcript. That is faithful but makes routine turns slower and carries irrelevant event metadata. The chosen split keeps data-bearing artifacts strict, speech natural, routine context bounded, and the final record complete.
+
+## 2026-09-04 — Bound repeated context without shortening the meeting record
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved runtime-guardrails scope
+
+Decision briefs stop at 6,000 characters and chair messages at 2,000 characters in both the session contract and visible inputs. Repeated adviser turns and interim synthesis receive at most the latest 32 transcript entries and 24,000 transcript characters; when older material is excluded, a secretary marker makes that omission explicit. The complete transcript remains available to the minutes UI, inspector, fallbacks, and final readout generation.
+
+We considered trimming the session transcript itself, which would enforce one simple global ceiling but silently discard meeting evidence and weaken the final memo. We also considered sending the full record to every model call, which preserves fidelity but lets latency and context cost grow without bound. A model-only projection preserves one authoritative meeting record while bounding the calls that repeat throughout discussion.

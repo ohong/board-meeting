@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatReadout } from "@/lib/format";
-import { Portrait } from "./LetterMark";
+import { Portrait, initialsFor } from "./LetterMark";
 import type { MeetingState } from "@/lib/session";
 
 /**
@@ -35,7 +35,7 @@ export function Readout({ state }: { state: MeetingState }) {
             ))}
             {state.guest.name ? (
               <li className="flex items-center gap-2">
-                <Portrait initials="" size="xs" variant="guest" label={state.guest.name} />
+                <Portrait initials={initialsFor(state.guest.name)} size="xs" variant="guest" label={state.guest.name} />
                 <span className="text-[13px] text-[var(--guest)]">{state.guest.name}</span>
               </li>
             ) : null}
@@ -88,12 +88,9 @@ export function Readout({ state }: { state: MeetingState }) {
 
       {readout.options.length ? (
         <Block title="Options considered">
-          <ul className="border-t border-[var(--rule)]">
+          <ul className="divide-y divide-[var(--rule)] border-t border-[var(--rule)]">
             {readout.options.map((option, index) => (
-              <li
-                key={`option-${index}`}
-                className="border-b border-[var(--rule)] py-3.5 text-[15px] leading-[1.5]"
-              >
+              <li key={`option-${index}`} className="py-3.5 text-[15px] leading-[1.5]">
                 {option}
               </li>
             ))}
@@ -103,12 +100,9 @@ export function Readout({ state }: { state: MeetingState }) {
 
       {readout.tradeoffs.length ? (
         <Block title="Key tradeoffs">
-          <ul className="border-t border-[var(--rule)]">
+          <ul className="divide-y divide-[var(--rule)] border-t border-[var(--rule)]">
             {readout.tradeoffs.map((item, index) => (
-              <li
-                key={`tradeoff-${index}`}
-                className="border-b border-[var(--rule)] py-3.5 text-[15px] leading-[1.5]"
-              >
+              <li key={`tradeoff-${index}`} className="py-3.5 text-[15px] leading-[1.5]">
                 {item}
               </li>
             ))}
@@ -216,12 +210,9 @@ function Column({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="col-span-12 md:col-span-6">
       <h2 className="editorial mb-4 text-[26px] leading-[1.12]">{title}</h2>
-      <ul className="border-t border-[var(--rule)]">
+      <ul className="divide-y divide-[var(--rule)] border-t border-[var(--rule)]">
         {items.map((item, index) => (
-          <li
-            key={`${title}-${index}`}
-            className="border-b border-[var(--rule)] py-3 text-[15px] leading-[1.5]"
-          >
+          <li key={`${title}-${index}`} className="py-3 text-[15px] leading-[1.5]">
             {item}
           </li>
         ))}

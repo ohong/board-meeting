@@ -2,6 +2,8 @@
 
 import { useMemo, type RefObject } from "react";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
+import { Portrait } from "@/components/ui/portrait";
+import { SendIcon } from "@/components/ui/icons";
 import type { MessageEntry } from "@/lib/meeting/types";
 
 export function Composer({
@@ -51,31 +53,37 @@ export function Composer({
     session.setChairComposing(value.trim().length > 0);
   }
 
+  const canSend = live && draft.trim().length > 0;
+
   return (
-    <div className="border-t border-room-3 bg-room px-4 py-3">
+    <div className="border-t border-line bg-surface px-3 pt-2.5 pb-3">
       {pendingQuestion ? (
-        <p className="mb-2 animate-rise-in rounded-[3px] border border-brass/35 bg-brass/8 px-2.5 py-1.5 text-[11.5px] leading-snug text-brass">
-          <span className="font-semibold tracking-[0.06em] uppercase">Question for you</span>{" "}
-          <span className="text-ink/85">&mdash; {pendingQuestion.speakerName} is waiting on an answer.</span>
+        <p className="mb-2 animate-rise-in rounded-lg border border-accent-line bg-accent-soft px-3 py-1.5 text-[12px] leading-snug text-accent-deep">
+          <span className="font-semibold">Question for you.</span>{" "}
+          <span className="text-ink-2">{pendingQuestion.speakerName} is waiting on an answer.</span>
         </p>
       ) : null}
 
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <span className="text-[10px] tracking-[0.1em] text-faint uppercase">Call on</span>
+        <span className="shrink-0 pr-1 text-[11px] font-semibold tracking-[0.08em] text-faint uppercase">Call on</span>
         {members.map((m) => (
           <button
             key={m.id}
             type="button"
             disabled={!live}
             onClick={() => onInsertMention(m.persona.mention)}
-            className="rounded-full border border-room-3 px-2 py-[3px] text-[11px] text-muted transition-colors duration-150 hover:border-brass hover:text-brass disabled:opacity-40"
+            className="pill h-7 shrink-0 gap-1.5 pr-2.5 pl-1 text-[11.5px] font-medium transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-accent-deep disabled:opacity-40"
           >
-            @{m.persona.mention}
+            <Portrait src={m.persona.portrait} alt="" size={18} />@{m.persona.mention}
           </button>
         ))}
       </div>
 
-      <div className="flex items-end gap-2">
+      <div
+        className={`flex items-end gap-2 rounded-2xl border bg-surface-2 p-1.5 pl-3.5 transition-colors focus-within:border-line-strong focus-within:bg-surface ${
+          live ? "border-line" : "border-line opacity-60"
+        }`}
+      >
         <textarea
           ref={textareaRef}
           value={draft}
@@ -89,20 +97,21 @@ export function Composer({
               send();
             }
           }}
-          placeholder="Add context, answer a question, or call on someone with @Name"
-          className="board-scrollbar max-h-[132px] min-h-[54px] flex-1 resize-none rounded-[3px] border border-room-3 bg-room-2 px-3 py-2 text-[13.5px] leading-snug text-ink outline-none placeholder:text-faint focus:border-brass-dim disabled:opacity-50"
+          placeholder="Ask the board, add context, or call on someone with @Name"
+          className="board-scrollbar max-h-[132px] min-h-[44px] flex-1 resize-none bg-transparent py-2 text-[13.5px] leading-snug text-ink outline-none placeholder:text-faint"
           aria-label="Message the board"
         />
         <button
           type="button"
           onClick={send}
-          disabled={!live || draft.trim().length === 0}
-          className="h-[54px] shrink-0 rounded-[3px] bg-brass px-4 text-[13px] font-semibold text-walnut-deep transition-opacity duration-150 disabled:cursor-not-allowed disabled:opacity-35"
+          disabled={!canSend}
+          aria-label="Send"
+          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-faint"
         >
-          Send
+          <SendIcon size={16} />
         </button>
       </div>
-      <p className="mt-1.5 text-[10.5px] text-faint">Enter sends &middot; Shift + Enter adds a line</p>
+      <p className="mt-1.5 px-1 text-[11px] text-faint">Enter to send &middot; Shift + Enter for a new line</p>
     </div>
   );
 }

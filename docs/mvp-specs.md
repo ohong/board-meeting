@@ -111,7 +111,7 @@ Codex should decide that this information is relevant and contribute it after jo
 | **0:25–0:40** | All three seats visibly enter a private “thinking” state, then become ready as independent positions complete in parallel. |
 | **0:40–1:15** | The board begins a concise, lively discussion. Members challenge the premise and one another. The user asks **@Lulu** how to explain a free-tier change without losing user trust, and Lulu answers directly. |
 | **1:15–1:45** | Click **Invite your agent** and copy the generated invitation prompt into Codex. Codex inspects the meeting, joins under its own name, visibly takes the guest seat, contributes its private context, asks **Daniel Ek** whether the enterprise-referral evidence changes his view of the free tier, and requests a current synthesis. Daniel responds. |
-| **1:45–2:00** | The human clicks **End Meeting**. The executive readout appears. Codex calls the readout tool and retrieves the final memo. |
+| **1:45–2:00** | The human clicks **End meeting**. The Executive Memo (executive readout) appears. Codex calls the readout tool and retrieves the final memo. |
 
 ### 3.5 Demo performance targets
 
@@ -640,7 +640,7 @@ The exact visual arrangement is flexible, but every section must be easy to scan
 
 - Replace or clearly transition from the live meeting into the readout state.
 - Preserve compact access to the participant roster and original question.
-- Provide a simple **Copy readout** action.
+- Provide a simple **Copy memo** action (labelled "Copy memo" in the UI) plus a download of the same text.
 - Do not add PDF export, saved history, sharing, or editing.
 - The WebMCP final-readout tool reads from this same generated result.
 

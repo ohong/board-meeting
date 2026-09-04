@@ -22,7 +22,7 @@ export function Portrait({
 }) {
   return (
     <span
-      className={`relative block shrink-0 overflow-hidden rounded-full bg-walnut-deep ${className}`}
+      className={`relative block shrink-0 overflow-hidden rounded-full bg-surface-3 ${className}`}
       style={{ width: size, height: size }}
     >
       <Image

@@ -3,10 +3,10 @@
 import { useMemo } from "react";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
 import type { MessageEntry } from "@/lib/meeting/types";
-import { GuestSeat } from "./guest-seat";
-import { MemberSeat } from "./member-seat";
+import { ChairIcon } from "@/components/ui/icons";
+import { Equalizer, MemberSeat } from "./member-seat";
 import {
-  GUEST_ANGLE,
+  CHAIR_ANGLE,
   RING_RX,
   RING_RY,
   SCENE_H,
@@ -46,27 +46,28 @@ export function TableScene({ onMention }: { onMention: (mention: string) => void
       : null;
   }, [state.streamingEntryId, state.transcript]);
 
-  const speakerIndex = streaming ? members.findIndex((m) => m.id === streaming.speakerId) : -1;
+  const speaker = streaming ? members.find((m) => m.id === streaming.speakerId) : undefined;
+  const speakerIndex = speaker ? members.indexOf(speaker) : -1;
   const cardPoint = speechCardPoint(speakerIndex >= 0 ? angles[speakerIndex] : 0);
-  const guestPoint = pointAt(GUEST_ANGLE);
+  const chairPoint = pointAt(CHAIR_ANGLE);
 
   return (
     <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
       <div
-        className="relative shrink-0 origin-center max-[1380px]:scale-90 max-[1180px]:scale-[0.78]"
+        className="relative shrink-0 origin-center max-[1440px]:scale-[0.92] max-[1280px]:scale-[0.82] max-[1120px]:scale-[0.72]"
         style={{ width: SCENE_W, height: SCENE_H }}
       >
-        {/* Walnut table */}
+        {/* The table */}
         <div
           aria-hidden
-          className="absolute rounded-[50%] bg-walnut shadow-[inset_0_0_0_1px_oklch(50%_0.06_70/0.45),0_22px_50px_oklch(10%_0.02_55/0.55)]"
+          className="absolute rounded-[50%] bg-table shadow-[inset_0_0_0_1px_var(--color-table-edge),inset_0_2px_0_0_oklch(100%_0_0/0.6),0_30px_60px_-30px_oklch(30%_0.04_60/0.35)]"
           style={{
             width: TABLE_RX * 2,
             height: TABLE_RY * 2,
             ...seatStyle(0, 0),
           }}
         >
-          <div className="absolute inset-6 rounded-[50%] shadow-[inset_0_0_0_1px_oklch(78%_0.08_80/0.18)]" />
+          <div className="absolute inset-[18px] rounded-[50%] shadow-[inset_0_0_0_1px_var(--color-table-edge)]" />
         </div>
 
         {/* Board member seats */}
@@ -83,33 +84,33 @@ export function TableScene({ onMention }: { onMention: (mention: string) => void
           );
         })}
 
-        {/* Reserved guest seat */}
-        <div className="absolute z-10" style={seatStyle(guestPoint.x, guestPoint.y)}>
-          <GuestSeat guest={state.guest} />
-        </div>
-
-        {/* Live speech card on the table surface, pulled in from the speaker's seat. */}
+        {/* Live speech card on the table surface, leaning toward the speaker's seat. */}
         <div className="pointer-events-none absolute z-20" style={seatStyle(cardPoint.x, cardPoint.y)}>
-          {streaming ? <SpeechCard key={streaming.id} entry={streaming} /> : null}
+          {streaming ? (
+            <SpeechCard key={streaming.id} entry={streaming} portrait={speaker?.persona.portrait ?? null} />
+          ) : null}
         </div>
 
         {/* The chair */}
-        <div
-          className="absolute z-10 text-center"
-          style={{ left: "50%", bottom: 0, transform: "translateX(-50%)" }}
-        >
-          <span
-            aria-hidden
-            className="mx-auto block h-1.5 w-24 rounded-full bg-brass/35 shadow-[0_0_18px_-2px_var(--color-brass)]"
-          />
-          <span className="mt-2 block text-[12px] tracking-[0.12em] text-muted uppercase">
-            You &middot; Chair
-          </span>
-          {state.chairComposing ? (
-            <span className="mt-1 block animate-pulse-soft text-[10px] tracking-[0.1em] text-brass uppercase">
-              Typing
+        <div className="absolute z-10 w-[150px] text-center" style={seatStyle(chairPoint.x, chairPoint.y - 6)}>
+          <span className="relative mx-auto block w-fit">
+            <span className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-surface p-[3px] shadow-[0_0_0_1px_var(--color-line),0_6px_18px_-8px_oklch(30%_0.04_60/0.35)]">
+              <span className="flex h-full w-full items-center justify-center rounded-full bg-accent-soft text-accent-deep">
+                <ChairIcon size={26} />
+              </span>
             </span>
-          ) : null}
+            <span aria-hidden className="absolute right-[3px] bottom-[3px] h-3 w-3 rounded-full bg-live ring-2 ring-surface" />
+          </span>
+          <span className="mt-2 block text-[13px] leading-tight font-semibold text-ink">You</span>
+          <span className="mt-0.5 block text-[11.5px] text-muted">Board Chair</span>
+          <span className="mt-1.5 flex h-[22px] items-center justify-center">
+            {state.chairComposing ? (
+              <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-2.5 text-[11px] font-semibold text-accent-deep">
+                <Equalizer />
+                Typing
+              </span>
+            ) : null}
+          </span>
         </div>
       </div>
     </div>

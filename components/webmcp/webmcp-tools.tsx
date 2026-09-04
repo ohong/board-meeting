@@ -171,6 +171,7 @@ const VISIBLE_EVENTS = new Set([
   "positions-ready",
   "meeting-ending",
   "meeting-ended",
+  "notice",
 ]);
 
 function agentTranscript(state: MeetingState): AgentTranscriptLine[] {

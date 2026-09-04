@@ -1,111 +1,128 @@
 "use client";
 
 import { useMeetingState, useSession } from "@/lib/meeting/context";
+import { MIN_BOARD_SIZE } from "@/lib/meeting/types";
+import { MAX_BRIEFING_CHARACTERS } from "@/lib/meeting/session";
+import { Button } from "@/components/ui/button";
+import { ArrowLeftIcon, ArrowRightIcon, CloseIcon } from "@/components/ui/icons";
 import { Portrait } from "@/components/ui/portrait";
+import { Eyebrow, Notice, PageShell } from "@/components/ui/shell";
 
 export function BriefScreen() {
   const session = useSession();
   const state = useMeetingState();
   const ready = session.canStart();
+  const chars = state.briefing.trim().length;
 
   return (
-    <div className="flex min-h-screen flex-col bg-paper text-paper-ink">
-      <div className="mx-auto flex w-full max-w-[900px] flex-1 flex-col px-10 py-10">
-        <p className="text-[11px] tracking-[0.28em] text-paper-muted uppercase">Brief your board</p>
-        <h1 className="mt-3 font-display text-[40px] leading-[1.05] font-semibold tracking-[-0.02em]">
-          What decision are you trying to make?
-        </h1>
-        <p className="mt-3 max-w-[620px] text-[14px] leading-relaxed text-paper-muted">
-          One decision, plus whatever background, constraints, and numbers matter. Links stay as plain text.
-        </p>
-
-        <label className="mt-7 block">
-          <span className="sr-only">Decision briefing</span>
-          <textarea
-            value={state.briefing}
-            onChange={(e) => session.setBriefing(e.target.value)}
-            rows={12}
-            autoFocus
-            placeholder="Should we eliminate our free tier? Here is the situation…"
-            className="w-full resize-y rounded-sm border border-rule bg-paper-2 p-4 font-display text-[17px] leading-relaxed text-paper-ink outline-none placeholder:text-paper-muted focus:border-paper-ink"
-          />
-        </label>
-
-        <div className="mt-3 flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => session.useExampleBriefing()}
-            className="rounded-sm border border-rule px-3 py-1.5 text-[12px] font-medium text-paper-muted transition-colors duration-150 hover:border-paper-ink hover:text-paper-ink"
-          >
-            Use example decision
-          </button>
-          <span className="text-[12px] text-paper-muted tabular-nums">
-            {state.briefing.trim().length} characters
-          </span>
+    <PageShell step={1} width={980}>
+      <section className="card overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-7 pt-6 pb-5">
+          <div>
+            <h2 className="font-display text-[26px] leading-tight font-semibold tracking-[-0.01em]">Brief the Board</h2>
+            <p className="mt-1 text-[13.5px] text-muted">
+              One decision, plus the background, constraints, and numbers that matter.
+            </p>
+          </div>
+          <span className="pill mt-1 text-muted">Step 1 of 3</span>
         </div>
 
-        <div className="mt-10 border-t border-rule pt-6">
-          <h2 className="text-[11px] tracking-[0.18em] text-paper-muted uppercase">
-            The table &middot; {state.board.length} seated
-          </h2>
-          <ul className="mt-4 flex flex-wrap gap-2">
-            {state.board.map((persona) => (
-              <li key={persona.slug}>
-                <button
-                  type="button"
-                  onClick={() => session.toggleMember(persona)}
-                  title={`Remove ${persona.name} from the board`}
-                  className="group flex items-center gap-2.5 rounded-full border border-rule bg-paper-2 py-1.5 pr-3.5 pl-1.5 text-left transition-colors duration-150 hover:border-dissent"
+        <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="px-7 pt-5 pb-6">
+            <div className="flex items-baseline justify-between gap-3">
+              <Eyebrow>The decision</Eyebrow>
+              <button
+                type="button"
+                onClick={() => session.useExampleBriefing()}
+                className="text-[12.5px] font-semibold text-accent-deep hover:underline"
+              >
+                Use example decision
+              </button>
+            </div>
+            <label className="mt-3 block">
+              <span className="sr-only">Decision briefing</span>
+              <textarea
+                value={state.briefing}
+                onChange={(e) => session.setBriefing(e.target.value)}
+                maxLength={MAX_BRIEFING_CHARACTERS}
+                rows={13}
+                autoFocus
+                placeholder="Should we eliminate our free tier? Here is the situation…"
+                className="board-scrollbar w-full resize-y rounded-2xl border border-line bg-surface-2 px-4 py-3.5 font-display text-[17px] leading-[1.55] text-ink outline-none transition-colors placeholder:text-faint focus:border-line-strong focus:bg-surface"
+              />
+            </label>
+            <p className="mt-2 text-right text-[12px] text-faint tabular-nums">
+              {chars.toLocaleString()} / {MAX_BRIEFING_CHARACTERS.toLocaleString()} characters
+            </p>
+
+            {state.notice ? (
+              <div className="mt-3">
+                <Notice text={state.notice.text} />
+              </div>
+            ) : null}
+          </div>
+
+          <aside className="border-t border-line bg-surface-2/50 px-6 pt-5 pb-6 md:border-t-0 md:border-l">
+            <div className="flex items-baseline justify-between">
+              <Eyebrow>Your board</Eyebrow>
+              <span className="text-[12px] text-muted tabular-nums">{state.board.length} seated</span>
+            </div>
+            <ul className="mt-3 flex flex-col gap-2">
+              {state.board.map((persona, i) => (
+                <li
+                  key={persona.slug}
+                  className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2.5"
                 >
-                  <Portrait src={persona.portrait} alt={persona.name} size={32} grayscale />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold text-paper-ink">{persona.name}</span>
-                    <span className="block max-w-[220px] truncate text-[11px] text-paper-muted group-hover:text-dissent">
-                      <span className="group-hover:hidden">{persona.company}</span>
-                      <span className="hidden group-hover:inline">Remove from board</span>
+                  <Portrait src={persona.portrait} alt="" size={36} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] leading-tight font-semibold text-ink">
+                      {persona.name}
                     </span>
+                    <span className="block truncate text-[11.5px] text-muted">{persona.company}</span>
                   </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[12px] text-paper-muted">Click a member to take them off the board.</p>
+                  <span className="sr-only">Seat {i + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => session.toggleMember(persona)}
+                    aria-label={`Remove ${persona.name} from the board`}
+                    title="Remove from board"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-faint transition-colors hover:bg-dissent-soft hover:text-dissent"
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => session.backToSelection()}
+              className="mt-3 w-full rounded-xl border border-dashed border-line-strong px-3 py-2.5 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-accent hover:text-accent-deep"
+            >
+              Change the board
+            </button>
+          </aside>
         </div>
 
-        {state.notice ? (
-          <p
-            role="status"
-            className="mt-4 animate-rise-in rounded-sm border border-dissent/40 bg-dissent/8 px-3 py-2 text-[13px] text-dissent"
-          >
-            {state.notice.text}
-          </p>
-        ) : null}
-
-        <div className="mt-10 flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => session.backToSelection()}
-            className="rounded-sm border border-rule px-4 py-3 text-[14px] font-medium text-paper-muted transition-colors duration-150 hover:border-paper-ink hover:text-paper-ink"
-          >
+        <div className="flex items-center justify-between gap-4 border-t border-line bg-surface px-7 py-4">
+          <Button variant="ghost" onClick={() => session.backToSelection()}>
+            <ArrowLeftIcon size={16} />
             Back
-          </button>
-          <button
-            type="button"
-            disabled={!ready}
-            onClick={() => session.startMeeting()}
-            className="rounded-sm bg-paper-ink px-5 py-3 text-[14px] font-semibold text-paper transition-opacity duration-150 disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            Start Board Meeting
-          </button>
-          {!ready ? (
-            <span className="text-[12px] text-paper-muted">
-              {state.board.length < 3
-                ? "Seat at least three advisers first."
-                : "Write the decision you want them to argue about."}
-            </span>
-          ) : null}
+          </Button>
+          <div className="flex items-center gap-4">
+            {!ready ? (
+              <span className="hidden text-[12.5px] text-muted sm:inline">
+                {state.board.length < MIN_BOARD_SIZE
+                  ? `Seat at least ${MIN_BOARD_SIZE} advisers first.`
+                  : "Write the decision you want them to argue about."}
+              </span>
+            ) : null}
+            <Button variant="primary" size="lg" disabled={!ready} onClick={() => session.startMeeting()}>
+              Start Board Meeting
+              <ArrowRightIcon size={16} />
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </PageShell>
   );
 }

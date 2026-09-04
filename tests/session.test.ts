@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_TRIO, FIXTURE_PERSONAS } from "@/lib/meeting/fixtures";
-import { MeetingSession } from "@/lib/meeting/session";
+import {
+  MAX_BRIEFING_CHARACTERS,
+  MAX_CHAIR_MESSAGE_CHARACTERS,
+  MeetingSession,
+} from "@/lib/meeting/session";
 
 function activeSession(count = 3) {
   const session = new MeetingSession();
@@ -8,6 +12,20 @@ function activeSession(count = 3) {
   session.setBriefing("A consequential decision with enough context.");
   session.startMeeting();
   return session;
+}
+
+function markEveryMemberSpoken(session: MeetingSession) {
+  session.engineSetPhase("discussion");
+  for (const member of session.members()) {
+    const entry = session.engineBeginMessage(member.id, {
+      addressedTo: "board",
+      addressedName: null,
+      intent: "statement",
+      interruption: false,
+    });
+    session.engineSetText(entry.id, `${member.persona.shortName} contributed.`);
+    session.engineEndMessage(entry.id);
+  }
 }
 
 describe("MeetingSession contracts", () => {
@@ -31,6 +49,8 @@ describe("MeetingSession contracts", () => {
     const session = new MeetingSession();
     expect(session.endMeeting()).toMatchObject({ ok: false, error: { code: "NOT_ALLOWED" } });
     const active = activeSession();
+    expect(active.endMeeting()).toMatchObject({ ok: false, error: { code: "NOT_ALLOWED" } });
+    markEveryMemberSpoken(active);
     expect(active.endMeeting()).toEqual({ ok: true });
     expect(active.getState().phase).toBe("closing");
   });
@@ -48,6 +68,18 @@ describe("MeetingSession contracts", () => {
     expect(session.getReadout()).toMatchObject({ ok: false, error: { code: "NOT_READY" } });
     session.joinGuest("Codex");
     expect(session.guestAddress("Nobody", "Question?")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+
+  it("keeps client input within the server request limits", () => {
+    const session = new MeetingSession();
+    session.setBriefing("b".repeat(MAX_BRIEFING_CHARACTERS + 50));
+    expect(session.getState().briefing).toHaveLength(MAX_BRIEFING_CHARACTERS);
+
+    const active = activeSession();
+    expect(active.sendChairMessage("m".repeat(MAX_CHAIR_MESSAGE_CHARACTERS + 1))).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT" },
+    });
   });
 });
 
@@ -75,6 +107,7 @@ describe("review fixes", () => {
     expect(s.joinGuest("Codex").ok).toBe(true);
     const r = s.requestSynthesis("guest");
     expect(r.ok).toBe(true);
+    markEveryMemberSpoken(s);
     s.endMeeting();
     const entry = s.getState().transcript.find((e) => e.kind === "synthesis");
     expect(entry && entry.kind === "synthesis" && !entry.streaming && entry.failed).toBe(true);

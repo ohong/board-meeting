@@ -11,6 +11,8 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
+import { Button } from "@/components/ui/button";
+import { CheckIcon, CloseIcon, CopyIcon } from "@/components/ui/icons";
 
 type SupportState = "unknown" | "supported" | "unsupported";
 
@@ -106,31 +108,30 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="Invite your agent"
-      className="w-[27rem] max-w-[92vw] overflow-hidden rounded-xl border border-[#8a6a3b]/70 bg-[#1c1309] text-[#e9dcc4] shadow-2xl shadow-black/60"
+      className="card w-[30rem] max-w-[92vw] animate-rise-in overflow-hidden text-ink shadow-[var(--shadow-float)]"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-[#8a6a3b]/40 bg-[#241809] px-4 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
         <div>
-          <h2 className="text-[15px] font-semibold tracking-wide text-[#f0e3c8]">Invite your agent</h2>
-          <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-[#c9a227]">
-            One guest seat · joins through this page
-          </p>
+          <h2 className="font-display text-[19px] leading-tight font-semibold">Invite your agent</h2>
+          <p className="mt-1 text-[12px] text-muted">One guest seat &middot; joins through this page&apos;s site tools</p>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close invite panel"
-          className="-mr-1 rounded-md px-2 py-1 text-lg leading-none text-[#c9b491] transition hover:bg-[#3a2a15] hover:text-[#f0e3c8]"
+          className="-mr-1 flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
         >
-          ×
+          <CloseIcon size={16} />
         </button>
       </div>
 
-      <div className="space-y-3 px-4 py-3.5">
-        <p className="text-[12.5px] leading-relaxed text-[#d9caab]">
-          A compatible personal agent can take the guest seat through this page&apos;s site tools — the
-          ChatGPT desktop app&apos;s built-in browser with site tools enabled, or Chrome 149+ with{" "}
-          <code className="rounded bg-[#2b1e0d] px-1 py-0.5 text-[11px] text-[#e3c877]">
+      <div className="space-y-3.5 px-5 py-4">
+        <p className="text-[13px] leading-relaxed text-ink-2">
+          A compatible personal agent can take the guest seat through this page&apos;s site tools: the ChatGPT
+          desktop app&apos;s built-in browser with site tools enabled, or Chrome 149+ with{" "}
+          <code className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] text-ink">
             chrome://flags/#enable-webmcp-testing
           </code>
           . Paste the invitation below into that agent.
@@ -138,19 +139,19 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
 
         <div
           className={[
-            "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11.5px]",
+            "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-[12px] leading-snug",
             support === "supported"
-              ? "border-[#5c7f4a]/60 bg-[#1a2413] text-[#b9d3a3]"
+              ? "border-live/30 bg-live-soft text-ink-2"
               : support === "unsupported"
-                ? "border-[#8a6a3b]/50 bg-[#251a0c] text-[#c8b48c]"
-                : "border-[#8a6a3b]/40 bg-[#221708] text-[#b6a482]",
+                ? "border-line bg-surface-2 text-muted"
+                : "border-line bg-surface-2 text-muted",
           ].join(" ")}
         >
           <span
             aria-hidden
             className={[
-              "h-1.5 w-1.5 shrink-0 rounded-full",
-              support === "supported" ? "bg-[#8fbf6a]" : support === "unsupported" ? "bg-[#a9865a]" : "bg-[#7d6a48]",
+              "h-2 w-2 shrink-0 rounded-full",
+              support === "supported" ? "bg-live" : support === "unsupported" ? "bg-faint" : "bg-faint animate-pulse-soft",
             ].join(" ")}
           />
           <span>
@@ -162,27 +163,28 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
           </span>
         </div>
 
-        <div className="rounded-md border border-[#8a6a3b]/40 bg-[#120c06] p-3">
-          <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-[#e6d9bd]">{invitation}</p>
+        <div className="rounded-xl border border-line bg-surface-2 p-3.5">
+          <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap break-words text-ink">{invitation}</p>
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11.5px] text-[#bfae8b]">
+          <p className="text-[12px] text-muted">
             Guest seat:{" "}
-            <span className={guestJoined ? "text-[#e8d49a]" : "text-[#9c8c6d]"}>
+            <span className={guestJoined ? "font-semibold text-ink" : ""}>
               {guestJoined ? `${state.guest?.name} joined` : "empty"}
             </span>
           </p>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={async () => {
               const ok = await copyText(invitation);
               setCopied(ok);
             }}
-            className="rounded-md border border-[#c9a227]/70 bg-[#3a2a10] px-3 py-1.5 text-[12px] font-medium text-[#f2e2b6] transition hover:bg-[#4a3614] active:translate-y-px"
           >
+            {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
             {copied ? "Copied" : "Copy invitation"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

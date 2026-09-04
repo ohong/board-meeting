@@ -3,11 +3,15 @@
 import { useMemo, useState } from "react";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
 import { MAX_BOARD_SIZE, MIN_BOARD_SIZE, type PersonaSummary } from "@/lib/meeting/types";
+import { Button } from "@/components/ui/button";
+import { ArrowRightIcon, SearchIcon } from "@/components/ui/icons";
+import { Portrait } from "@/components/ui/portrait";
+import { Eyebrow, Notice, PageShell } from "@/components/ui/shell";
 import { PersonaCard } from "./persona-card";
 
 function matches(persona: PersonaSummary, needle: string): boolean {
   if (!needle) return true;
-  const hay = [persona.name, persona.shortName, persona.role, persona.company, ...persona.searchTerms]
+  const hay = [persona.name, persona.shortName, persona.role, persona.company, ...persona.searchTerms, ...persona.lenses]
     .join(" ")
     .toLowerCase();
   return needle
@@ -26,91 +30,107 @@ export function SelectScreen({ catalog }: { catalog: PersonaSummary[] }) {
   const selectedSlugs = useMemo(() => state.board.map((p) => p.slug), [state.board]);
 
   const count = state.board.length;
+  const full = count >= MAX_BOARD_SIZE;
   const canContinue = count >= MIN_BOARD_SIZE && count <= MAX_BOARD_SIZE;
 
   return (
-    <div className="flex min-h-screen flex-col bg-paper text-paper-ink">
-      <div className="mx-auto flex w-full max-w-[1180px] flex-1 flex-col px-10 pt-10 pb-40">
-        <p className="text-[11px] tracking-[0.28em] text-paper-muted uppercase">The Board</p>
-        <h1 className="mt-3 font-display text-[42px] leading-[1.05] font-semibold tracking-[-0.02em]">
-          Choose your board
-        </h1>
-        <p className="mt-3 max-w-[640px] font-display text-[18px] leading-snug text-paper-muted">
-          Pick three to six advisers, brief them on one high-stakes decision, and chair the meeting yourself.
-        </p>
+    <PageShell step={1} width={840}>
+      <section className="card overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-7 pt-6 pb-5">
+          <div>
+            <h2 className="font-display text-[26px] leading-tight font-semibold tracking-[-0.01em]">Board Setup</h2>
+            <p className="mt-1 text-[13.5px] text-muted">
+              Choose {MIN_BOARD_SIZE}&ndash;{MAX_BOARD_SIZE} advisers to seat around your table. Each one argues from
+              their own record.
+            </p>
+          </div>
+          <span className="pill mt-1 text-muted">Step 1 of 3</span>
+        </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-4 border-b border-rule pb-4">
-          <label className="flex-1 min-w-[260px]">
-            <span className="sr-only">Search advisers by name or expertise</span>
+        <div className="px-7 pt-5">
+          <Eyebrow>Select board members</Eyebrow>
+          <label className="mt-3 flex h-11 items-center gap-2.5 rounded-xl border border-line bg-surface-2 px-3.5 transition-colors focus-within:border-line-strong focus-within:bg-surface">
+            <SearchIcon size={16} className="text-muted" />
+            <span className="sr-only">Search advisers by name, company, or expertise</span>
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, role, or expertise"
-              className="w-full rounded-sm border border-rule bg-paper-2 px-3 py-2.5 text-[14px] text-paper-ink outline-none placeholder:text-paper-muted focus:border-paper-ink"
+              placeholder="Search by name, company, or expertise"
+              className="h-full min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-faint"
             />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="text-[12px] font-medium text-muted hover:text-ink"
+              >
+                Clear
+              </button>
+            ) : null}
           </label>
-          <p className="text-[13px] text-paper-muted tabular-nums">
-            <span className="font-semibold text-paper-ink">{count}</span> of {MAX_BOARD_SIZE}
-          </p>
+
+          {state.notice ? (
+            <div className="mt-3">
+              <Notice text={state.notice.text} />
+            </div>
+          ) : null}
         </div>
 
-        {state.notice ? (
-          <p
-            role="status"
-            className="mt-4 animate-rise-in rounded-sm border border-dissent/40 bg-dissent/8 px-3 py-2 text-[13px] text-dissent"
-          >
-            {state.notice.text}
-          </p>
-        ) : null}
-
-        {results.length === 0 ? (
-          <p className="mt-10 text-[14px] text-paper-muted">
-            No adviser matches &ldquo;{query}&rdquo;. Try a company, a topic, or a first name.
-          </p>
-        ) : (
-          <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {results.map((persona) => {
-              const seat = selectedSlugs.indexOf(persona.slug);
-              return (
-                <li key={persona.slug} className="min-w-0">
-                  <PersonaCard
-                    persona={persona}
-                    selected={seat >= 0}
-                    index={seat >= 0 ? seat + 1 : null}
-                    onToggle={() => session.toggleMember(persona)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      <div className="fixed inset-x-0 bottom-0 border-t border-rule bg-paper/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1180px] items-center gap-6 px-10 py-4">
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-[15px] text-paper-ink">
-              {count === 0
-                ? "No one seated yet."
-                : state.board.map((p) => p.shortName).join(" · ")}
+        <div className="px-7 pt-4 pb-6">
+          {results.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-line px-4 py-10 text-center text-[13.5px] text-muted">
+              No adviser matches &ldquo;{query}&rdquo;. Try a company, a topic, or a first name.
             </p>
-            <p className="mt-0.5 text-[12px] text-paper-muted">
-              {canContinue
-                ? `${count} advisers seated. You can still swap anyone out.`
-                : `Select at least ${MIN_BOARD_SIZE} advisers to continue (up to ${MAX_BOARD_SIZE}).`}
+          ) : (
+            <ul className="flex flex-col gap-2.5">
+              {results.map((persona) => {
+                const seat = selectedSlugs.indexOf(persona.slug);
+                return (
+                  <li key={persona.slug}>
+                    <PersonaCard
+                      persona={persona}
+                      selected={seat >= 0}
+                      index={seat >= 0 ? seat + 1 : null}
+                      disabled={full && seat < 0}
+                      onToggle={() => session.toggleMember(persona)}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 flex items-center gap-4 border-t border-line bg-surface/92 px-7 py-4 backdrop-blur">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {count > 0 ? (
+              <span className="flex shrink-0 -space-x-2">
+                {state.board.map((p) => (
+                  <Portrait key={p.slug} src={p.portrait} alt={p.name} size={28} className="ring-2 ring-surface" />
+                ))}
+              </span>
+            ) : null}
+            <p className="min-w-0 text-[13px] text-muted">
+              <span className="font-semibold text-ink tabular-nums">
+                {count} of {MAX_BOARD_SIZE}
+              </span>{" "}
+              selected
+              <span className="hidden sm:inline">
+                {" "}
+                &middot;{" "}
+                {canContinue
+                  ? "You can still swap anyone out."
+                  : `Add at least ${MIN_BOARD_SIZE} to continue.`}
+              </span>
             </p>
           </div>
-          <button
-            type="button"
-            disabled={!canContinue}
-            onClick={() => session.goToBriefing()}
-            className="shrink-0 rounded-sm bg-paper-ink px-5 py-3 text-[14px] font-semibold text-paper transition-opacity duration-150 disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            Continue to briefing
-          </button>
+          <Button variant="primary" size="lg" disabled={!canContinue} onClick={() => session.goToBriefing()}>
+            Continue
+            <ArrowRightIcon size={16} />
+          </Button>
         </div>
-      </div>
-    </div>
+      </section>
+    </PageShell>
   );
 }

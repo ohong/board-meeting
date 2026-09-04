@@ -6,10 +6,61 @@
  *
  */
 import type { MeetingSession } from "./session";
-import { MIN_BOARD_SIZE, type BoardRuntime, type ClosingComment, type MemberContext, type MemberParticipant, type QueuedInput, type ReactInput, type ReactResult, type Readout, type ReadoutInput, type TurnDirective } from "./types";
+import { MIN_BOARD_SIZE, type BoardRuntime, type ClosingComment, type MemberContext, type MemberParticipant, type QueuedInput, type ReactInput, type ReactResult, type Readout, type ReadoutInput, type TranscriptLine, type TurnDirective } from "./types";
 
 export interface MeetingEngine {
   dispose(): void;
+}
+
+/**
+ * Autonomous discussion is intentionally a bounded burst. The room remains in the
+ * discussion phase after a natural pause; chair or WebMCP input wakes it again.
+ */
+const INITIAL_AUTOMATIC_TURNS = 10;
+const FOLLOW_UP_AUTOMATIC_TURNS = 3;
+const MIN_TURNS_BEFORE_LOW_URGENCY_PAUSE = 8;
+const MIN_URGENCY_TO_CONTINUE = 4;
+
+/** Keep repeated model calls bounded while retaining the complete on-screen record. */
+export const MAX_MODEL_CONTEXT_LINES = 32;
+export const MAX_MODEL_CONTEXT_CHARACTERS = 24_000;
+const MAX_MODEL_CONTEXT_LINE_CHARACTERS = 2_000;
+const OMITTED_CONTEXT_TEXT = "Earlier transcript entries were omitted from this turn's context.";
+
+export function compactTranscriptForModel(lines: TranscriptLine[]): TranscriptLine[] {
+  if (!lines.length) return [];
+
+  const selected: TranscriptLine[] = [];
+  let charactersLeft = MAX_MODEL_CONTEXT_CHARACTERS - OMITTED_CONTEXT_TEXT.length;
+  let earliestIncluded = lines.length;
+
+  for (
+    let index = lines.length - 1;
+    index >= 0 && selected.length < MAX_MODEL_CONTEXT_LINES - 1 && charactersLeft > 0;
+    index -= 1
+  ) {
+    const line = lines[index];
+    const cap = Math.min(MAX_MODEL_CONTEXT_LINE_CHARACTERS, charactersLeft);
+    const text =
+      line.text.length > cap
+        ? `${line.text.slice(0, Math.max(1, cap - 1)).trimEnd()}…`
+        : line.text;
+    selected.push({ ...line, text });
+    charactersLeft -= text.length;
+    earliestIncluded = index;
+  }
+
+  selected.reverse();
+  if (earliestIncluded > 0) {
+    selected.unshift({
+      speakerId: "system",
+      speakerName: "System",
+      role: "system",
+      text: OMITTED_CONTEXT_TEXT,
+      addressedName: null,
+    });
+  }
+  return selected;
 }
 
 export function createEngine(session: MeetingSession, runtime: BoardRuntime): MeetingEngine {
@@ -21,29 +72,42 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
   let activeTurn: Promise<void> | null = null;
   let lastSpeaker: string | null = null;
   let roundRobin = -1;
-  let composeSince: number | null = null;
   let deterministicFallback = false;
   let justUnavailable: string | null = null;
+  let automaticTurnsRemaining = 0;
+  let pausedForChair = false;
   const rebutters = new Set<string>();
   const pacingScale = Math.max(0, (runtime as BoardRuntime & { pacingScale?: number }).pacingScale ?? 1);
 
   const unsubscribe = session.on((event) => {
     if (disposed) return;
     if (event.type === "start") void start();
-    else if (event.type === "input") kick(0);
+    else if (event.type === "input") {
+      if (event.input.kind !== "synthesis-request") {
+        automaticTurnsRemaining = Math.max(automaticTurnsRemaining, FOLLOW_UP_AUTOMATIC_TURNS);
+        pausedForChair = false;
+      }
+      kick(0);
+    }
+    else if (event.type === "compose" && !event.composing) kick(0);
     else if (event.type === "end") void end();
-    else if (event.type === "retry") { if (session.getState().phase === "discussion") void runTurn(event.memberId, { type: "continue" }, [], false); }
+    else if (event.type === "retry") {
+      automaticTurnsRemaining = Math.max(automaticTurnsRemaining, 1);
+      pausedForChair = false;
+      if (session.getState().phase === "discussion") void runTurn(event.memberId, { type: "continue" }, [], false);
+    }
     else if (event.type === "reset") abortAll();
   });
 
   function abortAll() {
     generation.abort(); streamController?.abort(); streamController = null;
     if (timer) clearTimeout(timer); timer = null; working = false; activeTurn = null;
-    generation = new AbortController(); rebutters.clear(); lastSpeaker = null; roundRobin = -1; composeSince = null; deterministicFallback = false; justUnavailable = null;
+    generation = new AbortController(); rebutters.clear(); lastSpeaker = null; roundRobin = -1; deterministicFallback = false; justUnavailable = null; automaticTurnsRemaining = 0; pausedForChair = false;
   }
 
   async function start() {
     abortAll();
+    automaticTurnsRemaining = INITIAL_AUTOMATIC_TURNS;
     const signal = generation.signal; const members = session.members(); let settled = 0; let transitioned = false;
     const transition = () => {
       if (transitioned || signal.aborted || session.getState().phase !== "forming") return;
@@ -82,10 +146,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
     if (disposed || working || session.getState().phase !== "discussion") return;
     if (session.getState().streamingEntryId) { kick(100); return; }
     const state = session.getState();
-    if (state.chairComposing) {
-      composeSince ??= Date.now();
-      if (Date.now() - composeSince < 8_000) { kick(150); return; }
-    } else composeSince = null;
+    if (state.chairComposing) return;
     working = true;
     try {
       const queued = state.queue[0];
@@ -96,27 +157,44 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
         if (queued.mention) {
           const from = queued.kind === "guest-address" ? { id: "guest", name: state.guest?.name ?? "Guest" } : { id: "chair", name: "You" };
           memberId = queued.mention; directive = { type: "answer", fromId: from.id, fromName: from.name, question: text };
-        } else memberId = chooseSpeaker(false);
+        } else memberId = chooseSpeaker(true);
         session.engineDequeue(queued.id);
         if (queued.kind.startsWith("guest-")) session.setGuestStatus("joined");
       } else {
+        const mustCompleteFirstRound = availableMembers().some((m) => m.turns === 0);
+        if (automaticTurnsRemaining <= 0 && !mustCompleteFirstRound) {
+          pauseForChair();
+          return;
+        }
         memberId = chooseSpeaker(false);
         if (memberId && rebutters.has(memberId) && lastSpeaker) {
           const target = session.member(lastSpeaker); if (target) { directive = { type: "rebut", targetId: target.id, targetName: target.persona.name }; interruption = true; rebutters.delete(memberId); }
         } else if (memberId && (session.member(memberId)?.turns ?? 0) === 0) directive = { type: "open" };
       }
       if (memberId) await runTurn(memberId, directive, context, interruption);
+      else pauseForChair();
     } finally { working = false; }
   }
 
-  function chooseSpeaker(directMention: boolean): string | null {
-    const members = session.members(); if (!members.length) return null;
+  function availableMembers(): MemberParticipant[] {
+    return session.members().filter((m) => m.status !== "failed" && m.status !== "retrying" && m.status !== "forming");
+  }
+
+  function pauseForChair() {
+    if (pausedForChair || session.getState().phase !== "discussion") return;
+    pausedForChair = true;
+    session.engineClearReactions();
+    session.engineAddEvent("notice", "The board has reached a natural pause and is waiting for the chair.");
+  }
+
+  function chooseSpeaker(forceContinuation: boolean): string | null {
+    const members = availableMembers(); if (!members.length) return null;
     const someUnspoken = members.some((m) => m.turns === 0);
-    let eligible = members.filter((m) => directMention || !someUnspoken || m.turns < 2);
+    let eligible = members.filter((m) => !someUnspoken || m.turns < 2);
     if (!eligible.length) eligible = members;
-    if (!directMention && justUnavailable && eligible.length > 1) eligible = eligible.filter((m) => m.id !== justUnavailable);
+    if (justUnavailable && eligible.length > 1) eligible = eligible.filter((m) => m.id !== justUnavailable);
     // Nobody takes two consecutive turns unless directly called on.
-    if (!directMention && lastSpeaker && eligible.length > 1) eligible = eligible.filter((m) => m.id !== lastSpeaker);
+    if (lastSpeaker && eligible.length > 1) eligible = eligible.filter((m) => m.id !== lastSpeaker);
     if (deterministicFallback) {
       deterministicFallback = false;
       const unspoken = eligible.filter((m) => m.turns === 0).sort(seatSort)[0];
@@ -127,6 +205,8 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
     const unspoken = eligible.filter((m) => m.turns === 0);
     if (unspoken.length) return unspoken.sort(seatSort)[0].id;
     const urgency = [...eligible].sort((a, b) => b.urgency - a.urgency || a.seat - b.seat);
+    const totalTurns = session.members().reduce((sum, member) => sum + member.turns, 0);
+    if (!forceContinuation && totalTurns >= MIN_TURNS_BEFORE_LOW_URGENCY_PAUSE && (urgency[0]?.urgency ?? 0) < MIN_URGENCY_TO_CONTINUE) return null;
     if (urgency[0]?.urgency > 0) return urgency[0].id;
     for (let offset = 1; offset <= members.length; offset += 1) { const index = (roundRobin + offset) % members.length; const found = eligible.find((m) => m.id === members[index].id); if (found) { roundRobin = index; return found.id; } }
     return eligible[0]?.id ?? null;
@@ -140,6 +220,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
 
   async function executeTurn(memberId: string, directive: TurnDirective, newContext: string[], interruption: boolean) {
     const member = session.member(memberId); if (!member) return;
+    automaticTurnsRemaining = Math.max(0, automaticTurnsRemaining - 1);
     const addressed = directive.type === "answer" ? { id: directive.fromId, name: directive.fromName, intent: "answer" as const } : directive.type === "rebut" ? { id: directive.targetId, name: directive.targetName, intent: "rebuttal" as const } : { id: "board", name: null, intent: "statement" as const };
     const entry = session.engineBeginMessage(memberId, { addressedTo: addressed.id, addressedName: addressed.name, intent: addressed.intent, interruption });
     let succeeded = false;
@@ -179,7 +260,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
 
   async function runSynthesis(input: QueuedInput) {
     session.engineDequeue(input.id); const entryId = input.entryId; if (!entryId) return;
-    try { await runtime.synthesis({ briefing: session.getState().briefing, transcript: session.transcriptLines(), requestedByName: session.getState().guest?.name ?? "You" }, generation.signal, (delta) => session.engineAppendDelta(entryId, delta)); session.engineEndSynthesis(entryId); }
+    try { await runtime.synthesis({ briefing: session.getState().briefing, transcript: compactTranscriptForModel(session.transcriptLines()), requestedByName: session.getState().guest?.name ?? "You" }, generation.signal, (delta) => session.engineAppendDelta(entryId, delta)); session.engineEndSynthesis(entryId); }
     catch { session.engineEndSynthesis(entryId, { failed: true, text: entryText(entryId) || "Synthesis is temporarily unavailable." }); }
     if (session.getState().guest) session.setGuestStatus("joined"); kick(0);
   }
@@ -197,7 +278,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
       catch { return { memberId: member.id, memberName: member.persona.name, text: lastStatement(member.id) || member.positionUpdate || member.position?.recommendation || "No closing comment was available.", fallback: true }; }
     }));
     if (signal.aborted || disposed) return; session.engineSetClosingComments(comments);
-    const input = { briefing: session.getState().briefing, transcript: session.transcriptLines(), members: members.map((m) => ({ id: m.id, name: m.persona.name, role: m.persona.role })), closingComments: comments, guestName: session.getState().guest?.name ?? null };
+    const input = { briefing: session.getState().briefing, transcript: compactTranscriptForModel(session.transcriptLines()), members: members.map((m) => ({ id: m.id, name: m.persona.name, role: m.persona.role })), closingComments: comments, guestName: session.getState().guest?.name ?? null };
     let readout: Readout | null = null;
     for (let attempt = 0; attempt < 2 && !signal.aborted; attempt += 1) { try { readout = await runtime.readout(input, signal); break; } catch {} }
     if (!readout) readout = fallbackReadout(input);
@@ -206,7 +287,7 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
 
   function contextFor(memberId: string): MemberContext {
     const state = session.getState(); const member = session.member(memberId); if (!member) throw new Error(`Unknown member ${memberId}`);
-    return { slug: member.id, briefing: state.briefing, phase: state.phase, transcript: session.transcriptLines(), position: member.position, ownStatements: state.transcript.filter((e) => e.kind === "message" && e.speakerId === memberId && !e.failed).map((e) => e.kind === "message" ? e.text : ""), participants: [{ id: "chair", name: "You", role: "chair", line: "Human chair" }, ...session.members().filter((m) => m.id !== memberId).map((m) => ({ id: m.id, name: m.persona.name, role: "member" as const, line: m.persona.role })), ...(state.guest ? [{ id: "guest", name: state.guest.name, role: "guest" as const, line: "External personal agent" }] : [])] };
+    return { slug: member.id, briefing: state.briefing, phase: state.phase, transcript: compactTranscriptForModel(session.transcriptLines()), position: member.position, ownStatements: state.transcript.filter((e) => e.kind === "message" && e.speakerId === memberId && !e.failed).map((e) => e.kind === "message" ? e.text : "").slice(-8), participants: [{ id: "chair", name: "You", role: "chair", line: "Human chair" }, ...session.members().filter((m) => m.id !== memberId).map((m) => ({ id: m.id, name: m.persona.name, role: "member" as const, line: m.persona.role })), ...(state.guest ? [{ id: "guest", name: state.guest.name, role: "guest" as const, line: "External personal agent" }] : [])] };
   }
 
   function entryText(id: string | null): string { const e = id ? session.getState().transcript.find((x) => x.id === id) : null; return e && (e.kind === "message" || e.kind === "synthesis") ? e.text : ""; }

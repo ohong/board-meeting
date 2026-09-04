@@ -1,12 +1,32 @@
 "use client";
 
+import { useEffect } from "react";
 import { InvitePanel } from "@/components/webmcp/invite-panel";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
 
-/** Mount point for the WebMCP workstream's invitation panel. */
+/** Modal mount point for the WebMCP invitation panel: backdrop click or Escape closes it. */
 export function InviteSlot() {
   const session = useSession();
   const open = useMeetingState().invitePanelOpen;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") session.closeInvitePanel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, session]);
+
   if (!open) return null;
-  return <InvitePanel onClose={() => session.closeInvitePanel()} />;
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center bg-ink/20 p-6 backdrop-blur-[2px]"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) session.closeInvitePanel();
+      }}
+    >
+      <InvitePanel onClose={() => session.closeInvitePanel()} />
+    </div>
+  );
 }

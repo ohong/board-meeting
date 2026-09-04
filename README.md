@@ -8,7 +8,7 @@ Built for the [OpenAI WebMCP Challenge](https://webmcp.devpost.com/). MIT licens
 
 1. **Choose your board.** A searchable catalog of advisers. Each is a separate agent package distilled from the guest's Senra interview transcript and primary sources (see `agent/subagents/`).
 2. **Brief your board.** One free-form briefing. "Use example decision" loads the demo: should a B2B collaboration app kill its free tier?
-3. **Board meeting.** Every member forms a private opening position in parallel, then the room opens. Members rebut one another, react on their seats, ask the chair questions, and change position when persuaded. The chair calls on anyone with `@Name`.
+3. **Board meeting.** Every member forms a private opening position in parallel, then the room opens. Members rebut one another, react on their seats, ask the chair questions, and change position when persuaded. After a bounded opening discussion the board waits for the chair; a chair or guest contribution wakes another short burst. The chair calls on anyone with `@Name`.
 4. **Invite your agent.** Copy the invitation into your agent. It discovers the page's six site tools and joins the guest seat; everything it does is visible in the room.
 5. **End meeting.** Closing comments are collected and a secretary agent writes the readout: recommendation (with dissent preserved), options, tradeoffs, assumptions, open questions, next actions, closing comments. Your agent can retrieve the same readout.
 

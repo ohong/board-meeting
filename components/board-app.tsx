@@ -9,6 +9,7 @@ import { Boardroom } from "@/components/boardroom/boardroom";
 import { BriefScreen } from "@/components/brief/brief-screen";
 import { ReadoutView } from "@/components/readout/readout-view";
 import { SelectScreen } from "@/components/select/select-screen";
+import { Button } from "@/components/ui/button";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
 import type { PersonaSummary } from "@/lib/meeting/types";
 
@@ -37,16 +38,12 @@ export function BoardApp({ catalog }: { catalog: PersonaSummary[] }) {
       return state.readout ? (
         <ReadoutView readout={state.readout} />
       ) : (
-        <div className="flex min-h-screen items-center justify-center bg-paper px-8 text-center text-paper-ink">
-          <div>
-            <p className="font-display text-[22px] font-semibold">The readout is not available.</p>
-            <button
-              type="button"
-              onClick={() => session.reset()}
-              className="mt-4 rounded-sm bg-paper-ink px-4 py-2.5 text-[13px] font-semibold text-paper"
-            >
+        <div className="flex min-h-screen items-center justify-center bg-canvas px-8 text-center text-ink">
+          <div className="card px-8 py-8">
+            <p className="font-display text-[22px] font-semibold">The memo is not available.</p>
+            <Button variant="primary" className="mt-4" onClick={() => session.reset()}>
               Start a new meeting
-            </button>
+            </Button>
           </div>
         </div>
       );

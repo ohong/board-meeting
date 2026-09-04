@@ -37,7 +37,7 @@ Convene a board of AI advisers modeled on David Senra's guests, chair a live mee
 2. Select Daniel Ek, David Heinemeier Hansson, and Lulu Cheng Meservey in that order (or any 3–6). Selection order sets seat order; the first seat opens the discussion and is the member the invitation asks your agent to question. Click "Use example decision", then "Start Board Meeting".
 3. Watch the three seats form independent positions, then discuss. Type `@Lulu how would you explain this change to users?` to call on a member.
 4. Click "Invite your agent", copy the invitation, and paste it into the agent. In the ChatGPT desktop app, open the page with `@Browser <url>` first. The agent will call `inspect_board_meeting`, `join_board_meeting`, `contribute_to_board_meeting`, `address_board_member`, and `request_board_synthesis`; each is visible in the room.
-5. Click "End Meeting". The readout appears; the agent can call `get_board_meeting_readout` to retrieve it (before that it returns `NOT_READY`).
+5. Click "End meeting". The Executive Memo appears; the agent can call `get_board_meeting_readout` to retrieve it (before that it returns `NOT_READY`).
 6. Chrome: DevTools → Application → WebMCP lists the six tools and lets you invoke them manually. A dev harness is also at `/dev/webmcp`.
 7. Append `?runtime=mock` to the URL to run a deterministic scripted board without model calls.
 
@@ -50,7 +50,7 @@ Convene a board of AI advisers modeled on David Senra's guests, chair a live mee
 | 0:25 | Seats pulse "Thinking…", flip to Ready. | "Each adviser forms an independent view before hearing anyone else. No groupthink." |
 | 0:40 | Discussion streams; the first-selected member opens, a peer rebuts (interruption marker), reactions on seats. | "Separate agents, real disagreement." Then type `@Lulu how do we explain a free-tier change without losing user trust?` Lulu answers directly. |
 | 1:15 | Click "Invite your agent", copy, paste into Codex (ChatGPT desktop browser, already on the page). | "My own agent knows something the board doesn't." Codex inspects, joins (seat materializes), contributes the enterprise-referral context, asks Daniel, Daniel answers, Codex requests a synthesis. |
-| 1:45 | Click "End Meeting". Readout appears. Codex calls `get_board_meeting_readout`; the page shows "Retrieved by … via WebMCP". | "The human ends the meeting; the agent carries away the same memo." |
+| 1:45 | Click "End meeting". The Executive Memo appears. Codex calls `get_board_meeting_readout`; the page shows "Retrieved by … via WebMCP". | "The human ends the meeting; the agent carries away the same memo." |
 
 Codex-only private context to seed in the Codex conversation BEFORE recording (the app must not contain it):
 
@@ -61,7 +61,7 @@ Codex-only private context to seed in the Codex conversation BEFORE recording (t
 - Mock golden path in Chrome 151 with `#enable-webmcp-testing`: all six tools discovered via `document.modelContext.getTools()` and executed via `executeTool`; guest seat, contribution, addressed answer, synthesis, and readout retrieval all visible in the room.
 - Live golden path (gpt-5.6-terra / luna / sol): opening positions in parallel (~5–7 s), member turns 2–3 s each, reaction pass 1–3 s, Daniel Ek answered Codex using the enterprise-referral context, synthesis attributed views by name, readout retrieved through the tool after End Meeting.
 - Note for Chrome's `executeTool`: it accepts the input as a JSON string (a plain object was rejected with "Failed to parse input arguments"). Agents (ChatGPT/Codex) handle this themselves.
-- `next build` passes; `bun run test` 28 tests; lint clean.
+- `next build` passes; `bun run test` 37 tests; lint clean.
 
 ## Known limitations to state honestly
 

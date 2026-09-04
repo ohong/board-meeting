@@ -37,9 +37,14 @@ import {
   type TranscriptLine,
 } from "./types";
 
+/** Match the server-side request schemas so invalid oversized prompts never enter the loop. */
+export const MAX_BRIEFING_CHARACTERS = 6_000;
+export const MAX_CHAIR_MESSAGE_CHARACTERS = 2_000;
+
 export type SessionEvent =
   | { type: "start" }
   | { type: "input"; input: QueuedInput }
+  | { type: "compose"; composing: boolean }
   | { type: "end" }
   | { type: "retry"; memberId: string }
   | { type: "reset" };
@@ -186,6 +191,15 @@ export class MeetingSession {
     return n >= MIN_BOARD_SIZE && n <= MAX_BOARD_SIZE && this.state.briefing.trim().length > 0;
   }
 
+  /** Finalization waits until every currently available member has spoken once. */
+  canEndMeeting(): boolean {
+    if (this.state.phase !== "discussion") return false;
+    const available = this.members().filter(
+      (m) => m.status !== "failed" && m.status !== "retrying" && m.status !== "forming",
+    );
+    return available.length > 0 && available.every((m) => m.turns > 0);
+  }
+
   isLive(): boolean {
     return this.state.phase === "forming" || this.state.phase === "discussion";
   }
@@ -230,7 +244,7 @@ export class MeetingSession {
 
   setBriefing(text: string): void {
     if (this.state.phase !== "selecting" && this.state.phase !== "briefing") return;
-    this.update((s) => ({ ...s, briefing: text }));
+    this.update((s) => ({ ...s, briefing: text.slice(0, MAX_BRIEFING_CHARACTERS) }));
   }
 
   useExampleBriefing(): void {
@@ -293,13 +307,18 @@ export class MeetingSession {
   }
 
   setChairComposing(composing: boolean): void {
-    if (this.state.chairComposing !== composing) this.update((s) => ({ ...s, chairComposing: composing }));
+    if (this.state.chairComposing === composing) return;
+    this.update((s) => ({ ...s, chairComposing: composing }));
+    this.emit({ type: "compose", composing });
   }
 
   /** Chair speaks to the room. An @mention makes that member the next speaker. */
   sendChairMessage(text: string): ActionResult<{ mentioned: string | null }> {
     const trimmed = text.trim();
     if (!trimmed) return err("INVALID_INPUT", "Empty message.");
+    if (trimmed.length > MAX_CHAIR_MESSAGE_CHARACTERS) {
+      return err("INVALID_INPUT", `Keep messages under ${MAX_CHAIR_MESSAGE_CHARACTERS.toLocaleString()} characters.`);
+    }
     if (!this.isLive()) return err("NOT_ALLOWED", "The meeting is not in session.");
     const mentioned = this.parseMention(trimmed);
     const entry = this.pushMessage({
@@ -326,7 +345,13 @@ export class MeetingSession {
 
   /** Only the chair (UI) may call this. WebMCP must never expose it. */
   endMeeting(): ActionResult {
-    if (!this.isLive()) return err("NOT_ALLOWED", "The meeting is not in session.");
+    if (this.state.phase === "forming") {
+      return err("NOT_ALLOWED", "Wait for the board to finish forming its opening positions.");
+    }
+    if (this.state.phase !== "discussion") return err("NOT_ALLOWED", "The meeting is not in session.");
+    if (!this.canEndMeeting()) {
+      return err("NOT_ALLOWED", "Wait until every available board member has spoken once.");
+    }
     const now = Date.now();
     this.update((s) => ({
       ...s,

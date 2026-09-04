@@ -2,35 +2,37 @@
  * Seat geometry for the elliptical table.
  *
  * Angles are degrees measured from the top of the ellipse, increasing clockwise.
- * 0 = far side (top of screen), negative = left, positive = right.
+ * 0 = far side (top of screen), negative = left, positive = right, 180 = the chair.
  *
  *   x = rx * sin(theta)      y = -ry * cos(theta)      (screen coordinates, y down)
  *
- * The chair ("You") owns the bottom centre and is drawn outside the ring; the
- * reserved guest seat owns the lower-left of the ring. Board members are spread
- * symmetrically about the far side across an arc that widens with headcount, so
- * a three-person board reads as a tight huddle and a six-person board fills the
- * table without a single visibly empty chair.
+ * Portraits sit ON the table rim: the seat ring is only slightly larger than the
+ * table itself, so every avatar overlaps the edge the way people sit at a real
+ * table. The chair ("You") owns the bottom of the ring. Board members are spread
+ * symmetrically about the far side across an arc that widens with headcount, so a
+ * three-person board reads as a tight huddle and a six-person board fills the
+ * table without a visibly empty chair. The guest agent is not on the ring: it has
+ * its own card at the edge of the room.
  *
  * Seats are spaced by ARC LENGTH, not by angle: equal angular steps bunch up
  * near the ends of the major axis, which put neighbouring six-seat portraits
  * within a few pixels of each other.
  */
 
-/** Radii of the seat ring (portraits sit on this ellipse). */
+/** Radii of the seat ring (portrait centres sit on this ellipse). */
 export const RING_RX = 300;
-export const RING_RY = 178;
+export const RING_RY = 176;
 
-/** Radii of the walnut table itself. */
-export const TABLE_RX = 214;
-export const TABLE_RY = 118;
+/** Radii of the table itself. */
+export const TABLE_RX = 284;
+export const TABLE_RY = 164;
 
 /** Scene box the whole room is laid out in (scaled down on smaller viewports). */
-export const SCENE_W = 780;
-export const SCENE_H = 600;
+export const SCENE_W = 800;
+export const SCENE_H = 560;
 
-/** Reserved guest seat: lower-left, clear of the widest member arc and of the chair. */
-export const GUEST_ANGLE = -166;
+/** The chair sits at the bottom of the ring. */
+export const CHAIR_ANGLE = 180;
 
 /** Total arc (degrees) the members are spread across, by headcount. */
 const SPAN_BY_COUNT: Record<number, number> = {
@@ -92,16 +94,16 @@ export function memberAngles(count: number): number[] {
   return out;
 }
 
-/** Fixed size of the live speech card, so the reserved slot never changes shape. */
-export const SPEECH_CARD_W = 220;
+/** Fixed width of the live speech card, so the reserved slot never changes shape. */
+export const SPEECH_CARD_W = 240;
 
 /**
- * Where the speaker's cream speech card lies: on the walnut surface, just below
- * the table's centre, leaning slightly toward the speaker's seat. The table
- * interior is the only region no seat can ever occupy, so the card is collision
- * free for every board size while still pointing at whoever is talking.
+ * Where the speaker's speech card lies: on the table surface, just above the
+ * table's centre, leaning slightly toward the speaker's seat. The table interior
+ * is the only region no seat can ever occupy, so the card is collision free for
+ * every board size while still pointing at whoever is talking.
  */
 export function speechCardPoint(angleDeg: number): ScenePoint {
   const seat = pointAt(angleDeg);
-  return { x: Math.max(-70, Math.min(70, seat.x * 0.28)), y: 22 };
+  return { x: Math.max(-60, Math.min(60, seat.x * 0.22)), y: -6 };
 }

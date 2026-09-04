@@ -103,6 +103,7 @@ const LOCAL_FIXTURES: Record<string, () => MeetingState> = {
     const s = FIXTURES.guest();
     return { ...s, guest: s.guest ? { ...s.guest, status: "joining" } : null };
   },
+  invite: () => ({ ...fixtureDiscussion(), invitePanelOpen: true }),
 };
 
 const ALL: Record<string, () => MeetingState> = { ...FIXTURES, ...LOCAL_FIXTURES };
@@ -132,23 +133,23 @@ export default function FixturesPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-room">
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-room-3 bg-black px-3 py-2">
-        <span className="mr-2 text-[10px] tracking-[0.16em] text-brass uppercase">Fixtures</span>
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <div className="flex h-[41px] flex-wrap items-center gap-1.5 overflow-hidden border-b border-line bg-ink px-3">
+        <span className="mr-2 text-[10px] tracking-[0.16em] text-accent-soft uppercase">Fixtures</span>
         {NAMES.map((n) => (
           <button
             key={n}
             type="button"
             onClick={() => pick(n)}
             className={`rounded-[3px] px-2 py-1 text-[11px] ${
-              n === name ? "bg-brass text-walnut-deep font-semibold" : "text-muted hover:bg-room-2"
+              n === name ? "bg-accent text-white font-semibold" : "text-faint hover:bg-ink-2 hover:text-surface"
             }`}
           >
             {n}
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1" style={{ "--app-height": "calc(100dvh - 41px)" } as React.CSSProperties}>
         {session ? (
           <MeetingProvider key={name} session={session}>
             <BoardApp catalog={FIXTURE_PERSONAS} />

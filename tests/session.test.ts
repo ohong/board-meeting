@@ -18,6 +18,14 @@ async function started(runtime: BoardRuntime, options: { joinDelayMs?: number } 
   return session;
 }
 
+async function waitUntil(predicate: () => boolean, message: string) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (predicate()) return;
+    await Promise.resolve();
+  }
+  throw new Error(message);
+}
+
 function derivedRuntime(overrides: Partial<BoardRuntime> = {}): BoardRuntime {
   const mock = createMockRuntime();
   return {
@@ -42,6 +50,124 @@ function derivedRuntime(overrides: Partial<BoardRuntime> = {}): BoardRuntime {
 }
 
 describe("meeting session serialization and recovery", () => {
+  it("reveals independently completed mock openings without slowing the default runtime", async () => {
+    const releases = new Map<number, () => void>();
+    const delays = new Map([
+      ["daniel-ek", 420],
+      ["david-heinemeier-hansson", 760],
+      ["lulu-cheng-meservey", 1100],
+    ]);
+    const runtime = createMockRuntime({
+      openingDelayMs: (memberId) => delays.get(memberId) ?? 0,
+      wait: (milliseconds) =>
+        new Promise<void>((resolve) => {
+          releases.set(milliseconds, resolve);
+        }),
+    });
+    const session = createMeetingSession({ runtime, autoContinue: false });
+    selectDemo(session);
+
+    const starting = session.startMeeting();
+    await waitUntil(() => releases.size === 3, "mock openings did not begin in parallel");
+    expect(session.getState().members.map(({ status }) => status)).toEqual([
+      "thinking",
+      "thinking",
+      "thinking",
+    ]);
+
+    releases.get(420)?.();
+    await waitUntil(
+      () => session.getState().members[0]?.status === "ready",
+      "first opening did not become ready",
+    );
+    expect(session.getState().members.map(({ status }) => status)).toEqual([
+      "ready",
+      "thinking",
+      "thinking",
+    ]);
+
+    releases.get(760)?.();
+    await waitUntil(
+      () => session.getState().members[1]?.status === "ready",
+      "second opening did not become ready",
+    );
+    expect(session.getState().members.map(({ status }) => status)).toEqual([
+      "ready",
+      "ready",
+      "thinking",
+    ]);
+
+    releases.get(1100)?.();
+    expect((await starting).ok).toBe(true);
+    expect(session.getState().members.every(({ status }) => status === "ready")).toBe(true);
+
+    let defaultWaitCalls = 0;
+    const immediate = createMockRuntime({
+      wait: async () => {
+        defaultWaitCalls += 1;
+      },
+    });
+    const immediateSession = await started(immediate);
+    await immediateSession.pumpOnce();
+    expect(defaultWaitCalls).toBe(0);
+  });
+
+  it("keeps the demo trio substantive and nonrepetitive across twelve turns", async () => {
+    const session = await started(createMockRuntime());
+
+    await session.pumpDiscussion(12);
+
+    const messages = session
+      .getState()
+      .transcript.filter((event) => event.kind === "message" && event.speakerId !== "chair");
+    expect(messages).toHaveLength(12);
+    expect(new Set(messages.map(({ text }) => text)).size).toBe(12);
+    expect(messages.map(({ text }) => text).join(" ")).toMatch(/cohort|trial activation/i);
+    expect(messages.map(({ text }) => text).join(" ")).toMatch(/sequence the message|test sentence/i);
+  });
+
+  it("resumes paced automatic discussion after composing and never exceeds twelve turns", async () => {
+    const pendingGaps: Array<() => void> = [];
+    const observedDelays: number[] = [];
+    const session = createMeetingSession({
+      runtime: derivedRuntime(),
+      autoContinue: true,
+      autoTurnGapMs: 700,
+      wait: (milliseconds) => {
+        observedDelays.push(milliseconds);
+        return new Promise<void>((resolve) => pendingGaps.push(resolve));
+      },
+    });
+    selectDemo(session);
+    await session.startMeeting();
+    const messageCount = () =>
+      session.getState().transcript.filter((event) => event.kind === "message").length;
+    await waitUntil(
+      () => messageCount() === 1 && pendingGaps.length === 1,
+      "automatic discussion did not reach its first turn gap",
+    );
+
+    session.setComposing(true);
+    pendingGaps.shift()?.();
+    for (let flush = 0; flush < 5; flush += 1) await Promise.resolve();
+    expect(messageCount()).toBe(1);
+
+    session.setComposing(false);
+    while (messageCount() < 12) {
+      const before = messageCount();
+      await waitUntil(() => pendingGaps.length > 0, "automatic discussion did not resume");
+      pendingGaps.shift()?.();
+      await waitUntil(() => messageCount() > before, "automatic turn did not complete");
+    }
+
+    session.setComposing(true);
+    session.setComposing(false);
+    for (let flush = 0; flush < 10; flush += 1) await Promise.resolve();
+    expect(messageCount()).toBe(12);
+    expect(pendingGaps).toHaveLength(0);
+    expect(observedDelays.every((delay) => delay === 700)).toBe(true);
+  });
+
   it("forms private opening positions in parallel", async () => {
     const base = derivedRuntime();
     let active = 0;

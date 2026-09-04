@@ -93,6 +93,7 @@ describe("golden path", () => {
     const afterAddress = session.getState().transcript.filter((e) => e.kind === "message");
     const last = afterAddress[afterAddress.length - 1];
     expect(last?.speakerId).toBe("daniel-ek");
+    expect(last?.addressedTo).toBe("Codex");
 
     const synthesis = await session.requestSynthesis();
     expect(synthesis.ok).toBe(true);

@@ -18,3 +18,4 @@
 - Rebuilt the executive readout as a warm-paper editorial memo with all eight required sections, explicit dissent, participant context, reliable copy feedback, and a fresh-board reset.
 - Rebuilt the live meeting as a dark spatial boardroom beside paper minutes, with fixed 3–6 seat compositions, legible participant states, one public stream, agent arrival, invitation, and an accessible @mention composer.
 - Made WebMCP outcome receipts transient and session-aware so a completed site-tool call never obscures later meeting or readout content.
+- Paced the browser mock through visible parallel thinking and concise, non-repeating discussion turns while keeping deterministic tests instantaneous.

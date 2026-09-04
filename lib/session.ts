@@ -18,6 +18,7 @@ import type {
 export type SessionOptions = {
   runtime?: BoardRuntime;
   autoContinue?: boolean;
+  autoTurnGapMs?: number;
   now?: () => number;
   joinDelayMs?: number;
   wait?: (milliseconds: number) => Promise<void>;
@@ -69,6 +70,8 @@ export type InspectResult = {
 type Listener = () => void;
 
 type ActionResult = { ok: boolean; message?: string };
+
+const MAX_AUTOMATIC_TURNS = 12;
 
 function waitFor(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -129,6 +132,7 @@ function readoutFallback(
 export function createMeetingSession(options: SessionOptions = {}) {
   const runtime = options.runtime ?? createMockRuntime();
   const autoContinue = options.autoContinue ?? false;
+  const autoTurnGapMs = Math.max(0, options.autoTurnGapMs ?? 0);
   const now = options.now ?? (() => Date.now());
   const joinDelayMs = options.joinDelayMs ?? 800;
   const wait = options.wait ?? waitFor;
@@ -136,7 +140,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
   let eventSeq = 0;
   let generation = 0;
   let actionTail: Promise<void> = Promise.resolve();
-  let pumping = false;
+  let automaticTurns = 0;
+  let activeAutoPumpGeneration: number | null = null;
+  let resumeAutoPumpGeneration: number | null = null;
   let ended = false;
   let speakerCursor = 0;
   const deferredSpeakers = new Set<string>();
@@ -477,23 +483,61 @@ export function createMeetingSession(options: SessionOptions = {}) {
       text: "Independent views are closed. The board is in discussion.",
     });
     emit();
-    if (autoContinue && !pumping) {
-      void autoPump();
-    }
+    scheduleAutoPump();
     return { ok: true };
   }
 
-  async function autoPump() {
-    pumping = true;
+  function canAutoPump(token: number): boolean {
+    return (
+      autoContinue &&
+      isCurrent(token) &&
+      !ended &&
+      state.meetingPhase === "discussion" &&
+      !state.composing &&
+      automaticTurns < MAX_AUTOMATIC_TURNS
+    );
+  }
+
+  function scheduleAutoPump() {
+    const token = generation;
+    if (!canAutoPump(token)) return;
+    if (activeAutoPumpGeneration === token) {
+      // A composition pause can end between the loop condition and cleanup.
+      // Remember the wake-up so that edge does not strand the discussion.
+      resumeAutoPumpGeneration = token;
+      return;
+    }
+    void autoPump(token);
+  }
+
+  async function autoPump(token: number) {
+    if (activeAutoPumpGeneration === token) {
+      resumeAutoPumpGeneration = token;
+      return;
+    }
+    activeAutoPumpGeneration = token;
     try {
-      let turns = 0;
-      while (!ended && state.meetingPhase === "discussion" && !state.composing && turns < 12) {
+      while (canAutoPump(token)) {
+        if (automaticTurns > 0 && autoTurnGapMs > 0) {
+          await wait(autoTurnGapMs);
+          if (!canAutoPump(token)) break;
+        }
         const did = await enqueue(pumpOnceCore, false);
         if (!did) break;
-        turns += 1;
+        if (!isCurrent(token)) break;
+        automaticTurns += 1;
+      }
+    } catch (error) {
+      if (isCurrent(token)) {
+        state.lastError =
+          error instanceof Error ? error.message : "Automatic discussion pacing failed.";
+        emit();
       }
     } finally {
-      pumping = false;
+      if (activeAutoPumpGeneration === token) activeAutoPumpGeneration = null;
+      const resume = resumeAutoPumpGeneration === token;
+      if (resume) resumeAutoPumpGeneration = null;
+      if (resume && canAutoPump(token)) scheduleAutoPump();
     }
   }
 
@@ -744,7 +788,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
     generation += 1;
     actionTail = Promise.resolve();
     ended = true;
-    pumping = false;
+    automaticTurns = 0;
+    activeAutoPumpGeneration = null;
+    resumeAutoPumpGeneration = null;
     state.phase = "select";
     state.meetingPhase = "idle";
     state.search = "";
@@ -807,8 +853,10 @@ export function createMeetingSession(options: SessionOptions = {}) {
         { ok: false, message: "Session was reset before the message was handled." },
       ),
     setComposing(value: boolean) {
+      const wasComposing = state.composing;
       state.composing = value;
       emit();
+      if (wasComposing && !value) scheduleAutoPump();
     },
     pumpOnce: () => enqueue(pumpOnceCore, false),
     pumpDiscussion: async (n: number) => {

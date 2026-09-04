@@ -66,3 +66,12 @@ We considered keeping a permanent navigation or adviser rail like the denser ref
 The live state uses a dark, lightly theatrical room with a dominant table and hand-authored layouts for three through six adviser seats. The human chair and reserved guest threshold remain stable, while a paper minutes rail stays at least 400 px wide and contains the only public transcript and composer.
 
 We considered calculating seats continuously along an ellipse. That scales with arbitrary counts, but produces generic spacing, makes long nameplates collision-prone, and can obscure the decision folio. Fixed maps require four small compositions, but preserve intentional sight lines, keep the chair and guest distinct, and hold the exact 1440 × 900, 1280 × 800, and 1024 × 800 geometries without page overflow.
+
+## 2026-09-03 — Inject demo pacing only at the browser boundary
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved MVP implementation
+
+The browser's deterministic mock stages three opening positions in parallel, then uses a short speaking delay and inter-turn gap. The session engine accepts these timings as injected options; its defaults and the mock runtime remain instantaneous. Automatic continuation pauses while the chair composes, resumes afterward, and stops after twelve automatic contributions.
+
+We considered placing fixed delays inside the mock runtime or session defaults. That would make every unit test and server-side rehearsal pay real wall-clock time and would couple correctness to presentation timing. Browser-only injection keeps the visible demo legible while preserving fast deterministic tests and a production runtime whose pacing is governed by actual model latency.

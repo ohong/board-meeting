@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createMeetingSession, type MeetingSession, type MeetingState } from "@/lib/session";
-import { createMockRuntime } from "@/lib/runtime/mock";
+import {
+  createMockRuntime,
+  demoOpeningDelayMs,
+  MOCK_DEMO_TIMING,
+} from "@/lib/runtime/mock";
 import { createBrowserRuntime } from "@/lib/runtime/browser";
 import { SelectBoard } from "./SelectBoard";
 import { BriefBoard } from "./BriefBoard";
@@ -11,9 +15,19 @@ import { Readout } from "./Readout";
 import { WebMcpBridge } from "./WebMcp";
 
 function bootSession(live: boolean) {
+  if (live) {
+    return createMeetingSession({
+      runtime: createBrowserRuntime(),
+      autoContinue: true,
+    });
+  }
   return createMeetingSession({
-    runtime: live ? createBrowserRuntime() : createMockRuntime(),
+    runtime: createMockRuntime({
+      openingDelayMs: demoOpeningDelayMs,
+      publicTurnDelayMs: MOCK_DEMO_TIMING.publicTurnDelayMs,
+    }),
     autoContinue: true,
+    autoTurnGapMs: MOCK_DEMO_TIMING.autoTurnGapMs,
   });
 }
 

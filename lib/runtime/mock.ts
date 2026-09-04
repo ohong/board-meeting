@@ -7,7 +7,6 @@ import type {
   MemberTurn,
   OpeningPosition,
   RuntimeTurnInput,
-  TranscriptEvent,
 } from "../types";
 
 const OPENINGS: Record<string, OpeningPosition> = {
@@ -56,23 +55,128 @@ const FIRST_TURNS: Record<string, MemberTurn> = {
   },
 };
 
-function genericOpening(slug: string): OpeningPosition {
-  const m = getMember(slug);
+const FOLLOW_UP_TURNS: Record<string, MemberTurn[]> = {
+  "daniel-ek": [
+    {
+      text: "Separate acquisition from access. Keep a free workspace only when it is created by an invitation into active work; put every self-serve signup into the trial. That preserves the behavior that may carry enterprise demand while removing the broad support promise DHH is objecting to.",
+      addressedTo: "David Heinemeier Hansson",
+      reaction: "concern",
+    },
+    {
+      text: "The 34% number is still too coarse. Cohort the last ten enterprise wins by their first meaningful action: created alone, invited into a workspace, or shared work outside the company. If the shared cohort is the source, preserve that loop and stop subsidizing the rest.",
+    },
+    {
+      text: "My decision rule is simple: run new signups through the trial for 30 days, leave invite-created workspaces alone, and compare qualified pipeline plus support hours with the prior cohort. If referral quality holds, narrow free permanently. If it falls, you found the channel before destroying it.",
+    },
+  ],
+  "david-heinemeier-hansson": [
+    {
+      text: "A special free path is how complexity sneaks back in wearing a lab coat. Grandfather existing workspaces if you must, but give every new account the same 14 days and one honest price. The team needs one product to explain, support, and improve.",
+      addressedTo: "Daniel Ek",
+      reaction: "disagree",
+    },
+    {
+      text: "You already have a decision-grade signal: 6,000 free workspaces create 38% of support for an 18-person company. Do not demand perfect attribution before stopping a known drain. Announce the trial, personally call the enterprise accounts that came through free, and learn from customers who can actually leave.",
+    },
+    {
+      text: "The kill signal cuts both ways. If trial activation collapses after the change, reverse it. But if support falls and paid conversion rises, do not reopen free because a vanity signup chart looks lonely. A reversible decision still needs a date when the experiment ends.",
+    },
+  ],
+  "lulu-cheng-meservey": [
+    {
+      text: "There are two plausible stories: they took something away, or they stopped making a promise they could not keep. Grandfathering existing teams makes the second story credible. A surprise lockout makes the first one inevitable, whatever your spreadsheet says.",
+      reaction: "concern",
+    },
+    {
+      text: "Sequence the message before the migration: tell users what you learned, name what remains free during the transition, and show what paying lets the team guarantee. Give your best customers language they would be proud to repeat. That is how the announcement travels without sounding like extraction.",
+    },
+    {
+      text: "Narrative cannot rescue a bad product decision, but it can expose one early. If you cannot explain the change in one candid sentence without hiding behind simplification, the policy is not ready. My test sentence is: we are charging so every workspace we host is one we can stand behind.",
+    },
+  ],
+};
+
+export const MOCK_DEMO_TIMING = {
+  openingDelayMs: {
+    "daniel-ek": 420,
+    "david-heinemeier-hansson": 760,
+    "lulu-cheng-meservey": 1100,
+  },
+  publicTurnDelayMs: 650,
+  autoTurnGapMs: 700,
+} as const;
+
+export type MockRuntimeOptions = {
+  openingDelayMs?: (memberId: string) => number;
+  publicTurnDelayMs?: number;
+  wait?: (milliseconds: number) => Promise<void>;
+};
+
+function waitFor(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function compactBriefing(briefing: string): string {
+  const line = briefing
+    .split("\n")
+    .map((part) => part.replace(/^(Question|Briefing):\s*/i, "").trim())
+    .find(Boolean);
+  if (!line) return "the decision in front of the board";
+  return line.length > 120 ? `${line.slice(0, 117)}…` : line;
+}
+
+export function demoOpeningDelayMs(memberId: string): number {
+  const preset = MOCK_DEMO_TIMING.openingDelayMs[
+    memberId as keyof typeof MOCK_DEMO_TIMING.openingDelayMs
+  ];
+  if (preset !== undefined) return preset;
+  const checksum = Array.from(memberId).reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return 460 + (checksum % 4) * 180;
+}
+
+function genericOpening(input: RuntimeTurnInput): OpeningPosition {
+  const m = getMember(input.memberId);
+  const decision = compactBriefing(input.briefing);
   return {
-    memberId: slug,
-    recommendation: "Pressure-test whether free is distribution or drag before you burn the channel.",
-    reasoning: `${m?.name ?? slug} would ask whether this decision makes the company more itself, or merely less tired this quarter.`,
-    concern: "Unexamined word of mouth and unexamined support load can both bankrupt an 18-person team.",
-    question: "What would you need to see in 30 days to know this was right?",
+    memberId: input.memberId,
+    recommendation: `Make the next step on “${decision}” reversible until its central assumption is tested.`,
+    reasoning: `${m?.name ?? input.memberId} brings a ${m?.role ?? "board"} lens: preserve the option that compounds while putting a date and owner on the evidence needed to decide.`,
+    concern: "The board may be treating urgency as evidence and hiding the cost of reversal.",
+    question: "Which observable result in 30 days would make you reverse this choice?",
   };
 }
 
-function genericTurn(slug: string, input: RuntimeTurnInput): MemberTurn {
-  const m = getMember(slug);
-  const mention = input.addressedTo ? "Directly: " : "";
-  return {
-    text: `${mention}${m?.name ?? slug} here. The briefing says free converts at 2.3% and eats 38% of support, while 34% of paid arrived that way. Run a 14-day trial on new workspaces, keep a narrow share path, and watch enterprise referrals for one month.`,
-  };
+function latestQuestioner(input: RuntimeTurnInput): string {
+  return (
+    [...input.transcript]
+      .reverse()
+      .find((event) => event.kind === "message" && event.speakerId !== input.memberId)
+      ?.speakerName ?? "You"
+  );
+}
+
+function genericTurn(input: RuntimeTurnInput, turnIndex: number): MemberTurn {
+  const m = getMember(input.memberId);
+  const name = m?.name ?? input.memberId;
+  const startingPoint = input.privatePosition?.recommendation ?? "Keep the next move reversible";
+  const priorBoardPoint = [...input.transcript]
+    .reverse()
+    .find(
+      (event) =>
+        event.kind === "message" &&
+        event.speakerId !== input.memberId &&
+        event.speakerId !== "chair" &&
+        event.speakerId !== "guest",
+    )?.text;
+  const variants = [
+    `${name}'s starting point: ${startingPoint} Name the assumption that has to be true, assign an owner to measure it, and avoid making the irreversible part of the decision first.`,
+    `Split this into reversible and irreversible moves. Run the smallest version that can disprove the plan, publish the decision date now, and keep the current path available until the evidence arrives.`,
+    priorBoardPoint
+      ? `The useful tension in the room is not personality; it is the claim behind “${priorBoardPoint.slice(0, 96)}${priorBoardPoint.length > 96 ? "…" : ""}” Test that claim directly before averaging the board into a vague compromise.`
+      : `The missing input is a falsifiable threshold. Decide what result would make the board say no, not only what result would let the team declare victory.`,
+    `Close the experiment with a written rule: the owner, the measure, the review date, and the condition that reverses course. Without those four things, “reversible” is only a comforting adjective.`,
+  ];
+  return { text: variants[turnIndex % variants.length] };
 }
 
 function fallbackReadout(
@@ -113,36 +217,43 @@ function fallbackReadout(
   };
 }
 
-export function createMockRuntime(): BoardRuntime {
-  const spoken = new Map<string, number>();
+export function createMockRuntime(options: MockRuntimeOptions = {}): BoardRuntime {
+  const wait = options.wait ?? waitFor;
+  const pause = async (milliseconds: number) => {
+    if (milliseconds > 0) await wait(milliseconds);
+  };
   return {
     id: "mock",
     async formOpeningPosition(input) {
+      await pause(options.openingDelayMs?.(input.memberId) ?? 0);
       const preset = OPENINGS[input.memberId];
-      return preset ? { ...preset, memberId: input.memberId } : genericOpening(input.memberId);
+      return preset ? { ...preset, memberId: input.memberId } : genericOpening(input);
     },
     async publicTurn(input) {
-      const n = spoken.get(input.memberId) ?? 0;
-      spoken.set(input.memberId, n + 1);
+      await pause(options.publicTurnDelayMs ?? 0);
+      const n = input.ownPriorStatements.length;
       if (input.capability === "answerDirect" || input.prompt) {
+        const addressedTo = latestQuestioner(input);
         if (input.memberId === "lulu-cheng-meservey") {
           return {
             text: "You explain a free-tier change as a promise, not a punishment. Tell them you are done pretending a workspace you cannot support is generosity. Offer a clean trial, grandfather the ones who already built a home, and ask your best customers to invite people into something you will actually stand behind.",
-            addressedTo: "You",
+            addressedTo,
           };
         }
         if (input.memberId === "daniel-ek") {
           return {
             text: "If seven of your last ten enterprise wins entered through a shared free workspace, that is not folklore, that is the funnel. I would not kill free. I would instrument sharing, keep a narrow free path for invites, and put the trial on unshared tire-kickers. Evidence beats ideology.",
-            addressedTo: input.addressedTo,
+            addressedTo,
           };
         }
         return {
           text: `${getMember(input.memberId)?.name ?? "The seat"} answers directly: the evidence in the room should change the next experiment, not the personality of the company. Make the reversible test, then decide.`,
+          addressedTo,
         };
       }
       if (n === 0 && FIRST_TURNS[input.memberId]) return FIRST_TURNS[input.memberId];
-      return genericTurn(input.memberId, input);
+      const followUp = FOLLOW_UP_TURNS[input.memberId]?.[n - 1];
+      return followUp ?? genericTurn(input, n);
     },
     async closingComment(input) {
       const map: Record<string, string> = {

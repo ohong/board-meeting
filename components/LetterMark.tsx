@@ -1,33 +1,27 @@
 /**
- * Advisers have no portraits, so a monogram carries their identity. A deterministic hue per
- * person keeps the table from reading as six identical discs, held inside the room's warm
- * range so it still looks like brass and walnut rather than a colour wheel.
+ * One portrait frame for every participant. The roster has no licensed portraits, so the
+ * frame holds a typographic monogram — the design's stated fallback. Every adviser gets the
+ * identical treatment: they are told apart by name, role and behaviour, never by colour.
  */
-function hueFor(seed: string): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) % 100000;
-  return 22 + (hash % 88);
-}
-
-export function LetterMark({
+export function Portrait({
   initials,
-  seed,
-  size = "lg",
+  size = "md",
   variant = "member",
+  label,
 }: {
   initials: string;
-  /** Whatever identifies this person; the same seed always gives the same hue. */
-  seed?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   variant?: "member" | "guest" | "vacant";
+  /** The person's name, so the frame is not silent to assistive technology. */
+  label?: string;
 }) {
-  const variantClass = variant === "member" ? "" : ` ${variant}`;
-  const hue = variant === "member" && seed ? hueFor(seed) : undefined;
+  const variantClass = variant === "member" ? "" : ` portrait-${variant}`;
   return (
     <div
-      className={`letter-mark ${size}${variantClass}`}
-      style={hue === undefined ? undefined : ({ "--mark-hue": String(hue) } as React.CSSProperties)}
-      aria-hidden
+      className={`portrait portrait-${size}${variantClass}`}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
     >
       {initials}
     </div>

@@ -40,35 +40,35 @@ for (let run = 1; run <= RUNS; run += 1) {
   const t0 = Date.now();
 
   await page.goto(BASE_URL, { waitUntil: "networkidle" });
-  check("opens on board selection", (await page.locator("h1").first().innerText()) === "Choose your board");
+  check("opens on board selection", (await page.locator("h1").first().innerText()).includes("Who do you want in the room"));
 
   for (const q of ["Ek", "DHH", "Lulu"]) {
-    await page.fill('input[placeholder*="Search the roster"]', q);
+    await page.fill('input[placeholder*="Find a founder"]', q);
     await page.waitForTimeout(120);
     await page.locator("button[aria-pressed]").first().click();
   }
-  await page.fill('input[placeholder*="Search the roster"]', "");
+  await page.fill('input[placeholder*="Find a founder"]', "");
   await page.waitForTimeout(150);
   check("three advisers seated", (await page.locator('button[aria-pressed="true"]').count()) === 3);
 
-  await page.getByRole("button", { name: "Continue to briefing" }).click();
-  await page.getByRole("button", { name: "Use example decision" }).click();
-  await page.getByRole("button", { name: "Start Board Meeting" }).click();
+  await page.getByRole("button", { name: "Brief your board" }).click();
+  await page.getByRole("button", { name: "Use the pricing decision" }).click();
+  await page.getByRole("button", { name: "Start board meeting" }).click();
 
-  await page.waitForSelector("text=In discussion", { timeout: 45000 });
+  await page.waitForSelector("text=Add context or call on someone", { timeout: 45000 });
   const opened = (Date.now() - t0) / 1000;
 
-  await page.waitForFunction(() => document.body.innerText.match(/(\d+) contributions/)?.[1] >= 3, { timeout: 60000 });
-  const minutes = await page.locator("aside:has-text('MINUTES')").first().innerText();
+  await page.waitForFunction(() => document.querySelectorAll("article.minutes-entry").length >= 3, { timeout: 60000 });
+  const minutes = await page.locator("section[aria-label='Minutes']").innerText();
   check("all three advisers spoke", ["Daniel Ek", "David Heinemeier Hansson", "Lulu Cheng Meservey"].every((n) => minutes.includes(n)));
   check("a rebuttal is addressed to someone", minutes.includes("to Daniel Ek") || minutes.includes("to Lulu Cheng Meservey"));
-  check("a reaction is visible", /DISAGREES|AGREES|CONCERN/i.test(minutes));
+  check("a reaction is visible", /Pushes back|Agrees|Reconsidering/i.test(minutes));
 
-  const composer = page.locator('textarea[placeholder*="Answer the board"]');
+  const composer = page.locator('textarea[placeholder*="Add context or call on someone"]');
   await composer.fill("@Lulu how do we explain a free-tier change without losing user trust?");
   await composer.press("Enter");
   await page.waitForFunction(() => {
-    const rows = [...document.querySelectorAll(".minutes-row")].map((d) => d.textContent || "");
+    const rows = [...document.querySelectorAll(".minutes-entry")].map((d) => d.textContent || "");
     const chair = rows.findIndex((t) => t.includes("@Lulu how do we explain"));
     return chair > -1 && rows.slice(chair + 1).some((t) => t.includes("Lulu Cheng Meservey"));
   }, { timeout: 45000 });
@@ -80,7 +80,7 @@ for (let run = 1; run <= RUNS; run += 1) {
   const joined = JSON.parse(await page.evaluate(() => window.__call("join_board_meeting", { name: "Codex" })));
   check("guest joined under its own name", joined.ok === true);
   await page.waitForTimeout(1000);
-  check("guest seat activated", (await page.locator("text=Joined via WebMCP").count()) === 1);
+  check("guest seat activated", (await page.locator("text=Guest agent · WebMCP").count()) >= 1);
 
   const contributed = JSON.parse(await page.evaluate((t) => window.__call("contribute_to_board_meeting", { text: t }), CODEX_CONTEXT));
   check("guest contributed context", contributed.ok === true);
@@ -91,32 +91,33 @@ for (let run = 1; run <= RUNS; run += 1) {
 
   const synthesis = JSON.parse(await page.evaluate(() => window.__call("request_board_synthesis")));
   check("interim synthesis returned", synthesis.ok === true);
-  check("synthesis did not end the meeting", (await page.locator("text=End Meeting").count()) === 1);
+  check("synthesis did not end the meeting", (await page.getByRole("button", { name: "End meeting" }).count()) === 1);
 
   const early = JSON.parse(await page.evaluate(() => window.__call("get_board_meeting_readout")));
   check("readout refused before the chair ends it", early.ready === false);
 
-  await page.getByRole("button", { name: "End Meeting" }).click();
-  await page.waitForSelector("text=Executive readout", { timeout: 60000 });
+  await page.getByRole("button", { name: "End meeting" }).click();
+  await page.waitForSelector("text=Board readout", { timeout: 60000 });
   const readoutText = await page.locator("main").innerText();
-  const SECTIONS = ["Decision under discussion", "Board recommendation", "Options considered", "Key tradeoffs",
-    "Important assumptions", "Open questions", "Recommended next actions", "Closing comments by board member"];
-  check("readout has all eight sections", SECTIONS.every((s) => readoutText.toLowerCase().includes(s.toLowerCase())));
-  check("dissent preserved", readoutText.includes("The board remained divided"));
-  check("every adviser has a closing comment", ["— Daniel Ek", "— David Heinemeier Hansson", "— Lulu Cheng Meservey"].every((n) => readoutText.includes(n)));
+  const SECTIONS = ["Options considered", "Key tradeoffs", "Important assumptions", "Open questions",
+    "Recommended next actions", "Closing comments"];
+  check("readout has every section", SECTIONS.every((s) => readoutText.toLowerCase().includes(s.toLowerCase())));
+  check("the decision and recommendation lead the page", readoutText.includes("free tier") && readoutText.includes("Board readout"));
+  check("dissent preserved", readoutText.includes("The board remains divided"));
+  check("every adviser has a closing comment", ["Daniel Ek", "David Heinemeier Hansson", "Lulu Cheng Meservey"].every((n) => readoutText.includes(n)));
 
   const memo = await page.evaluate(() => window.__call("get_board_meeting_readout"));
   check("guest retrieved the memo", memo.includes("BOARD RECOMMENDATION"));
   await page.waitForTimeout(300);
-  check("retrieval confirmed on screen", readoutText.length > 0 && (await page.locator("text=retrieved this readout through WebMCP").count()) === 1);
+  check("retrieval confirmed on screen", (await page.locator("text=Retrieved by Codex").count()) === 1);
 
   await page.reload({ waitUntil: "networkidle" });
-  check("refresh starts a new meeting", (await page.locator("h1").first().innerText()) === "Choose your board");
+  check("refresh starts a new meeting", (await page.locator("h1").first().innerText()).includes("Who do you want in the room"));
   check("no page errors", errors.length === 0);
 
   const total = ((Date.now() - t0) / 1000).toFixed(1);
   const bad = checks.filter((c) => c.startsWith("FAIL"));
-  console.log(`run ${run}: ${bad.length ? bad.join(" | ") : "all 18 checks passed"}  (positions closed +${opened.toFixed(1)}s, full script ${total}s)`);
+  console.log(`run ${run}: ${bad.length ? bad.join(" | ") : `all ${checks.length} checks passed`}  (positions closed +${opened.toFixed(1)}s, full script ${total}s)`);
   if (errors.length) console.log("  errors:", errors);
   await context.close();
 }

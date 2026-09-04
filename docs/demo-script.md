@@ -19,19 +19,19 @@ five times in a row against a fresh session.
 
 ## The script
 
-**0:00–0:15 — Choose your board.** Search `Ek`, `DHH`, `Lulu` and seat all three. Say what
+**0:00–0:15 — Choose your board.** Search `Ek`, `DHH`, `Lulu` and seat all three. The miniature table on the left fills as you go. Say what
 the room is: three separate agents, each with its own sources, not one model in six hats.
 
-**0:15–0:25 — Brief your board.** Click **Use example decision**, let the briefing land on
-screen for a beat, then **Start Board Meeting**.
+**0:15–0:25 — Brief your board.** Click **Use the pricing decision**, let the briefing land on
+screen for a beat, then **Start board meeting**.
 
-**0:25–0:40 — Independent positions.** All three seats go to *Forming a view*, in parallel,
+**0:25–0:40 — Independent positions.** All three seats go to *Considering privately*, in parallel,
 and turn ready. Say why: each adviser commits to a position privately so the first speaker
 does not anchor the room. Nobody sees anyone else's.
 
 **0:40–1:15 — The discussion.** Ek questions the premise, DHH rebuts him by name, Lulu
-reframes it as trust rather than pricing. Reaction chips and the *to <name>* labels are
-worth pointing at. Then type:
+reframes it as trust rather than pricing. The reaction lines under each seat and the *to <name>* labels in the minutes are worth
+pointing at. Then type:
 
 > `@Lulu how do we explain a free-tier change without losing user trust?`
 
@@ -49,7 +49,7 @@ into your agent. It will:
 Watch the guest seat activate, the contribution land in the minutes, and Ek answer with the
 new evidence. The activity list in the invite panel tracks each call.
 
-**1:45–2:00 — End and read out.** Click **End Meeting**. Every adviser gives a closing
+**1:45–2:00 — End and read out.** Click **End meeting**. Every adviser gives a closing
 comment, then the readout appears: recommendation, options, tradeoffs, assumptions, open
 questions, next actions, and every closing comment attributed. The board is divided and the
 memo says so. Finally, your agent calls `get_board_meeting_readout` and gets the exact memo

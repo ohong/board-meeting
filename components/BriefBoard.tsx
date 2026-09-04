@@ -1,77 +1,98 @@
 "use client";
 
 import { useState } from "react";
-import { LetterMark } from "./LetterMark";
+import { Portrait } from "./LetterMark";
 import type { MeetingSession, MeetingState } from "@/lib/session";
 
+/**
+ * Paper mode, 4/8 for continuity with selection. The decision sheet is the dominant object:
+ * an open working surface to think on, not a textarea inside a card.
+ */
 export function BriefBoard({ session, state }: { session: MeetingSession; state: MeetingState }) {
   const [starting, setStarting] = useState(false);
   const ready = session.canStart();
 
   return (
-    <main className="flex-1 w-full max-w-[980px] mx-auto px-10 py-9">
-      <button type="button" onClick={() => session.goToSelect()} className="text-[12px] text-[var(--muted)] hover:text-[var(--ink)]">
-        ← Change the board
-      </button>
+    <main className="mx-auto grid w-full max-w-[1360px] grid-cols-12 gap-6 px-8 py-10 lg:px-12">
+      <section className="col-span-12 lg:col-span-4">
+        <div className="lg:sticky lg:top-10">
+          <button
+            type="button"
+            onClick={() => session.goToSelect()}
+            className="text-[13px] text-[var(--ink-secondary)] hover:text-[var(--ink)]"
+          >
+            Change board
+          </button>
 
-      <div className="eyebrow mt-5">Step two</div>
-      <h1 className="serif text-[42px] leading-[1.02] font-semibold tracking-[-0.03em] mt-2.5">
-        Brief your board
-      </h1>
-      <p className="mt-3 text-[15px] leading-relaxed text-[var(--muted)] max-w-[58ch]">
-        One decision, with as much context as you want to give — metrics, constraints, what you are
-        afraid of. Links stay as plain text; nothing here is fetched.
-      </p>
+          <h2 className="mt-6 text-[13px] font-medium">Your board</h2>
+          <ul className="mt-4 border-t border-[var(--rule)]">
+            {state.selected.map((slug) => {
+              const member = session.catalog.find((entry) => entry.slug === slug)!;
+              return (
+                <li
+                  key={slug}
+                  className="flex items-center gap-3 border-b border-[var(--rule)] py-3"
+                >
+                  <Portrait initials={member.initials} size="sm" label={member.name} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-medium leading-tight">
+                      {member.name}
+                    </span>
+                    <span className="block truncate text-[12px] leading-tight text-[var(--ink-secondary)]">
+                      {member.role}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
 
-      <div className="flex flex-wrap items-center gap-4 mt-6">
-        {state.selected.map((slug) => {
-          const member = session.catalog.find((entry) => entry.slug === slug)!;
-          return (
-            <div key={slug} className="flex items-center gap-2.5">
-              <LetterMark initials={member.initials} seed={member.slug} size="sm" />
-              <div className="leading-tight">
-                <div className="text-[12.5px] font-medium">{member.name}</div>
-                <div className="text-[10.5px] text-[var(--faint)]">{member.role}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <label className="block mt-7">
-        <span className="block text-[13px] mb-2 text-[var(--muted)]">
+      <section className="col-span-12 lg:col-span-8">
+        <h1 className="editorial text-[clamp(32px,3.4vw,46px)] leading-[1.02] tracking-[-0.02em]">
           What decision are you trying to make?
-        </span>
-        <textarea
-          value={state.briefing}
-          onChange={(event) => session.setBriefing(event.target.value)}
-          rows={12}
-          placeholder="Should we…? Here is the situation, the numbers, and what worries me."
-          className="paper-card w-full rounded-[3px] p-6 text-[16px] leading-[1.65] outline-none min-h-[300px] resize-y"
-          style={{ fontFamily: "var(--font-newsreader), Georgia, serif" }}
-        />
-      </label>
+        </h1>
 
-      <div className="flex items-center justify-between mt-5">
-        <button
-          type="button"
-          onClick={() => session.useExampleDecision()}
-          className="btn-quiet px-3.5 py-2 text-[12.5px]"
-        >
-          Use example decision
-        </button>
-        <button
-          type="button"
-          disabled={!ready || starting}
-          onClick={() => {
-            setStarting(true);
-            void session.startMeeting();
-          }}
-          className="btn-primary px-6 py-3 text-[14px]"
-        >
-          {starting ? "Convening the board" : "Start Board Meeting"}
-        </button>
-      </div>
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-3">
+          <p className="max-w-[62ch] text-[15px] leading-[1.5] text-[var(--ink-secondary)]">
+            Give them the context you would give a real board: the goal, the numbers, the
+            constraints, and what feels difficult. Links stay as plain text.
+          </p>
+          <button
+            type="button"
+            onClick={() => session.useExampleDecision()}
+            className="shrink-0 text-[13px] text-[var(--ink-secondary)] underline decoration-[var(--rule)] underline-offset-4 hover:text-[var(--ink)]"
+          >
+            Use the pricing decision
+          </button>
+        </div>
+
+        <label className="mt-6 block">
+          <span className="sr-only">Your decision brief</span>
+          <textarea
+            value={state.briefing}
+            onChange={(event) => session.setBriefing(event.target.value)}
+            rows={14}
+            placeholder="Describe the decision, what has led you here, and what the board should challenge."
+            className="editorial w-full resize-y border-t border-[var(--rule)] bg-transparent py-6 text-[19px] leading-[1.62] outline-none placeholder:text-[var(--ink-secondary)] focus:border-[var(--ink-secondary)]"
+          />
+        </label>
+
+        <div className="mt-2 flex items-center justify-end border-t border-[var(--rule)] pt-6">
+          <button
+            type="button"
+            disabled={!ready || starting}
+            onClick={() => {
+              setStarting(true);
+              void session.startMeeting();
+            }}
+            className="btn-primary"
+          >
+            {starting ? "Convening the board" : "Start board meeting"}
+          </button>
+        </div>
+      </section>
     </main>
   );
 }

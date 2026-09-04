@@ -1,121 +1,166 @@
 "use client";
 
-import { LetterMark, initialsFor } from "./LetterMark";
-import { Reaction } from "./Reaction";
+import { Portrait, initialsFor } from "./LetterMark";
+import { GUEST_STATE, REACTION, SEAT_STATE } from "./vocabulary";
 import type { GuestSeat, MemberSeat } from "@/lib/session";
-import type { SeatStatus } from "@/lib/types";
 
-const SEAT_STATUS: Record<SeatStatus, string> = {
-  thinking: "Forming a view",
-  ready: "",
-  speaking: "Speaking",
-  wants_to_respond: "Wants the floor",
-  reconnecting: "Reconnecting",
-};
-
-const GUEST_STATUS: Record<GuestSeat["status"], string> = {
-  empty: "Seat reserved",
-  waiting: "Awaiting your agent",
-  joining: "Joining",
-  joined: "Joined via WebMCP",
-  contributing: "Adding context",
-  asking: "Asking a question",
-};
+type Place = { left: string; top: string };
 
 /**
- * Seats sit on an ellipse. The chair takes the near edge, advisers fill the far arc, and
- * the guest seat sits at the near left so an arrival is unmissable. Angles are measured
- * clockwise from the right, screen coordinates, so 90 is the bottom and 270 the top.
+ * Fixed, art-directed seating rather than points distributed round an ellipse. Each
+ * arrangement puts the chair at the near end, the guest threshold at the near right, and
+ * the advisers where a conversation would actually put them.
  */
-function place(angleDeg: number): { left: string; top: string } {
-  const radians = (angleDeg * Math.PI) / 180;
-  return {
-    left: `${50 + Math.cos(radians) * 40}%`,
-    top: `${50 + Math.sin(radians) * 30}%`,
-  };
-}
+const ARRANGEMENTS: Record<number, Place[]> = {
+  3: [
+    { left: "50%", top: "7%" },
+    { left: "11%", top: "40%" },
+    { left: "89%", top: "40%" },
+  ],
+  4: [
+    { left: "33%", top: "6%" },
+    { left: "67%", top: "6%" },
+    { left: "10%", top: "44%" },
+    { left: "90%", top: "44%" },
+  ],
+  5: [
+    { left: "50%", top: "4%" },
+    { left: "19%", top: "13%" },
+    { left: "81%", top: "13%" },
+    { left: "10%", top: "48%" },
+    { left: "90%", top: "48%" },
+  ],
+  6: [
+    { left: "34%", top: "4%" },
+    { left: "66%", top: "4%" },
+    { left: "12%", top: "20%" },
+    { left: "88%", top: "20%" },
+    { left: "10%", top: "52%" },
+    { left: "90%", top: "52%" },
+  ],
+};
 
-function adviserAngles(count: number): number[] {
-  if (count <= 1) return [270];
-  const start = 202;
-  const end = 338;
-  const step = (end - start) / (count - 1);
-  return Array.from({ length: count }, (_, index) => start + step * index);
-}
+const CHAIR: Place = { left: "50%", top: "78%" };
+const GUEST: Place = { left: "87%", top: "76%" };
 
 export function BoardTable({
   members,
   guest,
-  chairLabel,
+  decision,
+  phaseLabel,
+  guestArrived,
   onMention,
+  onInspectBrief,
 }: {
   members: MemberSeat[];
   guest: GuestSeat;
-  chairLabel: string;
+  decision: string;
+  phaseLabel: string;
+  guestArrived: boolean;
   onMention: (name: string) => void;
+  onInspectBrief: () => void;
 }) {
-  const angles = adviserAngles(members.length);
+  const places = ARRANGEMENTS[members.length] ?? ARRANGEMENTS[3];
 
   return (
-    <div className="relative w-full h-full">
-      <div className="table-surface">
-        <div className="table-crest">
-          In session
-          <div className="mt-1 text-[9px] tracking-[0.2em] opacity-70">The Board</div>
-        </div>
-      </div>
+    <div className="room-field relative h-full w-full">
+      <div className="table-top h-[48%] w-[62%]" aria-hidden />
 
-      {members.map((member, index) => (
+      <div className="agenda-folio w-[min(360px,30%)] px-5 py-4">
+        <p className="text-[11px] font-medium text-[var(--ink-secondary)]">{phaseLabel}</p>
+        <p className="editorial mt-1.5 line-clamp-3 text-[17px] leading-[1.25]">{decision}</p>
         <button
           type="button"
-          key={member.slug}
-          className="seat"
-          data-status={member.status}
-          style={place(angles[index])}
-          onClick={() => onMention(member.name)}
-          title={`${member.name} — ${member.role}. Click to address them.`}
+          onClick={onInspectBrief}
+          className="mt-2.5 text-[12px] text-[var(--ink-secondary)] underline decoration-[var(--rule)] underline-offset-4 hover:text-[var(--ink)]"
         >
-          <div className="mx-auto w-fit">
-            <LetterMark initials={member.initials} seed={member.slug} />
-          </div>
-          <strong className="seat-name">{member.name}</strong>
-          <span className="nameplate">{member.house}</span>
-          <span className="status-line">
-            {member.status === "ready" && member.reaction ? (
-              <Reaction kind={member.reaction} />
-            ) : (
-              SEAT_STATUS[member.status]
-            )}
-          </span>
+          Read the full brief
         </button>
-      ))}
-
-      <div className="seat" data-guest={guest.status} style={place(148)}>
-        <div className="mx-auto w-fit">
-          {guest.name ? (
-            <LetterMark initials={initialsFor(guest.name)} variant="guest" />
-          ) : (
-            <LetterMark initials="＋" variant="vacant" />
-          )}
-        </div>
-        <strong className="seat-name" style={guest.name ? { color: "var(--guest)" } : undefined}>
-          {guest.name ?? "Guest seat"}
-        </strong>
-        <span className="nameplate" style={{ opacity: guest.name ? 1 : 0.5 }}>
-          {guest.name ? "External agent" : "Your agent"}
-        </span>
-        <span className="status-line" style={guest.name ? { color: "var(--guest)" } : undefined}>
-          {GUEST_STATUS[guest.status]}
-        </span>
       </div>
 
-      <div className="seat" style={place(90)}>
-        <div className="mx-auto w-fit">
-          <LetterMark initials="YOU" size="md" />
+      {/* A linear roster for assistive technology; the spatial arrangement is decorative. */}
+      <ul className="sr-only">
+        {members.map((member) => (
+          <li key={member.slug}>
+            {member.name}, {member.role}. {SEAT_STATE[member.status]}.
+          </li>
+        ))}
+        <li>You, chair.</li>
+        <li>{guest.name ? `${guest.name}, guest agent.` : "Guest agent place, open."}</li>
+      </ul>
+
+      <div aria-hidden>
+        {members.map((member, index) => (
+          <button
+            type="button"
+            key={member.slug}
+            className="seat"
+            data-state={member.status}
+            style={places[index]}
+            onClick={() => onMention(member.name)}
+            tabIndex={-1}
+            title={`${member.name} — ${member.role}`}
+          >
+            <div className="mx-auto w-fit">
+              <Portrait initials={member.initials} size="lg" />
+            </div>
+            <div className="mt-2.5">
+              <span className="nameplate">{member.name}</span>
+            </div>
+            <span className="mt-1.5 block text-[12px] leading-tight text-[var(--room-secondary)]">
+              {member.status === "ready" && member.reaction
+                ? REACTION[member.reaction]
+                : SEAT_STATE[member.status]}
+            </span>
+            {member.status === "thinking" ? <span className="considering" /> : null}
+          </button>
+        ))}
+
+        <div className="seat" style={CHAIR}>
+          <div className="mx-auto w-fit">
+            <Portrait initials="YOU" size="md" />
+          </div>
+          <div className="mt-2.5">
+            <span className="nameplate" style={{ borderColor: "var(--human-room)" }}>
+              You
+            </span>
+          </div>
+          <span className="mt-1.5 block text-[12px] leading-tight text-[var(--room-secondary)]">
+            Chair
+          </span>
         </div>
-        <strong className="seat-name">You</strong>
-        <span className="nameplate">Chair</span>
-        <span className="status-line">{chairLabel}</span>
+
+        <div
+          className={`seat${guestArrived ? " seat-guest-arrive" : ""}`}
+          style={GUEST}
+          data-state={guest.status === "empty" ? "thinking" : "ready"}
+        >
+          <div className="mx-auto w-fit">
+            <Portrait
+              initials={guest.name ? initialsFor(guest.name) : ""}
+              size="md"
+              variant={guest.name ? "guest" : "vacant"}
+            />
+          </div>
+          <div className="mt-2.5">
+            <span
+              className="nameplate"
+              style={
+                guest.name
+                  ? { borderColor: "var(--guest-room)", color: "var(--guest-room)" }
+                  : { opacity: 0.5 }
+              }
+            >
+              {guest.name ?? "Guest agent"}
+            </span>
+          </div>
+          <span
+            className="mt-1.5 block text-[12px] leading-tight"
+            style={{ color: guest.name ? "var(--guest-room)" : "var(--room-secondary)" }}
+          >
+            {GUEST_STATE[guest.status]}
+          </span>
+        </div>
       </div>
     </div>
   );

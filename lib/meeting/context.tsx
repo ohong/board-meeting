@@ -7,8 +7,8 @@ import type { MeetingState } from "./types";
 const SessionContext = createContext<MeetingSession | null>(null);
 
 /**
- * Provides one MeetingSession for the life of the page. A fresh page load creates a
- * fresh session (spec §5.1); nothing is persisted.
+ * Provides one local MeetingSession projection for the life of the page. RoomSync
+ * hydrates it from the shared room when the URL identifies an active meeting.
  */
 export function MeetingProvider({ children, session }: { children: ReactNode; session?: MeetingSession }) {
   const value = useMemo(() => session ?? new MeetingSession(), [session]);

@@ -36,7 +36,7 @@ function Tag({
   pulse?: boolean;
 }) {
   const tones = {
-    accent: "border-accent-line bg-accent-soft text-accent-deep",
+    accent: "border-transparent bg-ink text-surface shadow-[0_4px_12px_-6px_rgb(0_0_0/0.6)]",
     warn: "border-warn/40 bg-warn/12 text-ink-2",
     quiet: "border-line bg-surface text-muted",
     bad: "border-dissent/30 bg-dissent-soft text-dissent",
@@ -44,8 +44,10 @@ function Tag({
   } as const;
   return (
     <span
-      className={`inline-flex h-[22px] items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold whitespace-nowrap ${tones[tone]} ${
-        pulse ? "animate-pulse-soft" : ""
+      /* One `animate-*` at a time: both set the `animation` shorthand, so a
+         second class silently replaces the first. */
+      className={`inline-flex h-[22px] items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-semibold whitespace-nowrap ${tones[tone]} ${
+        pulse ? "animate-pulse-soft" : "animate-pop-in"
       }`}
     >
       {children}
@@ -73,14 +75,18 @@ function dotClass(status: MemberParticipant["status"]): string {
 
 export function MemberSeat({
   member,
+  dimmed = false,
   onSelect,
   onRetry,
 }: {
   member: MemberParticipant;
+  /** True while somebody else holds the floor: this seat steps back a little. */
+  dimmed?: boolean;
   onSelect: () => void;
   onRetry: () => void;
 }) {
   const speaking = member.status === "speaking";
+  const thinking = member.status === "forming" || member.status === "retrying";
   const unavailable = member.status === "failed";
 
   let tag: React.ReactNode = null;
@@ -101,9 +107,9 @@ export function MemberSeat({
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex h-[22px] items-center gap-1 rounded-full border border-dissent/30 bg-dissent-soft px-2.5 text-[11px] font-semibold text-dissent transition-colors hover:bg-dissent/15"
+        className="press inline-flex h-[22px] animate-pop-in items-center gap-1 rounded-full border border-dissent/30 bg-dissent-soft px-2.5 text-[12px] font-semibold text-dissent transition-[background-color,transform] duration-200 ease-out hover:bg-dissent/15"
       >
-        <RefreshIcon size={12} />
+        <RefreshIcon size={14} />
         Unavailable · retry
       </button>
     );
@@ -114,30 +120,49 @@ export function MemberSeat({
         type="button"
         onClick={onSelect}
         title={`Call on ${member.persona.name}`}
-        className="group block w-full cursor-pointer rounded-xl"
+        className="press group block w-full cursor-pointer rounded-lg transition-transform duration-150 ease-out"
       >
         <span className="relative mx-auto block w-fit">
+          {/* A ring that breathes while this member is still forming a view. */}
+          {thinking ? (
+            <span
+              aria-hidden
+              className="absolute -inset-1 animate-breathe rounded-full border border-accent-line"
+            />
+          ) : null}
           <span
-            className={`block rounded-full bg-surface p-[3px] transition-shadow duration-300 ${
+            className={`relative block rounded-full bg-surface p-[3px] transition-shadow duration-400 ease-out ${
               speaking
-                ? "shadow-[0_0_0_2px_var(--color-accent),0_10px_28px_-8px_var(--color-accent)]"
-                : "shadow-[0_0_0_1px_var(--color-line),0_6px_18px_-8px_oklch(30%_0.04_60/0.35)] group-hover:shadow-[0_0_0_2px_var(--color-line-strong),0_6px_18px_-8px_oklch(30%_0.04_60/0.35)]"
+                ? "shadow-[var(--shadow-seat-lit)]"
+                : "shadow-[var(--shadow-seat)] group-hover:shadow-[0_0_0_2px_var(--color-line-strong),0_8px_22px_-8px_rgb(0_0_0/0.22)]"
             }`}
           >
             <Portrait
               src={member.persona.portrait}
               alt={member.persona.name}
               size={64}
-              className={member.status === "forming" ? "animate-pulse-soft" : unavailable ? "opacity-45 grayscale" : ""}
+              className={unavailable ? "opacity-45 grayscale" : ""}
             />
           </span>
           <span
             aria-hidden
-            className={`absolute right-[3px] bottom-[3px] h-3 w-3 rounded-full ring-2 ring-surface ${dotClass(member.status)}`}
+            className={`absolute right-[3px] bottom-[3px] h-3 w-3 rounded-full ring-2 ring-surface transition-colors duration-300 ${dotClass(member.status)}`}
           />
         </span>
-        <span className="mt-2 block text-[13px] leading-tight font-semibold text-ink">{member.persona.name}</span>
-        <span className="mt-0.5 block truncate text-[11.5px] text-muted">{member.persona.company}</span>
+        <span
+          className={`mt-2 block text-[13px] leading-tight font-semibold transition-colors duration-400 ease-out ${
+            speaking ? "text-ink" : dimmed ? "text-ink-2/70" : "text-ink"
+          }`}
+        >
+          {member.persona.name}
+        </span>
+        <span
+          className={`mt-0.5 block truncate text-[12px] transition-colors duration-400 ease-out ${
+            dimmed && !speaking ? "text-faint" : "text-muted"
+          }`}
+        >
+          {member.persona.company}
+        </span>
       </button>
       <div className="mt-1.5 flex h-[22px] items-center justify-center">{tag}</div>
     </div>

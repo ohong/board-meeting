@@ -24,6 +24,7 @@ type AnyResult = Record<string, unknown> & {
 
 function toolsFor(state?: MeetingState): { session: MeetingSession; tools: BoardToolMap } {
   const session = new MeetingSession(state);
+  session.setCatalog(FIXTURE_PERSONAS);
   return { session, tools: createBoardTools(() => session) };
 }
 
@@ -83,7 +84,7 @@ function crowdedState(): MeetingState {
 }
 
 describe("WebMCP board tools", () => {
-  it("exposes exactly the six frozen tool names and never an end-meeting tool", () => {
+  it("exposes launch and participation tools and never an end-meeting tool", () => {
     const { tools } = toolsFor(FIXTURES.discussion());
     expect(Object.keys(tools).sort()).toEqual([...WEBMCP_TOOL_NAMES].sort());
     for (const name of WEBMCP_TOOL_NAMES) {
@@ -92,6 +93,37 @@ describe("WebMCP board tools", () => {
       expect(tools[name].description.length).toBeGreaterThan(80);
     }
     expect(Object.keys(tools).some((n) => n.includes("end"))).toBe(false);
+  });
+
+  it("lists advisers and launches a shareable meeting from the empty page", async () => {
+    const session = new MeetingSession();
+    session.setCatalog(FIXTURE_PERSONAS);
+    const tools = createBoardTools(() => session, {
+      createRoom: async (current) => {
+        const now = Date.now();
+        return {
+          id: "abcdefghjkmn",
+          chairKey: "chair-secret",
+          revision: 1,
+          state: current.getState(),
+          createdAt: now,
+          updatedAt: now,
+          expiresAt: now + 60_000,
+        };
+      },
+    });
+
+    const listed = await call(tools, "list_board_advisers");
+    expect((listed.advisers as unknown[]).length).toBe(FIXTURE_PERSONAS.length);
+
+    const launched = await call(tools, "launch_board_meeting", {
+      advisers: FIXTURE_PERSONAS.slice(0, 3).map((persona) => persona.slug),
+      briefing: "Should we launch this product next quarter?",
+    });
+    expect(launched.ok).toBe(true);
+    expect(launched.meeting_id).toBe("abcdefghjkmn");
+    expect(launched.meeting_url).toBe("/m/abcdefghjkmn");
+    expect(session.getState().phase).toBe("forming");
   });
 
   it("inspects before joining and tells the agent to join", async () => {
@@ -311,7 +343,7 @@ describe("WebMCP board tools", () => {
     const { tools } = toolsFor(FIXTURES.briefing());
     const inspect = await call(tools, "inspect_board_meeting");
     expect(inspect.ok).toBe(true);
-    expect(String(inspect.hint)).toContain("still choosing");
+    expect(String(inspect.hint)).toContain("launch_board_meeting");
 
     const join = await call(tools, "join_board_meeting", { display_name: "Harness Agent" });
     expect(join.ok).toBe(false);

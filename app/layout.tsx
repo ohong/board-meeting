@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
-import { Fraunces, Instrument_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { MeetingProvider } from "@/lib/meeting/context";
 import { EngineBinding } from "@/components/engine-binding";
 import { WebMCPTools } from "@/components/webmcp/webmcp-tools";
+import { RoomSync } from "@/components/room-sync";
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  axes: ["opsz"],
-});
-
-const instrumentSans = Instrument_Sans({
-  variable: "--font-instrument-sans",
+/* SF Pro is used wherever it exists (see `--font-sans` in globals.css). Inter is
+   the stand-in everywhere else: same grotesque skeleton, close metrics, so the
+   layout does not shift between platforms. */
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -24,11 +22,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${instrumentSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <MeetingProvider>
           {children}
           <EngineBinding />
+          <RoomSync />
           <WebMCPTools />
         </MeetingProvider>
       </body>

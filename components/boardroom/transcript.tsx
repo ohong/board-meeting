@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMeetingState } from "@/lib/meeting/context";
 import { Portrait } from "@/components/ui/portrait";
-import { ChairIcon } from "@/components/ui/icons";
+import { ArrowDownIcon, ChairIcon } from "@/components/ui/icons";
 import type { EventEntry, MessageEntry, SynthesisEntry } from "@/lib/meeting/types";
 
 function Caret() {
@@ -31,7 +31,7 @@ function Avatar({ entry, portrait }: { entry: MessageEntry; portrait: string | n
   }
   if (entry.speakerRole === "guest") {
     return (
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-live-soft text-[10px] font-bold text-ink-2">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-live-soft text-[12px] font-bold text-ink-2">
         {initials(entry.speakerName)}
       </span>
     );
@@ -49,8 +49,14 @@ function Message({ entry, portrait }: { entry: MessageEntry; portrait: string | 
 
   return (
     <li
-      className={`animate-rise-in flex gap-2.5 rounded-xl px-3 py-2.5 ${
-        isChair ? "bg-accent-soft/70" : isGuest ? "bg-live-soft/70" : entry.interruption ? "bg-surface-2/80" : ""
+      className={`animate-rise-in relative flex gap-2.5 rounded-lg py-2.5 pr-3 ${
+        isChair
+          ? "bg-accent-soft/70 pl-3"
+          : isGuest
+            ? "bg-live-soft/70 pl-3"
+            : entry.interruption
+              ? "border-l-2 border-dissent/40 bg-surface-2/70 pl-2.5"
+              : "pl-3"
       }`}
     >
       <Avatar entry={entry} portrait={portrait} />
@@ -58,7 +64,7 @@ function Message({ entry, portrait }: { entry: MessageEntry; portrait: string | 
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] leading-tight">
           <span className="font-semibold text-ink">{entry.speakerName}</span>
           {isGuest ? (
-            <span className="rounded-full bg-live/15 px-1.5 py-px text-[10px] font-semibold text-ink-2">
+            <span className="rounded-full bg-live/15 px-1.5 py-px text-[12px] font-semibold text-ink-2">
               Your agent
             </span>
           ) : null}
@@ -66,7 +72,7 @@ function Message({ entry, portrait }: { entry: MessageEntry; portrait: string | 
           {entry.interruption ? <span className="font-semibold text-dissent">Interrupting</span> : null}
           {entry.failed ? <span className="font-semibold text-dissent">Connection lost</span> : null}
         </p>
-        <p className="mt-1 text-[13.5px] leading-[1.5] text-ink-2">
+        <p className="mt-1 text-[13px] leading-[1.55] text-ink-2">
           {entry.text}
           {entry.streaming ? <Caret /> : null}
         </p>
@@ -77,7 +83,7 @@ function Message({ entry, portrait }: { entry: MessageEntry; portrait: string | 
 
 function SystemRow({ entry }: { entry: EventEntry }) {
   return (
-    <li className="flex items-center gap-3 px-2 py-1.5 text-[11.5px] text-muted">
+    <li className="flex items-center gap-3 px-2 py-2 text-[12px] text-muted">
       <span aria-hidden className="h-px flex-1 bg-line" />
       <span className="max-w-[80%] text-center leading-snug">{entry.text}</span>
       <span aria-hidden className="h-px flex-1 bg-line" />
@@ -87,16 +93,16 @@ function SystemRow({ entry }: { entry: EventEntry }) {
 
 function Synthesis({ entry }: { entry: SynthesisEntry }) {
   return (
-    <li className="animate-rise-in rounded-xl border border-accent-line bg-accent-soft/40 px-3.5 py-3">
-      <p className="flex flex-wrap items-baseline gap-x-2 text-[11.5px]">
+    <li className="animate-rise-in rounded-lg border border-accent-line bg-accent-soft/40 px-3.5 py-3">
+      <p className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
         <span className="font-semibold tracking-[0.08em] text-accent-deep uppercase">Interim synthesis</span>
         <span className="text-muted">requested by {entry.requestedByName}</span>
       </p>
-      <p className="mt-1.5 font-display text-[14px] leading-[1.5] text-ink">
+      <p className="mt-1.5 text-[14px] leading-[1.5] text-ink">
         {entry.text}
         {entry.streaming ? <Caret /> : null}
       </p>
-      {entry.failed ? <p className="mt-1.5 text-[11px] font-semibold text-dissent">Synthesis incomplete</p> : null}
+      {entry.failed ? <p className="mt-1.5 text-[12px] font-semibold text-dissent">Synthesis incomplete</p> : null}
     </li>
   );
 }
@@ -105,6 +111,9 @@ export function Transcript() {
   const state = useMeetingState();
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
+  // Mirrored into state only when it flips, so scrolling doesn't re-render on
+  // every wheel event.
+  const [pinned, setPinned] = useState(true);
 
   const portraits = useMemo(() => {
     const map: Record<string, string> = {};
@@ -123,27 +132,52 @@ export function Transcript() {
     el.scrollTop = el.scrollHeight;
   }, [lastId, lastText, state.transcript.length]);
 
+  const toLatest = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    nearBottom.current = true;
+    setPinned(true);
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
+
   return (
-    <div
-      ref={scrollRef}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-      }}
-      className="board-scrollbar min-h-0 flex-1 overflow-y-auto px-2.5 py-3"
-    >
-      <ol className="flex flex-col gap-1">
-        {state.transcript.map((entry) =>
-          entry.kind === "message" ? (
-            <Message key={entry.id} entry={entry} portrait={portraits[entry.speakerId] ?? null} />
-          ) : entry.kind === "synthesis" ? (
-            <Synthesis key={entry.id} entry={entry} />
-          ) : (
-            <SystemRow key={entry.id} entry={entry} />
-          ),
-        )}
-      </ol>
+    <div className="relative min-h-0 flex-1">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const near = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+          nearBottom.current = near;
+          setPinned((was) => (was === near ? was : near));
+        }}
+        className="board-scrollbar scroll-edges h-full overflow-y-auto px-2.5 py-3"
+      >
+        <ol className="flex flex-col gap-1">
+          {state.transcript.map((entry) =>
+            entry.kind === "message" ? (
+              <Message key={entry.id} entry={entry} portrait={portraits[entry.speakerId] ?? null} />
+            ) : entry.kind === "synthesis" ? (
+              <Synthesis key={entry.id} entry={entry} />
+            ) : (
+              <SystemRow key={entry.id} entry={entry} />
+            ),
+          )}
+        </ol>
+      </div>
+
+      {/* Reading back shouldn't cost you the live edge. */}
+      {pinned ? null : (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+          <button
+            type="button"
+            onClick={toLatest}
+            className="press flex h-8 animate-rise-in items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[12px] font-semibold text-ink-2 shadow-[var(--shadow-float)] transition-[color,border-color,transform] duration-200 ease-out hover:border-line-strong hover:text-ink"
+          >
+            <ArrowDownIcon size={14} />
+            Jump to latest
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-

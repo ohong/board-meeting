@@ -1,0 +1,17 @@
+{
+  "voice": "pwMBn0SsmN1220Aorv15",
+  "voiceName": "Matt - Natural, Chatty, Friendly",
+  "model": "eleven_v3",
+  "lines": [
+    { "id": "01-hook",    "text": "There's always one decision you shouldn't be making alone." },
+    { "id": "02-setup",   "text": "So build the room. Three to six advisers, each one arguing from their own public record." },
+    { "id": "03-brief",   "text": "Hand them the real numbers. The thing you've been avoiding." },
+    { "id": "04-form",    "text": "They form their positions in private. Separate agents. No groupthink." },
+    { "id": "05-argue",   "text": "Then the room opens... and they go at each other." },
+    { "id": "06-tools",   "text": "Here's the part nobody else is doing. Your own agent takes a seat." },
+    { "id": "07-mcp",     "text": "Eight site tools, live on the page. No integration. Nothing to scrape." },
+    { "id": "08-agent",   "text": "It brings what the board can't know. Your numbers. Your history." },
+    { "id": "09-memo",    "text": "When you've heard enough, you end it. One memo, with the disagreement left in." },
+    { "id": "10-end",     "text": "The best board meeting you've ever had." }
+  ]
+}

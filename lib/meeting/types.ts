@@ -1,5 +1,5 @@
 /**
- * Shared meeting contract — FROZEN.
+ * Shared meeting contract.
  *
  * Every module (UI, orchestration engine, model runtime, WebMCP tools, readout)
  * builds against these types. Do not edit without the orchestrator's approval.
@@ -235,7 +235,20 @@ export interface Readout {
 export type ReadoutStatus = "idle" | "generating" | "ready" | "failed";
 
 // ---------------------------------------------------------------------------
-// Meeting state (single source of truth; lives only in the page)
+// Shared room
+// ---------------------------------------------------------------------------
+
+export type SharedRoomStatus = "creating" | "synced" | "error";
+
+export interface SharedRoomInfo {
+  /** Public, unguessable capability used by invited participants. */
+  id: string | null;
+  status: SharedRoomStatus;
+  error: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Meeting state (canonical copy lives in the shared room once launched)
 // ---------------------------------------------------------------------------
 
 export interface MeetingState {
@@ -258,6 +271,7 @@ export interface MeetingState {
   readout: Readout | null;
   readoutStatus: ReadoutStatus;
   readoutRetrievedByGuestAt: number | null;
+  room: SharedRoomInfo | null;
   invitePanelOpen: boolean;
   /** Non-fatal notice for the UI (e.g. "Seventh member not allowed"). */
   notice: { id: string; text: string } | null;
@@ -368,10 +382,12 @@ export interface BoardRuntime {
 }
 
 // ---------------------------------------------------------------------------
-// WebMCP tool names — FROZEN (spec §11.3)
+// WebMCP tool names
 // ---------------------------------------------------------------------------
 
 export const WEBMCP_TOOL_NAMES = [
+  "list_board_advisers",
+  "launch_board_meeting",
   "inspect_board_meeting",
   "join_board_meeting",
   "contribute_to_board_meeting",

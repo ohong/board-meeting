@@ -1,0 +1,56 @@
+# Sources — Michael Dell
+
+**Structural note.** The David Senra interview is the primary source for *how Michael Dell thinks and talks*: curiosity as taking things apart, inventing a crisis, cash conversion, underestimation as fuel, naive confidence vs arrogance, fear of failure, "of course," understatement. It is not a full treatise on virtual integration, segmentation, or the 1989 retail mistake. Those load-bearing pieces of judgment come from his own earlier writing and on-record interviews (HBR 1998, *Direct from Dell*, Ferriss, Masters of Scale). Both halves are source-grounded; nothing about cash conversion or the direct model is extrapolated from vibes.
+
+Claims in `instructions.md` are **evidence** unless marked inference in `notes.md`. No private, health, family, or legal-matter content is used (the go-private fight is treated as a capital-structure decision, not a personality war).
+
+## Primary — transcript
+
+| Source | Access | What it contributed | Confidence |
+|---|---|---|---|
+| David Senra interview, "Michael Dell" — https://www.davidsenra.com/episode/michael-dell · YouTube https://youtu.be/9WSsLSq40Yw | Official episode-page transcript, read in full | Voice tics ("yeah," "you know," "right?," "it's like," "of course"). Curiosity: take it apart; IBM PC as off-the-shelf chips plus markup. Dorm-room start, $1,000, all-consuming. "If you don't have a crisis, make one." Become the competitor that would put you out of business. Experiment 2×/10×/100× or stop. Small mistakes, fix fast. Osborne effect. Founders sabotage themselves more than competitors do. Negative cash conversion; five-ish days of inventory vs ~90 in the channel; chip date codes. "You don't want them to understand what's going on." Mail-order stigma as fuel. First full year ~80% businesses. Internet as rocket fuel for a business that was already direct. Naive + confidence, never the arrogant zone. Fear of failure bigger than love of success; "pain is the best teacher." "Just wake up every day and go do the thing." "Seems pretty normal to me." "How else would you do it?" Lee Walker's line that he built a business natural to him (Dell agrees). Supply chain as a critical puzzle; first Asia trip 1985 (Japan, Hong Kong, Taiwan, Korea — not mainland China). Six or seven technology waves; timeframes shrinking. "Any wild idea has a chance of succeeding." At the limit, nobody knows anything. | High — official transcript |
+
+Episode page prints **October 12, 2025**. That date is used as `episodeDate` (not the guests-index listing).
+
+## Primary — Dell's own writing, speeches, interviews
+
+| Source | What it contributed | Confidence |
+|---|---|---|
+| Joan Magretta, "The Power of Virtual Integration: An Interview with Dell Computer's Michael Dell," *Harvard Business Review*, Mar–Apr 1998 — full text via archival reprint | **"You actually get to have a relationship with the customer"** and that information lets you leverage suppliers and customers. **Virtual integration.** **"We substitute information for inventory and ship only when we have real demand from real end customers."** Inventory velocity; chip date codes as a teaching tool. Negative cash-conversion cycle. **"Averages obscure a lot"**; deaverage by customer/product/geography. Incorrect entry into retail in 1989, then exit when segment profitability was understood. 90% of then-sales to institutions. Spend time with customers; Platinum Councils; customer said they wanted stability, not more speed. Assets collect risks. Common "bad hygiene" of stuffing the channel. | High — his words in a long interview |
+| Michael Dell, University of Texas at Austin commencement, 2003 — https://web.archive.org/web/20040324192416/http://www.dell.com/downloads/global/corporate/speeches/msd/2003_05_17_msd_commencement.pdf | **"there is very little learning in success."** Two hard lessons: failure to manage inventory, failure to listen to customers on new products; **"we fixed our problems as fast as we found them."** No manual; ignore industry "experts"; curiosity as catalyst. Did not invent the PC, direct selling, or the Internet — refined and eliminated steps. Never measure success only against others — you might set the bar too low. | High — prepared remarks |
+| Tim Ferriss Show #534 transcript (Sep 2021) — https://tim.blog/2021/09/28/michael-dell-transcript/ | **"Play nice, but win"** as parents' phrase and company language. **"You learn a lot more from your customers than you do from the competition."** **"Failure is a key ingredient in any success."** Direct-model *advanced* move is the information advantage + capital efficiency + customer intimacy compounding; retail is a guess. Take-private logic: market priced him as a PC company while he was investing in software/services/storage; buy it back; get off the **"quarterly earnings, shot clock"**; then EMC/VMware; public again to simplify capital structure. Olympics product too aggressive; memory-chip transition almost killed the company and became the JIT muscle. Hypergrowth ~$890M to $2.1B nearly tore the company apart; still had to go for it. Introvert; on-stage is an act. **"I have this belief that a lot of human potential is left unrealized because people are afraid to fail."** DTC common mistakes. | High — full transcript |
+| Masters of Scale, "Break it 'til you make it," Reid Hoffman interview — https://mastersofscale.com/michael-dell-break-it-til-you-make-it/ | Deconstruction as method. IBM PC parts ~not IBM's; cost vs price as a 19-year-old. Asia at 20; suppliers as partners, not commodities. Direct model vs 5,000 stores. **"you don't need a warehouse for parts because the suppliers will deliver the parts, like every hour right onto the production line."** Toyota production system as an influence, taken further. Priced servers too low; buyers thought things were left out; lacked enterprise credibility. Service levels dropped during hypergrowth; loyalty beyond satisfaction. Go-private to invest without caring about quarterly results. Hire new graduates and give them unsolved operations challenges. | High — official transcript (auto-generated, substance corroborated) |
+| Michael Dell, *Play Nice But Win* (2021), via Charter briefing with page cites — https://www.charterworks.com/michael-dell-play-nice-but-win/ | **"We didn't start building to the customer's order because we saw some massive paradigm in the future. We started that way because we didn't have the capital to mass-produce."** Take-private so transformation could proceed **"without the tyranny, the ever-ticking shot clock, of a quarterly earnings report"** (p. 8). **"You don't start a company if you're not an optimist."** **"Daring to fail is the only path to meaningful growth."** Facts-and-alternatives then choices-and-commitments decision process (used in instructions only as the *habit* of experiment-then-commit, not as a named process). Tiger/dog/cat line on how hard real transformation is — **not used in instructions.md** (too easy to turn into a slogan). Icahn narrative **excluded** from the persona (legal/adversarial; not load-bearing for board behavior). | High on cited lines; book itself not read cover-to-cover |
+| Michael Dell, *Direct from Dell* (1998) — excerpts via HBR overlap and secondary quotations (dokumen.pub chapter scans) | Direct model version 1.0 = eliminate reseller markup and store cost; later realization that **inventory management was the undiscovered opportunity**. **"The quality of your information is inversely proportional to the amount of assets required, in this case excess inventory."** **"It is not about how much inventory you have, but about how fast it's moving through the cycle"** (widely attributed; treated as paraphrasable, not dropped verbatim into instructions). Constraint created the model. | Medium-high on substance; exact wording of some lines is via secondary excerpt |
+| Michael Dell on X/LinkedIn, 16 Sep 2024 — https://x.com/MichaelDell/status/1835632101741224210 | **"Never let a good crisis go to waste—and if there is no crisis, create one (as a way of motivating change and progress)."** Corroborates the Senra line as a durable personal maxim, not a one-off. | High |
+| Discovery/Curiosity, "What inspired you to revolutionize the way PCs were marketed and sold?" — archived Q&A in his voice | Direct selling as a better way after seeing component cost vs the inefficient path to the end user; newspaper-subscription years as the first lesson in direct contact and feedback. | Medium-high — short primary clip |
+
+## Secondary / context
+
+| Source | What it contributed | Confidence |
+|---|---|---|
+| Thomas Meredith (Dell CFO), *CFO Magazine*, 1998 — https://www.cfo.com/news/thomas-meredith-dell-computer-corp/684673/ | Cash conversion cycle as an operating system after the 1993 inventory mess; velocity as the balance of growth, liquidity, profitability. **Not Dell's voice**; used only to corroborate that CCC was a company-wide obsession, not invented for the persona. | Medium |
+| CNET, "Explaining Dell's transformation" (2003) | "Sell what you have"; master production-plan meetings. **Not used in instructions.md** — not clearly Dell's own phrasing. | Medium — background only |
+| Business 2.0 / CNN Money, "The Dell Way" (Feb 2003) | "Don't let anyone come between us and the customer." Low-markup execution. Background for closeness-to-customer, not quoted. | Medium |
+| Charter / Ferriss on the Apple-liquidation 1997 remark | Dell later called the comment stupid. **Excluded** from instructions (not a principle; would flatten him into a gaffe). | High that it happened; unused |
+
+## Explicitly rejected
+
+- Carl Icahn dinner, "circus clown," and related *Play Nice But Win* combat narrative. Public, but adversarial/legal-adjacent and not how he should show up in a board meeting.
+- Family material from the Senra episode (son as "Dad Terminal," parents' tears). Origin-story dorm/IBM is kept; family is not.
+- Health material (Ferriss stuttering story).
+- Specific operating-cost percentages (Compaq 36% vs Dell 18%) from Senra's ad-read / *Hardball*, not from Dell's mouth in the interview.
+- Polished aggregator quotes with no primary trace ("expensive solutions are signs of mediocrity" is Ingvar Kamprad, not Dell).
+- Invented memories, private facts, or numbers not in the sources above.
+
+## Verbatim (or near-verbatim) in `instructions.md` / `persona.json`
+
+These are the only lines close enough to quotes to require a cite:
+
+- **"If you don't have a crisis, make one"** — Senra transcript; also Dell's 2024 X post ("if there is no crisis, create one"). Used in worldview, a sample line, and `voiceSample`.
+- **"You substitute information for inventory"** — HBR 1998, Dell: "We substitute information for inventory…"
+- **"How else would you do it?"** — Senra.
+- **"Pain is the best teacher"** — Senra.
+- **"You learn more from customers than from competitors"** — paraphrase of Ferriss: "You learn a lot more from your customers than you do from the competition."
+- **"just wake up and go do the thing"** / **"seems pretty normal"** / **"it's all been a lot of fun"** — Senra, lightly compressed.
+- **"mail-order company"** — Senra, Compaq's label for Dell, in his telling.

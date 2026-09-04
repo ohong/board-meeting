@@ -1,8 +1,9 @@
-/** Small inline icon set (1.5px strokes, currentColor) so the UI needs no icon dependency. */
+/** Inline icon set, currentColor, no dependency. Two sizes are used across the
+ *  product: 14px inline and in navigation, 20px as a card-level mark. */
 
 type IconProps = { size?: number; className?: string };
 
-function Svg({ size = 16, className = "", children }: IconProps & { children: React.ReactNode }) {
+function Svg({ size = 14, className = "", children }: IconProps & { children: React.ReactNode }) {
   return (
     <svg
       aria-hidden
@@ -147,5 +148,11 @@ export const ChairIcon = (p: IconProps) => (
 export const ChevronDownIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="m6 9 6 6 6-6" />
+  </Svg>
+);
+
+export const ArrowDownIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 5v14m0 0-6-6m6 6 6-6" />
   </Svg>
 );

@@ -40,19 +40,24 @@ export function GuestSeat({
 
   return (
     <div
-      className={`flex w-[300px] items-center gap-3 rounded-2xl border px-3.5 py-3 transition-colors ${
-        seated ? "card animate-seat-in" : "border-dashed border-line-strong bg-surface/80"
+      className={`flex w-[300px] items-center gap-3 rounded-2xl border px-3.5 py-3 transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
+        seated
+          ? "card animate-seat-in"
+          : "material border-dashed border-line-strong shadow-[var(--shadow-card)]"
       }`}
     >
       {seated ? (
         <span
           aria-hidden
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft font-display text-[15px] font-semibold text-accent-deep transition-shadow duration-300 ${
+          /* The guest agent reads green everywhere else it appears — the header
+             stack, its transcript rows, the memo roster — so it reads green
+             here too. Copper belongs to the board and the chair. */
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-live-soft text-[14px] font-semibold text-ink-2 transition-shadow duration-300 ease-out ${
             joining
-              ? "animate-pulse-soft shadow-[0_0_0_2px_var(--color-accent-line)]"
+              ? "animate-pulse-soft shadow-[0_0_0_2px_var(--color-live)]"
               : active
-                ? "shadow-[0_0_0_2px_var(--color-accent),0_10px_28px_-8px_var(--color-accent)]"
-                : "shadow-[0_0_0_2px_var(--color-accent-line)]"
+                ? "shadow-[0_0_0_2px_var(--color-live),0_10px_28px_-8px_var(--color-live)]"
+                : "shadow-[0_0_0_2px_var(--color-live)]"
           }`}
         >
           {initials(guest.name)}
@@ -62,7 +67,7 @@ export function GuestSeat({
           aria-hidden
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed border-line-strong text-faint"
         >
-          <PlugIcon size={18} />
+          <PlugIcon size={20} />
         </span>
       )}
 
@@ -71,15 +76,15 @@ export function GuestSeat({
           {seated ? guest.name : "Your personal agent"}
         </span>
         <span
-          className={`mt-1 flex items-center gap-1.5 text-[11.5px] leading-tight ${
-            active ? "font-medium text-accent-deep" : "text-muted"
+          className={`mt-1 flex items-center gap-1.5 text-[12px] leading-tight ${
+            active ? "font-medium text-ink-2" : "text-muted"
           } ${joining ? "animate-pulse-soft" : ""}`}
         >
           {seated ? (
             <span
               aria-hidden
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                joining ? "bg-faint" : active ? "animate-pulse-soft bg-accent" : "bg-live"
+                joining ? "bg-faint" : active ? "animate-pulse-soft bg-live" : "bg-live"
               }`}
             />
           ) : null}

@@ -145,8 +145,8 @@ These are targets for the rehearsed demo environment, not general production SLA
 - Agent-to-agent replies, visible reactions, next-turn interruptions, and position updates.
 - Human-controlled meeting conclusion.
 - A chief-of-staff-style final readout.
-- WebMCP tools for Codex to inspect, join, contribute, address a member, request synthesis, and retrieve the readout.
-- Ephemeral session state that disappears on refresh.
+- WebMCP tools for Codex to create a meeting or inspect, join, contribute, address a member, request synthesis, and retrieve the readout.
+- Ephemeral shared-room state with a 24-hour expiry.
 - Minimal retry and fallback behavior needed for a reliable demo.
 
 ### 4.2 Explicit non-goals
@@ -154,7 +154,7 @@ These are targets for the rehearsed demo environment, not general production SLA
 Do not build any of the following for this MVP:
 
 - User accounts or authentication.
-- Saved meetings, history, bookmarks, or recovery after refresh.
+- Saved meeting history, bookmarks, or recovery after the 24-hour room expiry.
 - A database or Supabase integration.
 - Cross-session or long-term agent memory.
 - User-created personas.
@@ -166,8 +166,8 @@ Do not build any of the following for this MVP:
 - Mobile-specific layouts or native mobile apps.
 - Multiple human participants.
 - More than one external personal agent.
-- A shareable cross-device or cross-browser meeting room.
-- Production-grade Google Meet-style invitation tokens.
+- Multiple concurrent chairs or Google Meet-style participant management.
+- Account-bound invitation ACLs; the unguessable room URL is the guest capability.
 - Side conversations or private chats between board members.
 - Voting, confidence scores, predictions, or imaginary betting.
 - Decision journals, follow-up meetings, or outcome tracking.
@@ -491,16 +491,16 @@ A deterministic fallback order must exist if any model-based speaker planning fa
 
 ### 11.1 Product intent
 
-WebMCP allows the user’s existing personal agent to participate in the boardroom without a custom server integration. In the demo, Codex operates on the same live page open in its built-in browser and uses the site’s registered tools.
+WebMCP allows an agent to launch a board meeting or participate in one without a custom integration. In the demo, Codex opens the unique room URL in its built-in browser and uses the site’s registered tools while the human chairs the same meeting from another browser context.
 
-The MVP invitation is a **copyable invitation prompt**, optionally accompanied by the current page URL. It is not a remotely synchronized room link. Cross-browser and cross-device joining are explicitly out of scope.
+Every started meeting receives an unguessable **shared room URL** and a copyable invitation prompt containing that URL. The invited page is a live, read-only projection of the chair's room; the external agent contributes through WebMCP.
 
 ### 11.2 Invite flow
 
 - **Invite your agent** is available from the start of an active meeting until the human ends it.
 - Activating it opens a compact invitation panel.
 - The panel explains that a compatible agent can join through the current page’s site tools.
-- The panel contains a copyable prompt instructing the agent to:
+- The panel contains the unique room URL and a copyable prompt instructing the agent to:
   1. inspect the meeting;
   2. join using its own known identity;
   3. contribute relevant context it already knows;
@@ -516,7 +516,15 @@ The generated invitation copy should be substantially equivalent to:
 
 ### 11.3 Required WebMCP capabilities
 
-The top-level page must expose exactly six narrowly scoped tools with stable names. Locking these names allows the invitation prompt, Codex demo, tests, and UI confirmation states to be built in parallel against one contract.
+The top-level page exposes eight narrowly scoped tools with stable names. Two creation tools let an agent list advisers and launch a meeting; the six participation tools retain their existing contract.
+
+#### 0A. `list_board_advisers` — List advisers
+
+Read the available adviser ids, names, and decision-making focus without changing state.
+
+#### 0B. `launch_board_meeting` — Launch meeting
+
+Choose three to six advisers, provide the complete decision briefing, start the meeting, and return its unique room URL.
 
 #### A. `inspect_board_meeting` — Inspect meeting
 
@@ -687,8 +695,8 @@ The exact visual arrangement is flexible, but every section must be easy to scan
 - **Frontend:** Next.js and TypeScript.
 - **Agent framework:** Vercel eve.
 - **Models:** OpenAI GPT models only.
-- **Hosting:** Compatible with a standard Vercel deployment.
-- **Database:** None for the MVP.
+- **Hosting:** Cloudflare Workers through OpenNext.
+- **Shared state:** one SQLite-backed Durable Object per room, expiring after 24 hours.
 
 ### 14.2 Eve usage
 
@@ -700,10 +708,11 @@ The exact visual arrangement is flexible, but every section must be easy to scan
 
 ### 14.3 State ownership
 
-- The current page is the source of truth for the active product session.
-- Server calls receive the relevant meeting context for each invocation and return events or content to the page.
-- Do not introduce persistent server sessions, session recovery, or shared room infrastructure.
-- WebMCP handlers invoke the same client-side session actions as the human interface.
+- The room's Durable Object is the canonical shared snapshot; the chair's page owns model orchestration and publishes revisioned state.
+- Server model calls receive the relevant meeting context for each invocation and return events or content to the chair page.
+- The chair capability is a separate random secret held in `sessionStorage`; it is never present in the invitation URL or public room responses.
+- Guest actions are applied atomically to the room, and concurrent guest inputs are preserved until the chair explicitly acknowledges their input ids.
+- WebMCP participation handlers use the same deterministic `MeetingSession` actions on the server-side room projection.
 
 ### 14.4 Determinism versus model judgment
 

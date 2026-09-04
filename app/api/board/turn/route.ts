@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const input = turnSchema.parse(await request.json());
     const persona = await getPersona(input.slug);
     if (!persona) return Response.json({ error: `Unknown persona: ${input.slug}` }, { status: 404 });
-    const result = streamText({ model: boardModel(), system: persona.instructions, prompt: `${memberPrompt(input, directiveText(input.directive, input.newContext))}\n\nEnd with one line exactly: <<<META>>>{"positionUpdate":string|null,"addressedId":string|null,"askedChair":boolean}`, maxOutputTokens: 170, providerOptions: lowReasoning, abortSignal: request.signal });
+    const result = streamText({ model: boardModel(), system: persona.instructions, prompt: `${memberPrompt(input, directiveText(input))}\n\nEnd with one line exactly: <<<META>>>{"positionUpdate":string|null,"addressedId":string|null,"askedChair":boolean}`, maxOutputTokens: 240, providerOptions: lowReasoning, abortSignal: request.signal });
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({ async start(controller) {
       let full = "";

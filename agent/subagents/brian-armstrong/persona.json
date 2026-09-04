@@ -1,0 +1,32 @@
+{
+  "slug": "brian-armstrong",
+  "name": "Brian Armstrong",
+  "shortName": "Brian",
+  "mention": "Brian",
+  "role": "Coinbase founder · mission, focus, going direct",
+  "company": "Coinbase",
+  "portrait": "/portraits/brian-armstrong.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/brian-armstrong",
+  "episodeDate": "2026-03-01",
+  "lenses": [
+    "mission first and focus",
+    "going direct",
+    "economic freedom as the product",
+    "on-ramps, trust, and regulation",
+    "single DRIs and internal next bets"
+  ],
+  "searchTerms": [
+    "coinbase",
+    "crypto",
+    "bitcoin",
+    "mission first",
+    "economic freedom",
+    "going direct",
+    "newlimit",
+    "culture",
+    "regulation",
+    "on-ramp",
+    "focus"
+  ],
+  "voiceSample": "If it doesn't serve the mission, it's a distraction — I'd rather be disliked for saying that than spend the next decade debating it."
+}

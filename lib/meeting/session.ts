@@ -1,9 +1,10 @@
 /**
- * MeetingSession — the single client-side source of truth for one page visit.
+ * MeetingSession — the reactive client copy of a board meeting.
  *
  * Deterministic application logic lives here: phase transitions, selection limits,
  * participant identity, transcript ordering, queueing, chair-only authorization,
- * participation bookkeeping. No model calls. No persistence.
+ * participation bookkeeping. No model calls. Shared-room persistence is handled
+ * by RoomSync so this class remains deterministic and directly testable.
  *
  * Both the human UI and the WebMCP tools call the SAME public actions on this object.
  * The orchestration engine (engine.ts) drives the async meeting loop through the
@@ -43,6 +44,7 @@ export const MAX_CHAIR_MESSAGE_CHARACTERS = 2_000;
 
 export type SessionEvent =
   | { type: "start" }
+  | { type: "resume" }
   | { type: "input"; input: QueuedInput }
   | { type: "compose"; composing: boolean }
   | { type: "end" }
@@ -74,6 +76,7 @@ export function createInitialState(): MeetingState {
     readout: null,
     readoutStatus: "idle",
     readoutRetrievedByGuestAt: null,
+    room: null,
     invitePanelOpen: false,
     notice: null,
     startedAt: null,
@@ -85,6 +88,13 @@ export class MeetingSession {
   private state: MeetingState;
   private listeners = new Set<Listener>();
   private eventListeners = new Set<EventListener>();
+  private catalog: PersonaSummary[] = [];
+  private chairKey: string | null = null;
+  private authority: "chair" | "guest" = "chair";
+  private applyingRemote = false;
+  private roomRevision = 0;
+  private seenRoomInputIds = new Set<string>();
+  private mutationVersion = 0;
 
   constructor(initial?: MeetingState) {
     this.state = initial ?? createInitialState();
@@ -99,6 +109,154 @@ export class MeetingSession {
     return () => this.listeners.delete(listener);
   };
 
+  setCatalog(catalog: PersonaSummary[]): void {
+    this.catalog = catalog;
+  }
+
+  getCatalog(): PersonaSummary[] {
+    return this.catalog;
+  }
+
+  resolveCatalogMember(ref: string): PersonaSummary | undefined {
+    const needle = ref.trim().replace(/^@/, "").toLowerCase();
+    if (!needle) return undefined;
+    return (
+      this.catalog.find((persona) => persona.slug === needle) ??
+      this.catalog.find((persona) => persona.mention.toLowerCase() === needle) ??
+      this.catalog.find((persona) => persona.name.toLowerCase() === needle) ??
+      this.catalog.find((persona) => persona.shortName.toLowerCase() === needle) ??
+      this.catalog.find((persona) => persona.name.toLowerCase().startsWith(needle))
+    );
+  }
+
+  getRoomId(): string | null {
+    return this.state.room?.id ?? null;
+  }
+
+  getChairKey(): string | null {
+    return this.chairKey;
+  }
+
+  getRoomRevision(): number {
+    return this.roomRevision;
+  }
+
+  getMutationVersion(): number {
+    return this.mutationVersion;
+  }
+
+  getAcknowledgedRoomInputIds(): string[] {
+    const queued = new Set(this.state.queue.map((input) => input.id));
+    return [...this.seenRoomInputIds].filter((id) => !queued.has(id)).slice(-100);
+  }
+
+  isChair(): boolean {
+    return this.authority === "chair";
+  }
+
+  isApplyingRoomState(): boolean {
+    return this.applyingRemote;
+  }
+
+  markRoomCreating(): void {
+    this.update((state) => ({ ...state, room: { id: null, status: "creating", error: null } }));
+  }
+
+  attachRoom(id: string, chairKey: string | null, revision = 0): void {
+    const switchingRooms = this.state.room?.id !== id;
+    if (switchingRooms) this.seenRoomInputIds.clear();
+    this.chairKey = chairKey;
+    this.authority = chairKey ? "chair" : "guest";
+    this.roomRevision = switchingRooms ? revision : Math.max(this.roomRevision, revision);
+    this.update((state) => ({ ...state, room: { id, status: "synced", error: null } }));
+  }
+
+  markRoomError(message: string): void {
+    this.update((state) => ({
+      ...state,
+      room: { id: state.room?.id ?? null, status: "error", error: message },
+    }));
+  }
+
+  /** Apply a canonical room snapshot, optionally preserving newer chair work. */
+  applyRoomState(next: MeetingState, wakeEngine = false, revision = 0, mergeGuestOnly = false): boolean {
+    if (revision > 0 && revision <= this.roomRevision) return false;
+    const previous = this.state;
+    const previousQueue = new Set(previous.queue.map((input) => input.id));
+    const remoteInput = (input: QueuedInput) =>
+      input.kind === "guest-context" || input.kind === "guest-address" || input.kind === "synthesis-request";
+    const remoteEntry = (entry: TranscriptEntry) =>
+      (entry.kind === "message" && entry.speakerRole === "guest") ||
+      (entry.kind === "event" && (entry.event === "guest-joined" || entry.event === "readout-retrieved")) ||
+      entry.kind === "synthesis";
+    let shared = next;
+    if (mergeGuestOnly && this.isChair()) {
+      const transcriptIds = new Set(previous.transcript.map((entry) => entry.id));
+      const additions = next.transcript.filter(
+        (entry) => remoteEntry(entry) && !transcriptIds.has(entry.id),
+      );
+      const queueIds = new Set(previous.queue.map((input) => input.id));
+      const newInputs = next.queue.filter(
+        (input) =>
+          remoteInput(input) &&
+          !queueIds.has(input.id) &&
+          !this.seenRoomInputIds.has(input.id),
+      );
+      shared = {
+        ...previous,
+        guest: previous.guest ?? next.guest,
+        transcript: [...previous.transcript, ...additions].sort((a, b) => a.ts - b.ts),
+        queue: [...previous.queue, ...newInputs].sort((a, b) => a.ts - b.ts),
+        readoutRetrievedByGuestAt:
+          previous.readoutRetrievedByGuestAt ?? next.readoutRetrievedByGuestAt,
+      };
+    }
+    const localUi = {
+      invitePanelOpen: previous.invitePanelOpen,
+      notice: previous.notice,
+      chairComposing: this.isChair() ? previous.chairComposing : false,
+    };
+    this.applyingRemote = true;
+    this.state = {
+      ...shared,
+      ...localUi,
+      room: {
+        id: this.getRoomId() ?? shared.room?.id ?? null,
+        status: "synced",
+        error: null,
+      },
+    };
+    const remoteQueueIds = new Set<string>();
+    for (const input of next.queue) {
+      if (!remoteInput(input)) continue;
+      remoteQueueIds.add(input.id);
+      this.seenRoomInputIds.add(input.id);
+    }
+    const localQueueIds = new Set(this.state.queue.map((input) => input.id));
+    for (const id of this.seenRoomInputIds) {
+      if (!remoteQueueIds.has(id) && !localQueueIds.has(id)) this.seenRoomInputIds.delete(id);
+    }
+    this.roomRevision = Math.max(this.roomRevision, revision);
+    this.mutationVersion += 1;
+    for (const listener of this.listeners) listener();
+    this.applyingRemote = false;
+
+    if (!wakeEngine || !this.isChair()) return true;
+    for (const input of this.state.queue) {
+      if (!previousQueue.has(input.id)) this.emit({ type: "input", input });
+    }
+    if (previous.phase !== "closing" && this.state.phase === "closing") this.emit({ type: "end" });
+    return true;
+  }
+
+  /** Resume a chair-owned engine after loading an existing shared room. */
+  resumeEngine(): void {
+    if (!this.isChair()) return;
+    if (this.state.phase === "forming" || this.state.phase === "discussion" || this.state.phase === "closing") {
+      this.emit({ type: "resume" });
+    }
+  }
+
   on = (listener: EventListener): (() => void) => {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
@@ -107,6 +265,7 @@ export class MeetingSession {
   private update(fn: (draft: MeetingState) => MeetingState | void): void {
     const next = fn({ ...this.state });
     this.state = next ?? this.state;
+    this.mutationVersion += 1;
     for (const l of this.listeners) l();
   }
 
@@ -191,6 +350,26 @@ export class MeetingSession {
     return n >= MIN_BOARD_SIZE && n <= MAX_BOARD_SIZE && this.state.briefing.trim().length > 0;
   }
 
+  configureAndStart(board: PersonaSummary[], briefing: string): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can launch a board.");
+    if (this.state.phase !== "selecting" && this.state.phase !== "briefing") {
+      return err("NOT_ALLOWED", "A meeting is already in progress.");
+    }
+    const unique = [...new Map(board.map((persona) => [persona.slug, persona])).values()];
+    if (unique.length < MIN_BOARD_SIZE || unique.length > MAX_BOARD_SIZE) {
+      return err("LIMIT", `Choose ${MIN_BOARD_SIZE}–${MAX_BOARD_SIZE} distinct advisers.`);
+    }
+    const trimmed = briefing.trim();
+    if (!trimmed) return err("INVALID_INPUT", "Write a decision briefing before launching the meeting.");
+    this.update((state) => ({
+      ...createInitialState(),
+      board: unique,
+      briefing: trimmed.slice(0, MAX_BRIEFING_CHARACTERS),
+      room: state.room,
+    }));
+    return this.startMeeting();
+  }
+
   /** Finalization waits until every currently available member has spoken once. */
   canEndMeeting(): boolean {
     if (this.state.phase !== "discussion") return false;
@@ -207,6 +386,7 @@ export class MeetingSession {
   // ------------------------------------------------------- chair: selection
 
   toggleMember(persona: PersonaSummary): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can change the board.");
     if (this.state.phase !== "selecting" && this.state.phase !== "briefing") {
       return err("NOT_ALLOWED", "The board is locked once the meeting starts.");
     }
@@ -228,6 +408,7 @@ export class MeetingSession {
   }
 
   goToBriefing(): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can brief the board.");
     if (this.state.phase !== "selecting") return err("NOT_ALLOWED", "Not selecting.");
     if (this.state.board.length < MIN_BOARD_SIZE) {
       return err("LIMIT", `Select at least ${MIN_BOARD_SIZE} members.`);
@@ -237,12 +418,14 @@ export class MeetingSession {
   }
 
   backToSelection(): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can change the board.");
     if (this.state.phase !== "briefing") return err("NOT_ALLOWED", "Not briefing.");
     this.update((s) => ({ ...s, phase: "selecting", notice: null }));
     return { ok: true };
   }
 
   setBriefing(text: string): void {
+    if (!this.isChair()) return;
     if (this.state.phase !== "selecting" && this.state.phase !== "briefing") return;
     this.update((s) => ({ ...s, briefing: text.slice(0, MAX_BRIEFING_CHARACTERS) }));
   }
@@ -262,6 +445,7 @@ export class MeetingSession {
   // ------------------------------------------------------- chair: meeting
 
   startMeeting(): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can start the meeting.");
     if (this.state.phase !== "briefing" && this.state.phase !== "selecting") {
       return err("NOT_ALLOWED", "Meeting already started.");
     }
@@ -314,6 +498,7 @@ export class MeetingSession {
 
   /** Chair speaks to the room. An @mention makes that member the next speaker. */
   sendChairMessage(text: string): ActionResult<{ mentioned: string | null }> {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can speak as the chair.");
     const trimmed = text.trim();
     if (!trimmed) return err("INVALID_INPUT", "Empty message.");
     if (trimmed.length > MAX_CHAIR_MESSAGE_CHARACTERS) {
@@ -336,6 +521,7 @@ export class MeetingSession {
   }
 
   openInvitePanel(): void {
+    if (!this.isChair()) return;
     this.update((s) => ({ ...s, invitePanelOpen: true }));
   }
 
@@ -345,6 +531,7 @@ export class MeetingSession {
 
   /** Only the chair (UI) may call this. WebMCP must never expose it. */
   endMeeting(): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can end the meeting.");
     if (this.state.phase === "forming") {
       return err("NOT_ALLOWED", "Wait for the board to finish forming its opening positions.");
     }
@@ -380,6 +567,7 @@ export class MeetingSession {
   }
 
   retryMember(memberId: string): ActionResult {
+    if (!this.isChair()) return err("NOT_ALLOWED", "Only the meeting chair can retry a board member.");
     const m = this.member(memberId);
     if (!m) return err("NOT_FOUND", "No such member.");
     this.emit({ type: "retry", memberId });
@@ -388,6 +576,12 @@ export class MeetingSession {
 
   reset(): void {
     this.state = createInitialState();
+    this.chairKey = null;
+    this.authority = "chair";
+    this.applyingRemote = false;
+    this.roomRevision = 0;
+    this.seenRoomInputIds.clear();
+    this.mutationVersion += 1;
     for (const l of this.listeners) l();
     this.emit({ type: "reset" });
   }
@@ -428,7 +622,7 @@ export class MeetingSession {
     };
   }
 
-  joinGuest(name: string): ActionResult<{ name: string; seat: string }> {
+  joinGuest(name: string, animate = true): ActionResult<{ name: string; seat: string }> {
     const display = (name ?? "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
     if (!display) return err("INVALID_INPUT", "Provide the display name you know yourself by.");
     const lower = display.toLowerCase();
@@ -446,7 +640,7 @@ export class MeetingSession {
     const now = Date.now();
     this.update((s) => ({
       ...s,
-      guest: { role: "guest", id: "guest", name: display, status: "joining", joinedAt: now },
+      guest: { role: "guest", id: "guest", name: display, status: animate ? "joining" : "joined", joinedAt: now },
       invitePanelOpen: false,
       transcript: [
         ...s.transcript,
@@ -459,10 +653,12 @@ export class MeetingSession {
         } satisfies EventEntry,
       ],
     }));
-    // The seat transitions joining -> joined after a short beat so the UI can animate.
-    setTimeout(() => {
-      if (this.state.guest?.status === "joining") this.setGuestStatus("joined");
-    }, 900);
+    if (animate) {
+      // The seat transitions joining -> joined after a short beat so the UI can animate.
+      setTimeout(() => {
+        if (this.state.guest?.status === "joining") this.setGuestStatus("joined");
+      }, 900);
+    }
     return { ok: true, name: display, seat: "guest" };
   }
 

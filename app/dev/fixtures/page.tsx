@@ -135,14 +135,14 @@ export default function FixturesPage() {
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
       <div className="flex h-[41px] flex-wrap items-center gap-1.5 overflow-hidden border-b border-line bg-ink px-3">
-        <span className="mr-2 text-[10px] tracking-[0.16em] text-accent-soft uppercase">Fixtures</span>
+        <span className="mr-2 text-[12px] tracking-[0.16em] text-faint uppercase">Fixtures</span>
         {NAMES.map((n) => (
           <button
             key={n}
             type="button"
             onClick={() => pick(n)}
-            className={`rounded-[3px] px-2 py-1 text-[11px] ${
-              n === name ? "bg-accent text-white font-semibold" : "text-faint hover:bg-ink-2 hover:text-surface"
+            className={`rounded-full px-2.5 py-1 text-[12px] ${
+              n === name ? "bg-surface text-ink font-semibold" : "text-faint hover:bg-ink-2 hover:text-surface"
             }`}
           >
             {n}

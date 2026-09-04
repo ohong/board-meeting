@@ -123,4 +123,33 @@ describe("review fixes", () => {
     expect(names).toContain("Chair (founder)");
     expect(names).toContain("Codex (external agent)");
   });
+
+  it("merges new room input without overwriting newer chair work or replaying acknowledged input", () => {
+    const chair = live();
+    chair.attachRoom("abcdefghjkmn", "chair-key", 1);
+    const remote = new MeetingSession(chair.getState());
+    remote.joinGuest("Codex");
+    remote.setGuestStatus("joined");
+    remote.guestContribute("Pilot retention is twice the free cohort.");
+
+    chair.applyRoomState(remote.getState(), true, 2, true);
+    const input = chair.getState().queue[0];
+    expect(input.kind).toBe("guest-context");
+    chair.engineDequeue(input.id);
+    expect(chair.getAcknowledgedRoomInputIds()).toEqual([input.id]);
+
+    const member = chair.members()[0];
+    const localTurn = chair.engineBeginMessage(member.id, {
+      addressedTo: "board",
+      addressedName: null,
+      intent: "answer",
+      interruption: false,
+    });
+    chair.engineSetText(localTurn.id, "This is newer chair-hosted model output.");
+    chair.engineEndMessage(localTurn.id);
+    chair.applyRoomState(remote.getState(), true, 3, true);
+
+    expect(chair.getState().queue).toHaveLength(0);
+    expect(chair.getState().transcript.some((entry) => entry.id === localTurn.id)).toBe(true);
+  });
 });

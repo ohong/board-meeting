@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMeetingState, useSession } from "@/lib/meeting/context";
 import { Button } from "@/components/ui/button";
 import { CheckIcon, CloseIcon, CopyIcon } from "@/components/ui/icons";
+import { roomShareUrl } from "@/lib/meeting/room-client";
 
 type SupportState = "unknown" | "supported" | "unsupported";
 
@@ -38,15 +39,6 @@ function useSiteToolSupport(): SupportState {
       return "unknown";
     },
     () => "unknown",
-  );
-}
-
-/** The current page URL, read without tripping a hydration mismatch. */
-function usePageUrl(): string {
-  return useSyncExternalStore(
-    () => () => {},
-    () => window.location.href,
-    () => "",
   );
 }
 
@@ -82,7 +74,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
   const state = useMeetingState();
   const support = useSiteToolSupport();
   const [copied, setCopied] = useState(false);
-  const pageUrl = usePageUrl();
+  const pageUrl = state.room?.id ? roomShareUrl(state.room.id) : "";
 
   // The invitation names a real member of THIS board, never a hard-coded person.
   const members = session.members();
@@ -94,7 +86,9 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
       "join using the name you know yourself by, share any relevant context you already have, ask " +
       `${focusName} one focused question about whether that evidence changes their view, and request a ` +
       "synthesis of the discussion. After the human chair ends the meeting, retrieve the final readout.";
-    return pageUrl ? `${body}\n${pageUrl}` : body;
+    return pageUrl
+      ? `${body}\n\nOpen this unique meeting link and use the site tools registered there:\n${pageUrl}`
+      : body;
   }, [focusName, pageUrl]);
 
   useEffect(() => {
@@ -114,7 +108,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
     >
       <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
         <div>
-          <h2 className="font-display text-[19px] leading-tight font-semibold">Invite your agent</h2>
+          <h2 className="font-display text-[24px] leading-tight font-semibold">Invite your agent</h2>
           <p className="mt-1 text-[12px] text-muted">One guest seat &middot; joins through this page&apos;s site tools</p>
         </div>
         <button
@@ -123,7 +117,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
           aria-label="Close invite panel"
           className="-mr-1 flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
         >
-          <CloseIcon size={16} />
+          <CloseIcon size={14} />
         </button>
       </div>
 
@@ -131,7 +125,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
         <p className="text-[13px] leading-relaxed text-ink-2">
           A compatible personal agent can take the guest seat through this page&apos;s site tools: the ChatGPT
           desktop app&apos;s built-in browser with site tools enabled, or Chrome 149+ with{" "}
-          <code className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] text-ink">
+          <code className="rounded-lg bg-surface-2 px-1.5 py-0.5 text-[12px] text-ink">
             chrome://flags/#enable-webmcp-testing
           </code>
           . Paste the invitation below into that agent.
@@ -139,7 +133,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
 
         <div
           className={[
-            "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-[12px] leading-snug",
+            "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[12px] leading-snug",
             support === "supported"
               ? "border-live/30 bg-live-soft text-ink-2"
               : support === "unsupported"
@@ -163,8 +157,16 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
           </span>
         </div>
 
-        <div className="rounded-xl border border-line bg-surface-2 p-3.5">
-          <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap break-words text-ink">{invitation}</p>
+        <div className="rounded-lg border border-line bg-surface-2 p-3.5">
+          {pageUrl ? (
+            <p className="text-[12px] leading-relaxed whitespace-pre-wrap break-words text-ink">{invitation}</p>
+          ) : (
+            <p className="text-[12px] leading-relaxed text-muted">
+              {state.room?.status === "error"
+                ? `The room link could not be created: ${state.room.error ?? "unknown error"}`
+                : "Preparing this meeting's private room link…"}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -177,6 +179,7 @@ export function InvitePanel({ onClose }: { onClose: () => void }) {
           <Button
             variant="primary"
             size="sm"
+            disabled={!pageUrl}
             onClick={async () => {
               const ok = await copyText(invitation);
               setCopied(ok);

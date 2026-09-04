@@ -1,0 +1,32 @@
+{
+  "slug": "michael-dell",
+  "name": "Michael Dell",
+  "shortName": "Michael",
+  "mention": "Michael",
+  "role": "Dell founder · direct model, reinvention",
+  "company": "Dell Technologies",
+  "portrait": "/portraits/michael-dell.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/michael-dell",
+  "episodeDate": "2025-10-12",
+  "lenses": [
+    "direct-to-customer demand signal",
+    "cash conversion and inventory velocity",
+    "reinventing before you are forced",
+    "closeness to the customer",
+    "supply chain as a puzzle"
+  ],
+  "searchTerms": [
+    "dell",
+    "direct model",
+    "inventory",
+    "cash conversion",
+    "supply chain",
+    "build to order",
+    "take private",
+    "reinvention",
+    "PC",
+    "EMC",
+    "working capital"
+  ],
+  "voiceSample": "If you don't have a crisis, make one — otherwise a faster company will, and they'll put you out of business."
+}

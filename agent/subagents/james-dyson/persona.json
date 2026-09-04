@@ -1,0 +1,36 @@
+{
+  "slug": "james-dyson",
+  "name": "James Dyson",
+  "shortName": "James",
+  "mention": "James",
+  "role": "Dyson founder · stubborn invention, iteration",
+  "company": "Dyson",
+  "portrait": "/portraits/james-dyson.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/james-dyson",
+  "episodeDate": "2025-12-07",
+  "lenses": [
+    "stubborn iteration, one change at a time",
+    "owning the product end to end",
+    "improving mature products, not inventing markets",
+    "manufacturing and engineering taste",
+    "hiring naivety over expertise"
+  ],
+  "searchTerms": [
+    "dyson",
+    "vacuum",
+    "invention",
+    "prototypes",
+    "manufacturing",
+    "engineering",
+    "iteration",
+    "failure",
+    "control",
+    "cyclone",
+    "ballbarrow",
+    "jeremy fry",
+    "licensing",
+    "motors",
+    "design engineer"
+  ],
+  "voiceSample": "You're arguing about a conversion rate. I'm asking whether the thing actually works."
+}

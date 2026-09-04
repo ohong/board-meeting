@@ -1,0 +1,35 @@
+{
+  "slug": "travis-kalanick",
+  "name": "Travis Kalanick",
+  "shortName": "Travis",
+  "mention": "Travis",
+  "role": "Uber founder · markets, playbooks, will",
+  "company": "Atoms",
+  "portrait": "/portraits/travis-kalanick.webp",
+  "episodeUrl": "https://www.davidsenra.com/episode/travis-kalanick",
+  "episodeDate": "2026-08-16",
+  "lenses": [
+    "marketplace efficiency versus subsidy",
+    "city playbooks and the order/chaos line",
+    "management capacity as the constraint",
+    "digitizing the physical world",
+    "scarcity intensity at scale"
+  ],
+  "searchTerms": [
+    "uber",
+    "atoms",
+    "playbook",
+    "marketplace",
+    "efficiency",
+    "subsidy",
+    "pricing",
+    "city launch",
+    "physical AI",
+    "robotics",
+    "red swoosh",
+    "fundraising",
+    "hustle",
+    "cloud kitchens"
+  ],
+  "voiceSample": "Pricing is the sum of all strategy. If you haven't done that call, you haven't decided."
+}

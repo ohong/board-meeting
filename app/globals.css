@@ -1,51 +1,94 @@
 @import "tailwindcss";
 
-/* Type: Fraunces (display serif) + Instrument Sans (UI). Both are loaded in
-   app/layout.tsx as next/font CSS variables on <html>. */
+/* Type: one neutral grotesque for the whole product. SF Pro is used where it
+   exists (every Apple device); Inter is loaded in app/layout.tsx as the
+   cross-platform stand-in so the metrics stay close on Windows and Linux.
+   `--font-display` is the same family — display type is the same face set
+   larger and tracked tighter, not a second voice. */
 @theme inline {
-  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
-  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter), "Segoe UI", system-ui,
+    sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-inter), "Segoe UI", system-ui,
+    sans-serif;
 }
 
-/* One warm, light palette for the whole product: off-white canvas, white cards,
-   soft sand rules, near-black warm ink, and a single copper accent. */
+/* One neutral palette. Hierarchy is carried by three greys — #292929 primary,
+   #5D5D5D secondary, #9E9E9E tertiary — over white cards on an off-white
+   canvas, with #757575 as an AA-safe step between the second and third for
+   running text. Colour is reserved for state: green for the guest agent, blue
+   for "wants the floor", red for dissent. The emphasis colour is graphite, so
+   a primary action reads as weight rather than hue. */
 @theme {
-  --color-canvas: oklch(97.2% 0.009 80);
-  --color-surface: oklch(99.2% 0.004 85);
-  --color-surface-2: oklch(96% 0.011 80);
-  --color-surface-3: oklch(93.5% 0.014 78);
-  --color-line: oklch(90.5% 0.013 78);
-  --color-line-strong: oklch(84% 0.018 75);
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f5f5;
+  --color-surface-3: #ebebeb;
+  --color-line: #e5e5e5;
+  --color-line-strong: #d4d4d4;
 
-  --color-ink: oklch(23% 0.018 55);
-  --color-ink-2: oklch(38% 0.02 55);
-  --color-muted: oklch(52% 0.022 60);
-  --color-faint: oklch(66% 0.018 65);
+  --color-ink: #292929;
+  --color-ink-2: #5d5d5d;
+  --color-muted: #757575;
+  --color-faint: #9e9e9e;
 
-  --color-accent: oklch(63% 0.115 45);
-  --color-accent-deep: oklch(54% 0.12 42);
-  --color-accent-soft: oklch(95% 0.028 55);
-  --color-accent-line: oklch(88% 0.055 52);
+  --color-accent: #292929;
+  --color-accent-deep: #111111;
+  --color-accent-soft: #f0f0f0;
+  --color-accent-line: #dcdcdc;
 
-  --color-live: oklch(66% 0.15 150);
-  --color-live-soft: oklch(95% 0.04 150);
-  --color-warn: oklch(72% 0.13 75);
-  --color-dissent: oklch(48% 0.16 25);
-  --color-dissent-soft: oklch(95% 0.025 25);
+  --color-live: #2f7d5f;
+  --color-live-soft: #eaf3ef;
+  --color-warn: #3f6bd8;
+  --color-dissent: #b3261e;
+  --color-dissent-soft: #fbeeed;
 
-  --color-table: oklch(94.5% 0.016 78);
-  --color-table-edge: oklch(89% 0.022 75);
+  --color-table: #f4f4f4;
+  --color-table-edge: #d6d6d6;
 
-  --shadow-card: 0 1px 2px oklch(30% 0.03 60 / 0.05), 0 18px 40px -22px oklch(30% 0.04 60 / 0.22);
-  --shadow-float: 0 2px 6px oklch(30% 0.03 60 / 0.07), 0 24px 56px -20px oklch(30% 0.04 60 / 0.3);
+  /* The room the table stands in: a shade deeper than the canvas so the lit
+     table surface reads as the brightest thing on screen. */
+  --color-room: #e6e6e6;
+  --color-room-deep: #dadada;
+  --color-room-wall: #cbcbcb;
+  --color-table-lit: #ffffff;
+  --color-table-shade: #ebebeb;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 18px 40px -22px rgb(0 0 0 / 0.16);
+  --shadow-float: 0 2px 6px rgb(0 0 0 / 0.06), 0 24px 56px -20px rgb(0 0 0 / 0.22);
   --shadow-ring: 0 0 0 1px var(--color-line);
+  --shadow-seat: 0 0 0 1px var(--color-line), 0 6px 18px -8px rgb(0 0 0 / 0.22);
+  --shadow-seat-lit: 0 0 0 2px var(--color-accent), 0 12px 30px -8px rgb(0 0 0 / 0.32);
+
+  /* Radii, per the type/space system: 8px for controls and rows, 16px for
+     cards and panels, fully round for CTAs. */
+  --radius-control: 8px;
+  --radius-card: 16px;
+
+  /* Curves. One strong ease-out for entrances and exits, one strong ease-in-out
+     for things that move across the screen, one drawer curve. These deliberately
+     override Tailwind's built-in `ease-out` / `ease-in-out`: the built-ins are
+     too weak to read as intentional at UI durations. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-pop: cubic-bezier(0.34, 1.4, 0.64, 1);
 
   --animate-pulse-soft: pulse-soft 2.1s ease-in-out infinite;
-  --animate-seat-in: seat-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-rise-in: rise-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-seat-in: seat-in 520ms var(--ease-out) both;
+  --animate-rise-in: rise-in 260ms var(--ease-out) both;
+  --animate-screen-in: screen-in 320ms var(--ease-out) both;
+  /* Reaction tags and avatars appear several times per turn, so their pop has
+     no overshoot — bounce on something this frequent reads as busy. `pop-bounce`
+     is for the occasional, deliberate action (seating an adviser). */
+  --animate-pop-in: pop-in 240ms var(--ease-out) both;
+  --animate-pop-bounce: pop-in 300ms var(--ease-pop) both;
+  --animate-materialize: materialize 260ms var(--ease-out) both;
+  --animate-fade-in: fade-in 240ms var(--ease-out) both;
+  --animate-breathe: breathe 2.6s ease-in-out infinite;
   --animate-caret: caret 1s steps(2, start) infinite;
   --animate-dots: dots 1.2s ease-in-out infinite;
-
   @keyframes pulse-soft {
     0%,
     100% {
@@ -56,25 +99,83 @@
     }
   }
 
+  /* Every entrance keyframe reads its travel from a variable, so
+     `prefers-reduced-motion` can zero the movement and leave the fade. */
   @keyframes seat-in {
     from {
       opacity: 0;
-      transform: scale(0.86);
+      transform: translateY(var(--motion-rise-lg)) scale(var(--motion-scale-in));
     }
     to {
       opacity: 1;
-      transform: scale(1);
+      transform: none;
     }
   }
 
   @keyframes rise-in {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(var(--motion-rise));
     }
     to {
       opacity: 1;
       transform: none;
+    }
+  }
+
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--motion-rise-lg));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(var(--motion-scale-pop));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* For full-bleed layers, where any travel would expose an edge. */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes materialize {
+    from {
+      opacity: 0;
+      transform: scale(var(--motion-scale-in));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* A slow ring around a portrait while its member is thinking. */
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.12;
+      transform: scale(var(--motion-scale-breathe));
     }
   }
 
@@ -102,24 +203,70 @@
   }
 }
 
+/* Motion travel. Every keyframe above is written against these so reduced-motion
+   users get the same choreography with the movement taken out. */
+:root {
+  --motion-rise: 6px;
+  --motion-rise-lg: 10px;
+  --motion-scale-in: 0.96;
+  --motion-scale-pop: 0.88;
+  --motion-scale-breathe: 1.16;
+}
+
 html {
   color-scheme: light;
 }
 
+/* One tracking value for the whole product. SF Pro (and Inter) both set a
+   little loose for interface text at these sizes; -0.15px is the correction. */
 body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: -0.15px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display type is the same face, one notch heavier than body and tracked
+   tighter — large text reads loose at the tracking that suits 12-14px. */
+.font-display,
+[class*="font-display"] {
+  font-family: var(--font-display);
+  letter-spacing: -0.4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-rise: 0px;
+    --motion-rise-lg: 0px;
+    --motion-scale-in: 1;
+    --motion-scale-pop: 1;
+    --motion-scale-breathe: 1;
+  }
+
+  /* Keep the fades — they carry meaning — but stop anything that loops or
+     travels, and never let a transition outlast the interaction. */
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 200ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 160ms !important;
+  }
+
+  .motion-travel {
+    transition-property: opacity !important;
+  }
+}
+
+/* Frostier, opaque chrome when the user asks for less transparency. */
+@media (prefers-reduced-transparency: reduce) {
+  .material,
+  .material-strong {
+    background: var(--color-surface) !important;
+    backdrop-filter: none !important;
   }
 }
 
@@ -127,7 +274,7 @@ body {
 @utility card {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: 1.25rem;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
 }
 
@@ -140,9 +287,75 @@ body {
   background: var(--color-surface);
   padding: 0.3rem 0.7rem;
   font-size: 12px;
+  font-weight: 500;
   line-height: 1;
   color: var(--color-ink-2);
   white-space: nowrap;
+}
+
+/* Translucent chrome: content scrolls under it rather than being cut off by an
+   opaque strip. */
+@utility material {
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(16px) saturate(180%);
+}
+
+@utility material-strong {
+  background: rgb(255 255 255 / 0.86);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Press feedback. Instant, on pointer-down, on anything that can be pressed.
+   These deliberately set NO `transition`: doing so would write the shorthand and
+   silently drop whatever colour or shadow transition the element declares with
+   Tailwind's longhand utilities (or gain nothing where the shorthand loses).
+   Every caller lists `transform` in its own transition instead. */
+@utility press {
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+/* A smaller press for large surfaces, where 3% reads as a lurch. */
+@utility press-sm {
+  &:active {
+    transform: scale(0.99);
+  }
+}
+
+/* Hover lift, gated: a tap on a touch screen fires a false hover. */
+@utility lift {
+  transition:
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out),
+    border-color 200ms var(--ease-out),
+    background-color 200ms var(--ease-out);
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      transform: translateY(-2px);
+    }
+  }
+}
+
+/* A faint paper tooth over the boardroom floor. Flat fills read as CSS; a little
+   noise reads as a material. Kept under 4% opacity and multiplied so it darkens
+   rather than fogs. */
+@utility room-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+}
+
+/* Fade content into the floating chrome above and below a scroll region instead
+   of cutting it with a hard rule. */
+@utility scroll-edges {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
 }
 
 .board-scrollbar {
@@ -150,7 +363,9 @@ body {
   scrollbar-color: var(--color-line-strong) transparent;
 }
 
-/* Focus rings: one visible style everywhere, only for keyboard focus. */
+/* Focus rings: one visible style everywhere, only for keyboard focus. Text
+   fields are excluded on purpose — they carry their own accent border and glow,
+   and a browser outline on top of it reads as a doubled ring. */
 :where(button, [href], select):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;

@@ -82,6 +82,14 @@ export function createEngine(session: MeetingSession, runtime: BoardRuntime): Me
   const unsubscribe = session.on((event) => {
     if (disposed) return;
     if (event.type === "start") void start();
+    else if (event.type === "resume") {
+      if (session.getState().phase === "forming") void start();
+      else if (session.getState().phase === "discussion") {
+        automaticTurnsRemaining = Math.max(automaticTurnsRemaining, FOLLOW_UP_AUTOMATIC_TURNS);
+        pausedForChair = false;
+        kick(0);
+      } else if (session.getState().phase === "closing") void end();
+    }
     else if (event.type === "input") {
       if (event.input.kind !== "synthesis-request") {
         automaticTurnsRemaining = Math.max(automaticTurnsRemaining, FOLLOW_UP_AUTOMATIC_TURNS);

@@ -1,10 +1,9 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  // Persona packages are read from disk at runtime by route handlers and the catalog page.
-  outputFileTracingIncludes: {
-    "/**": ["./agent/**/*"],
-  },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
+
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+// Lets `next dev` see the Cloudflare bindings declared in wrangler.jsonc.
+initOpenNextCloudflareForDev();

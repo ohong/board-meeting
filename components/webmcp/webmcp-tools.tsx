@@ -3,10 +3,10 @@
 /**
  * WebMCP site tools — OWNED BY THE WEBMCP WORKSTREAM.
  *
- * Registers the six tools named in `WEBMCP_TOOL_NAMES` (lib/meeting/types.ts) on
+ * Registers the tools named in `WEBMCP_TOOL_NAMES` (lib/meeting/types.ts) on
  * `document.modelContext` and routes every one of them to the SAME `MeetingSession`
- * actions the human UI calls (spec §11.4, §14.3). There is no parallel transcript
- * and no server session.
+ * actions the human UI calls. Launched meetings are projected through one shared
+ * room so an invitation opened in another browser reaches the same transcript.
  *
  * Design rules taken from the spec + Chrome/OpenAI guidance:
  *  - `document.modelContext` first, `navigator.modelContext` as a legacy fallback,
@@ -26,10 +26,20 @@ import { useSession } from "@/lib/meeting/context";
 import type { MeetingSession } from "@/lib/meeting/session";
 import {
   WEBMCP_TOOL_NAMES,
+  type ActionResult,
   type ActionErrorCode,
   type MeetingState,
   type WebMcpToolName,
 } from "@/lib/meeting/types";
+import {
+  connectRoomFromLocation,
+  ensureSharedRoom,
+  performRoomGuestAction,
+  refreshRoom,
+  roomIdFromLocation,
+  roomShareUrl,
+} from "@/lib/meeting/room-client";
+import type { CreatedRoom, RoomGuestAction } from "@/lib/meeting/room";
 import {
   READOUT_SECTIONS,
   readoutSectionItems,
@@ -155,6 +165,26 @@ function errorText(error: unknown): string {
   return String(error);
 }
 
+async function syncRoomForTool(session: MeetingSession): Promise<void> {
+  const locationRoom = roomIdFromLocation();
+  if (!session.getRoomId() && locationRoom) {
+    await connectRoomFromLocation(session);
+  } else if (session.getRoomId()) {
+    await refreshRoom(session);
+  }
+}
+
+async function runGuestAction(
+  session: MeetingSession,
+  action: RoomGuestAction,
+  local: () => ActionResult<Record<string, unknown>>,
+): Promise<ActionResult<Record<string, unknown>>> {
+  if (session.getRoomId() || roomIdFromLocation()) {
+    return (await performRoomGuestAction(session, action)).result;
+  }
+  return local();
+}
+
 // ---------------------------------------------------------------------------
 // Transcript projection for agents
 // ---------------------------------------------------------------------------
@@ -215,7 +245,7 @@ function nextHint(state: MeetingState): string {
     return "The chair has ended the meeting and the readout is being written. Call get_board_meeting_readout in about ten seconds.";
   }
   if (state.phase === "selecting" || state.phase === "briefing") {
-    return "The human chair is still choosing the board and writing the briefing. Call inspect_board_meeting again in a few seconds; you can join once the meeting is in session.";
+    return "No meeting is live yet. To create one yourself, call list_board_advisers and then launch_board_meeting; otherwise wait for the human chair to launch it.";
   }
   if (!joined) {
     return "You have not joined; call join_board_meeting with your own name.";
@@ -354,14 +384,98 @@ function waitForSynthesis(
 }
 
 /**
- * The six handlers, sharing one `MeetingSession` accessor.
+ * The handlers, sharing one `MeetingSession` accessor.
  *
  * Exported so the dev harness (app/dev/webmcp) and tests/webmcp-tools.test.ts
  * exercise exactly the same code that gets registered with the browser.
  */
-export function createBoardTools(getSession: () => MeetingSession): BoardToolMap {
+export function createBoardTools(
+  getSession: () => MeetingSession,
+  dependencies: { createRoom?: (session: MeetingSession) => Promise<CreatedRoom> } = {},
+): BoardToolMap {
   /** Per-meeting guard for the one-time "readout retrieved" system event. */
   let readoutMarkedFor: number | null = null;
+  const createRoom = dependencies.createRoom ?? ensureSharedRoom;
+
+  const listAdvisers: BoardTool = {
+    name: "list_board_advisers",
+    title: "List available board advisers",
+    description:
+      "List the advisers available for a new board meeting, including the stable ids to pass to launch_board_meeting and each person's decision-making lens. Use this first when you are creating the meeting yourself.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, untrustedContentHint: false },
+    execute: guarded("list_board_advisers", () => {
+      const advisers = getSession().getCatalog();
+      if (!advisers.length) return toolError("NOT_AVAILABLE", "The adviser catalog is still loading. Try again shortly.");
+      return {
+        ok: true,
+        advisers: advisers.map((persona) => ({
+          id: persona.slug,
+          name: persona.name,
+          focus: truncate(persona.lenses.slice(0, 2).join(", ") || persona.role, 48),
+        })),
+        limits: { minimum: 3, maximum: 6 },
+        hint: "Choose 3–6 distinct ids, write the decision briefing, then call launch_board_meeting.",
+      };
+    }),
+  };
+
+  const launch: BoardTool = {
+    name: "launch_board_meeting",
+    title: "Launch a board meeting",
+    description:
+      "Create and start a shareable board meeting from the empty page. Choose three to six adviser ids from list_board_advisers and provide the complete decision briefing. The result includes the unique meeting URL that a person or another agent can open.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        advisers: {
+          type: "array",
+          minItems: 3,
+          maxItems: 6,
+          uniqueItems: true,
+          items: { type: "string" },
+          description: "Three to six adviser ids or unambiguous names, in seating order.",
+        },
+        briefing: {
+          type: "string",
+          minLength: 1,
+          maxLength: 6000,
+          description: "The decision, evidence, constraints, and metrics the board should consider.",
+        },
+      },
+      required: ["advisers", "briefing"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, untrustedContentHint: false },
+    execute: guarded("launch_board_meeting", async (input) => {
+      const session = getSession();
+      const refs = Array.isArray(input.advisers)
+        ? input.advisers.map(asString).map((value) => value.trim()).filter(Boolean)
+        : [];
+      const board = refs.map((ref) => session.resolveCatalogMember(ref));
+      const unknown = refs.filter((_, index) => !board[index]);
+      if (unknown.length) {
+        return {
+          ...toolError("NOT_FOUND", `Unknown adviser: ${unknown.join(", ")}.`),
+          available_ids: session.getCatalog().map((persona) => persona.slug),
+        };
+      }
+      const result = session.configureAndStart(
+        board.filter((persona): persona is NonNullable<typeof persona> => !!persona),
+        asString(input.briefing),
+      );
+      if (!result.ok) return result;
+      const room = await createRoom(session);
+      return {
+        ok: true,
+        meeting_id: room.id,
+        meeting_url: roomShareUrl(room.id),
+        phase: session.getState().phase,
+        board: session.getState().board.map((persona) => ({ id: persona.slug, name: persona.name })),
+        hint: "The meeting is live. Call inspect_board_meeting, then join_board_meeting if you want to take the guest seat. Share meeting_url to invite another participant.",
+      };
+    }),
+  };
 
   const inspect: BoardTool = {
     name: "inspect_board_meeting",
@@ -391,8 +505,9 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, untrustedContentHint: true },
-    execute: guarded("inspect_board_meeting", (input) => {
+    execute: guarded("inspect_board_meeting", async (input) => {
       const session = getSession();
+      await syncRoomForTool(session);
       const state = session.getState();
       const snapshot = session.inspect();
 
@@ -490,9 +605,15 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, untrustedContentHint: false },
-    execute: guarded("join_board_meeting", (input) => {
+    execute: guarded("join_board_meeting", async (input) => {
       const session = getSession();
-      const result = session.joinGuest(asString(input.display_name));
+      await syncRoomForTool(session);
+      const displayName = asString(input.display_name);
+      const result = await runGuestAction(
+        session,
+        { type: "join", displayName },
+        () => session.joinGuest(displayName),
+      );
       if (!result.ok) return result;
       const state = session.getState();
       return {
@@ -527,9 +648,15 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, untrustedContentHint: false },
-    execute: guarded("contribute_to_board_meeting", (input) => {
+    execute: guarded("contribute_to_board_meeting", async (input) => {
       const session = getSession();
-      const result = session.guestContribute(asString(input.text));
+      await syncRoomForTool(session);
+      const text = asString(input.text);
+      const result = await runGuestAction(
+        session,
+        { type: "contribute", text },
+        () => session.guestContribute(text),
+      );
       if (!result.ok) return result;
       return {
         ok: true,
@@ -563,10 +690,16 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, untrustedContentHint: false },
-    execute: guarded("address_board_member", (input) => {
+    execute: guarded("address_board_member", async (input) => {
       const session = getSession();
+      await syncRoomForTool(session);
       const memberRef = asString(input.member);
-      const result = session.guestAddress(memberRef, asString(input.text));
+      const text = asString(input.text);
+      const result = await runGuestAction(
+        session,
+        { type: "address", member: memberRef, text },
+        () => session.guestAddress(memberRef, text),
+      );
       if (!result.ok) {
         if (result.error.code === "NOT_FOUND") {
           return {
@@ -580,7 +713,7 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
         ok: true,
         memberId: result.memberId,
         memberName: result.memberName,
-        hint: `${result.memberName} will answer next; call inspect_board_meeting in ~10s to read the answer.`,
+        hint: `${asString(result.memberName)} will answer next; call inspect_board_meeting in ~10s to read the answer.`,
       };
     }),
   };
@@ -605,18 +738,24 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     execute: guarded("request_board_synthesis", async (input, options) => {
       const session = getSession();
-      const result = session.requestSynthesis("guest");
+      await syncRoomForTool(session);
+      const result = await runGuestAction(
+        session,
+        { type: "synthesis" },
+        () => session.requestSynthesis("guest"),
+      );
       if (!result.ok) return result;
       const hint =
         "Synthesis will appear in the transcript within ~10s; inspect to read it (it is the entry with speaker 'Secretary').";
       const wait = clamp(asInt(input.wait_seconds, 0), 0, 20);
-      if (wait <= 0) return { ok: true, entryId: result.entryId, hint };
+      const entryId = asString(result.entryId);
+      if (wait <= 0) return { ok: true, entryId, hint };
 
-      const waited = await waitForSynthesis(session, result.entryId, wait, options?.signal);
+      const waited = await waitForSynthesis(session, entryId, wait, options?.signal);
       if (!waited.finished) {
         return {
           ok: true,
-          entryId: result.entryId,
+          entryId,
           pending: true,
           ...(waited.text ? { partial: truncate(waited.text, 600) } : {}),
           hint,
@@ -624,7 +763,7 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
       }
       return {
         ok: true,
-        entryId: result.entryId,
+        entryId,
         ...(waited.failed ? { degraded: true } : {}),
         synthesis: truncate(waited.text, 1100),
         hint: "The synthesis is now in the shared transcript, visible to the chair and the board. Keep inspecting, and retrieve the readout after the chair ends the meeting.",
@@ -649,8 +788,9 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, untrustedContentHint: true },
-    execute: guarded("get_board_meeting_readout", (input) => {
+    execute: guarded("get_board_meeting_readout", async (input) => {
       const session = getSession();
+      await syncRoomForTool(session);
       const result = session.getReadout();
       if (!result.ok) return result;
 
@@ -661,7 +801,11 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
         state.readoutRetrievedByGuestAt === null
       ) {
         readoutMarkedFor = result.readout.generatedAt;
-        session.markReadoutRetrievedByGuest();
+        if (session.getRoomId()) {
+          await performRoomGuestAction(session, { type: "readout-retrieved" });
+        } else {
+          session.markReadoutRetrievedByGuest();
+        }
       }
 
       const requested = asString(input.section).trim().toLowerCase() || "all";
@@ -724,6 +868,8 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
   };
 
   return {
+    list_board_advisers: listAdvisers,
+    launch_board_meeting: launch,
     inspect_board_meeting: inspect,
     join_board_meeting: join,
     contribute_to_board_meeting: contribute,
@@ -738,7 +884,7 @@ export function createBoardTools(getSession: () => MeetingSession): BoardToolMap
 // ---------------------------------------------------------------------------
 
 /**
- * Only one mounted <WebMCPTools/> may own the six tool names at a time. The root
+ * Only one mounted <WebMCPTools/> may own the tool names at a time. The root
  * layout mounts one globally; the dev harness at /dev/webmcp mounts another over a
  * fixture session. React runs child effects before parent effects, so on that route
  * the harness instance wins and the layout instance stands down — everywhere else
@@ -771,7 +917,7 @@ export function WebMCPTools() {
       return;
     }
 
-    // Only the instance that actually owns the six names publishes the debug flag,
+    // Only the instance that actually owns the eight names publishes the debug flag,
     // so a second instance can never clobber the owner's tool list.
     if (registrationOwner) return;
     const owner = {};
@@ -782,6 +928,8 @@ export function WebMCPTools() {
     const options = { signal: controller.signal };
     const tools = createBoardTools(() => sessionRef.current);
     const order: BoardTool[] = [
+      tools.list_board_advisers,
+      tools.launch_board_meeting,
       tools.inspect_board_meeting,
       tools.join_board_meeting,
       tools.contribute_to_board_meeting,
@@ -795,6 +943,8 @@ export function WebMCPTools() {
     };
 
     void Promise.allSettled([
+      mc.registerTool({ ...tools.list_board_advisers }, options),
+      mc.registerTool({ ...tools.launch_board_meeting }, options),
       mc.registerTool({ ...tools.inspect_board_meeting }, options),
       mc.registerTool({ ...tools.join_board_meeting }, options),
       mc.registerTool({ ...tools.contribute_to_board_meeting }, options),

@@ -21,12 +21,14 @@ export function InviteSlot() {
   if (!open) return null;
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-ink/20 p-6 backdrop-blur-[2px]"
+      className="absolute inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/20 p-6 backdrop-blur-[3px]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) session.closeInvitePanel();
       }}
     >
-      <InvitePanel onClose={() => session.closeInvitePanel()} />
+      <div className="animate-materialize">
+        <InvitePanel onClose={() => session.closeInvitePanel()} />
+      </div>
     </div>
   );
 }

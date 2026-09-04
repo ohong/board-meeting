@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-04
+
+- Added a concise, searchable decision lens to every adviser in the frozen catalog and surfaced it without displacing the portrait-led selection treatment.
+- Made active catalog searches easier to understand and reset with token-aware matching, a filtered result count, and an inline Clear action.
+
 ## 2026-09-03
 
 - Made meeting commands deterministic and reset-safe while preserving parallel opening and closing work.

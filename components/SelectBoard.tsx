@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getMember } from "@/lib/catalog";
+import { CATALOG, getMember } from "@/lib/catalog";
 import type { MeetingSession, MeetingState } from "@/lib/session";
 import { BoardPreview } from "./BoardPreview";
 import { Portrait } from "./Portrait";
@@ -71,17 +71,22 @@ export function SelectBoard({
               <h2 id="adviser-library-title">Adviser library</h2>
               <p>Guests from David Senra’s Founders interviews.</p>
             </div>
-            <span>{catalog.length} {catalog.length === 1 ? "match" : "advisers"}</span>
+            <span>
+              {state.search.trim()
+                ? `${catalog.length} of ${CATALOG.length} ${catalog.length === 1 ? "match" : "matches"}`
+                : `${catalog.length} advisers`}
+            </span>
           </div>
 
-          <label className="catalog-search">
-            <span>Search the archive</span>
+          <div className="catalog-search">
+            <label htmlFor="catalog-search-input">Search the archive</label>
             <span className="search-field">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="11" cy="11" r="6.5" />
                 <path d="m16 16 4 4" />
               </svg>
               <input
+                id="catalog-search-input"
                 value={state.search}
                 onChange={(event) => {
                   session.setSearch(event.target.value);
@@ -90,8 +95,20 @@ export function SelectBoard({
                 placeholder="Find a founder, investor, or operator"
                 type="search"
               />
+              {state.search ? (
+                <button
+                  type="button"
+                  className="search-clear"
+                  onClick={() => {
+                    session.setSearch("");
+                    setLimitAttempt(null);
+                  }}
+                >
+                  Clear
+                </button>
+              ) : null}
             </span>
-          </label>
+          </div>
 
           {state.selectionMessage ? (
             <p className="selection-limit" role="status">
@@ -127,6 +144,9 @@ export function SelectBoard({
                       <span className="adviser-status">{selected ? "Selected" : "Choose adviser"}</span>
                       <strong>{member.name}</strong>
                       <span className="adviser-role">{member.role}</span>
+                      <span className="adviser-lens">
+                        <span>Decision lens</span> {member.decisionLens}
+                      </span>
                       <span className="adviser-source">Source: Founders interview</span>
                       {attemptedAtLimit ? (
                         <span className="tile-limit" id={`limit-${member.slug}`}>

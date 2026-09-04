@@ -515,6 +515,17 @@ a:focus-visible {
   font-size: 1rem;
 }
 
+.search-clear {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #8b382b;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
 .search-field input::placeholder {
   color: #777168;
   opacity: 1;
@@ -587,10 +598,21 @@ a:focus-visible {
 }
 
 .adviser-status,
+.adviser-lens,
 .adviser-source {
   color: #68645c;
   font-size: 0.6875rem;
   line-height: 1.3;
+}
+
+.adviser-lens {
+  margin-top: 7px;
+  color: #4d4943;
+}
+
+.adviser-lens > span {
+  color: #8b382b;
+  font-weight: 650;
 }
 
 .adviser-status {

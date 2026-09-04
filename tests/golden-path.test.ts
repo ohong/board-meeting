@@ -19,6 +19,12 @@ describe("catalog", () => {
     expect(CATALOG.length).toBeGreaterThanOrEqual(30);
   });
 
+  it("gives every adviser a searchable decision lens", () => {
+    expect(CATALOG.every((member) => member.decisionLens.trim().length > 0)).toBe(true);
+    expect(searchCatalog("freemium consumer").map((member) => member.slug)).toContain("daniel-ek");
+    expect(searchCatalog("creative candor").map((member) => member.slug)).toContain("ed-catmull");
+  });
+
   it("blocks a seventh selection", () => {
     const session = createMeetingSession({ runtime: createMockRuntime() });
     const slugs = CATALOG.slice(0, 7).map((m) => m.slug);

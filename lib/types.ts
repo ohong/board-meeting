@@ -31,6 +31,7 @@ export type CatalogMember = {
   name: string;
   aliases: string[];
   role: string;
+  decisionLens: string;
   initials: string;
   featured?: boolean;
 };

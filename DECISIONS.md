@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-09-04 — Keep decision discovery in the catalog contract
+
+**Status:** accepted
+**Decision maker:** Codex, independently within the approved catalog-usability scope
+
+Every catalog member now carries one required, concise `decisionLens`. Selection presents it as quiet editorial metadata, and search matches it alongside names, roles, slugs, and aliases. Multiword queries require every token to match the same member.
+
+We considered deriving discovery text from the adviser runtime instructions. That would avoid one catalog field, but it would couple interface copy and search behavior to long, model-facing prompts whose structure may change. A required catalog field duplicates a small amount of intent, but keeps product copy stable, reviewable, and type-checked for all 36 advisers. We also considered multiple lens chips, but plain text preserves the portrait-led hierarchy and avoids turning the catalog into a filter dashboard.
+
 ## 2026-09-03 — Serialize meeting commands on one promise lane
 
 **Status:** accepted

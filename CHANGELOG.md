@@ -20,3 +20,4 @@
 - Made WebMCP outcome receipts transient and session-aware so a completed site-tool call never obscures later meeting or readout content.
 - Paced the browser mock through visible parallel thinking and concise, non-repeating discussion turns while keeping deterministic tests instantaneous.
 - Routed live turns through Eve-isolated adviser and secretary subagents, with immutable capability envelopes, closed output schemas, a 90-word public-turn ceiling, and fail-closed identity checks.
+- Kept full-repository lint focused on authored source by excluding generated Next and Eve build artifacts.

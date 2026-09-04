@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { getVercelOidcToken } from "@vercel/oidc";
 import {
   Client,
@@ -156,18 +155,24 @@ async function relayExpectedChild(
     }
     if (event.type === "session.started") {
       const invocation = event.data.invocation;
-      if (
-        invocation?.kind !== "subagent" ||
-        invocation.name !== expectedTarget ||
-        invocation.parentCallId !== call.data.callId ||
-        invocation.parentSessionId !== call.data.sessionId ||
-        invocation.parentTurnId !== call.data.turnId
-      ) {
-        throw new EveRuntimeContractError(
-          "EVE_SUBAGENT_CALL_INVALID",
-          `The attached Eve child session was not the expected subagent '${expectedTarget}'.`,
-        );
+      if (invocation) {
+        const mismatchedFields = [
+          invocation.kind !== "subagent" ? "kind" : null,
+          invocation.name !== expectedTarget ? "name" : null,
+          invocation.parentCallId !== call.data.callId ? "parentCallId" : null,
+          invocation.parentSessionId !== call.data.sessionId ? "parentSessionId" : null,
+          invocation.parentTurnId !== call.data.turnId ? "parentTurnId" : null,
+        ].filter((field): field is string => field !== null);
+        if (mismatchedFields.length > 0) {
+          throw new EveRuntimeContractError(
+            "EVE_SUBAGENT_CALL_INVALID",
+            `The attached Eve child session was not the expected subagent '${expectedTarget}' (${mismatchedFields.join(", ")} mismatch).`,
+          );
+        }
       }
+      // Eve 0.51's local proxy omits invocation metadata from the replayed
+      // child session.started event. In that case the trusted root event still
+      // binds the selected name and tool to the exact childSessionId we attach.
       authenticatedChild = true;
     } else if (event.type === "step.started" || event.type === "step.failed") {
       visibleMessage = "";
@@ -268,6 +273,21 @@ function recentTranscript(events: TranscriptEvent[]): TranscriptEvent[] {
   return events.slice(-24);
 }
 
+function modelTranscript(events: TranscriptEvent[], recentOnly = false) {
+  const selected = recentOnly ? recentTranscript(events) : events;
+  return selected.map(({ speakerName, text, addressedTo, reaction }) => ({
+    speaker: speakerName,
+    text,
+    ...(addressedTo ? { addressedTo } : {}),
+    ...(reaction ? { reaction } : {}),
+  }));
+}
+
+function modelInput<T extends { transcript: TranscriptEvent[] }>(input: T, recentOnly = false) {
+  const { transcript, ...rest } = input;
+  return { ...rest, transcript: modelTranscript(transcript, recentOnly) };
+}
+
 function memberMessage(input: RuntimeTurnInput): string {
   const instructions = {
     formOpeningPosition:
@@ -280,7 +300,9 @@ function memberMessage(input: RuntimeTurnInput): string {
   } as const;
 
   const responseContract =
-    input.capability === "publicTurn" || input.capability === "answerDirect"
+    input.capability === "publicTurn" ||
+    input.capability === "answerDirect" ||
+    input.capability === "closingComment"
       ? "Return only the words you would say aloud. Do not return JSON, routing metadata, or markdown."
       : "Return only the structured value required by the output schema.";
   return [
@@ -288,40 +310,41 @@ function memberMessage(input: RuntimeTurnInput): string {
     instructions[input.capability as keyof typeof instructions],
     "Use only the supplied meeting state and your authored adviser instructions.",
     responseContract,
-    JSON.stringify({ ...input, transcript: recentTranscript(input.transcript) }),
+    JSON.stringify(modelInput(input, true)),
   ].join("\n\n");
 }
 
-function secretaryMessage(capability: "synthesis" | "readout", input: unknown): string {
+function secretaryMessage<T extends { transcript: TranscriptEvent[] }>(
+  capability: "synthesis" | "readout",
+  input: T,
+): string {
   const task =
     capability === "synthesis"
-      ? "Write a concise interim synthesis covering current agreement, current disagreement, and the most important unresolved question. Return it in the text field."
-      : "Produce the executive readout. Preserve disagreement and do not invent facts. Closing comments are source material and are attached unchanged by the caller after your structured result.";
+      ? "Write only a concise interim synthesis covering current agreement, current disagreement, and the most important unresolved question. Do not return JSON, routing metadata, or markdown."
+      : "Produce a concise executive readout. Keep decision and recommendation under 80 words each; return exactly 3 options, 4 tradeoffs, 3 assumptions, 3 open questions, and 4 next actions, each under 30 words. Preserve disagreement and do not invent facts. Closing comments are source material and are attached unchanged by the caller after your structured result.";
   return [
     `Board capability: ${capability}.`,
     task,
     "Use only the supplied meeting state and your authored secretary instructions.",
-    "Return only the structured value required by the output schema.",
-    JSON.stringify(input),
+    capability === "readout"
+      ? "Return only the structured value required by the output schema."
+      : "Return only the synthesis text.",
+    JSON.stringify(modelInput(input)),
   ].join("\n\n");
 }
 
-function encodeRoutingEnvelope(
-  capability: WorkflowCapability,
-  target: WorkflowTarget,
-  message: string,
-): string {
-  return Buffer.from(
-    JSON.stringify({ version: 1, capability, target, message }),
-    "utf8",
-  ).toString("base64url");
-}
+type WorkflowRequest = {
+  capability: WorkflowCapability;
+  target: WorkflowTarget;
+  message: string;
+};
 
-function rootMessage(routingEnvelope: string): string {
+function rootMessage(request: WorkflowRequest): string {
   return [
-    "Call board_runtime exactly once with the immutable routing envelope below.",
-    "Do not decode or alter it. Do not call another tool. Do not answer substantively.",
-    `routingEnvelope: ${routingEnvelope}`,
+    "Call board_runtime exactly once with the exact fields in the immutable request below.",
+    "Do not edit, reconstruct, summarize, or replace any field. Do not call another tool.",
+    "After the tool returns, reply with exactly ROUTED and nothing else.",
+    `request: ${JSON.stringify(request)}`,
   ].join("\n");
 }
 
@@ -330,7 +353,7 @@ function extractWorkflowOutput(
   expected: {
     capability: WorkflowCapability;
     target: WorkflowTarget;
-    routingEnvelope: string;
+    message: string;
   },
 ): unknown {
   if (invocation.status === "failed") {
@@ -347,9 +370,11 @@ function extractWorkflowOutput(
   if (
     requestedActions.length !== 1 ||
     !workflowCall ||
-    workflowCall.kind !== "workflow-tool-call" ||
+    workflowCall.kind !== "tool-call" ||
     workflowCall.toolName !== BOARD_RUNTIME_TOOL ||
-    workflowCall.input.routingEnvelope !== expected.routingEnvelope
+    workflowCall.input.capability !== expected.capability ||
+    workflowCall.input.target !== expected.target ||
+    workflowCall.input.message !== expected.message
   ) {
     throw new EveRuntimeContractError(
       "EVE_WORKFLOW_CALL_INVALID",
@@ -438,15 +463,15 @@ export function createLiveRuntime(options: LiveRuntimeOptions = {}): BoardRuntim
     message: string,
     options?: PublicTurnOptions,
   ): Promise<unknown> {
-    const routingEnvelope = encodeRoutingEnvelope(capability, target, message);
+    const request = { capability, target, message };
     const invocation = await invokeEve({
       host,
-      message: rootMessage(routingEnvelope),
+      message: rootMessage(request),
       expectedTarget: target,
       signal: options?.signal,
       onStream: options?.onStream,
     });
-    return extractWorkflowOutput(invocation, { capability, target, routingEnvelope });
+    return extractWorkflowOutput(invocation, request);
   }
 
   return {

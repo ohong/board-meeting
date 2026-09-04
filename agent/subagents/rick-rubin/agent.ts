@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { openai } from "../../openai";
 import { defineAgent } from "eve";
 
 export default defineAgent({

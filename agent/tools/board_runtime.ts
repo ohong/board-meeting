@@ -1,49 +1,44 @@
-import { Buffer } from "node:buffer";
 import { defineTool } from "eve/tools";
-import type { agent as AgentFunction } from "eve/workflow";
+import { agent } from "eve/workflow";
 import { z } from "zod";
 
 import {
   boardWorkflowResultJsonSchema,
+  constrainPublicTurn,
   outputJsonSchemaForCapability,
   outputSchemaForCapability,
   routingEnvelopeSchema,
+  runtimeCapabilitySchema,
 } from "../../lib/runtime/schemas";
 
-const inputSchema = z.object({ routingEnvelope: z.string().min(1) }).strict();
-type AgentOutputSchema = NonNullable<Parameters<typeof AgentFunction>[1]["outputSchema"]>;
-
-async function decodeRoutingEnvelope(encoded: string) {
-  "use step";
-
-  const decoded = Buffer.from(encoded, "base64url").toString("utf8");
-  return routingEnvelopeSchema.parse(JSON.parse(decoded));
-}
+const inputSchema = z
+  .object({
+    capability: runtimeCapabilitySchema,
+    target: z.string().min(1).max(200),
+    message: z.string().min(1).max(220_000),
+  })
+  .strict();
+type AgentOutputSchema = NonNullable<Parameters<typeof agent>[1]["outputSchema"]>;
 
 export default defineTool({
   description:
     "Route one immutable board capability request to the exact adviser or secretary named by the caller.",
   inputSchema,
   outputSchema: boardWorkflowResultJsonSchema,
-  async execute({ routingEnvelope }, ctx) {
+  async execute(input, ctx) {
     "use workflow";
 
-    const envelope = await decodeRoutingEnvelope(routingEnvelope);
-    // Eve 0.51's neutral workflow bundler warns on the documented static
-    // subpath import even though it deliberately emits that import as an
-    // external. Keeping the same public entrypoint computed avoids the false
-    // unresolved-import diagnostic without reaching into Eve internals.
-    const workflowModule: typeof import("eve/workflow") = await import(
-      ["eve", "workflow"].join("/")
-    );
-    const { agent } = workflowModule;
-    const streamsPublicText =
-      envelope.capability === "publicTurn" || envelope.capability === "answerDirect";
+    const envelope = routingEnvelopeSchema.parse({ version: 1, ...input });
+    const returnsPlainText =
+      envelope.capability === "publicTurn" ||
+      envelope.capability === "answerDirect" ||
+      envelope.capability === "closingComment" ||
+      envelope.capability === "synthesis";
     const result = await agent(ctx, {
       key: "board-runtime-delegation",
       target: envelope.target,
       message: envelope.message,
-      ...(streamsPublicText
+      ...(returnsPlainText
         ? {}
         : {
             outputSchema: outputJsonSchemaForCapability(
@@ -52,9 +47,15 @@ export default defineTool({
           }),
     });
 
-    const validatedResult = streamsPublicText
-      ? outputSchemaForCapability(envelope.capability).parse({ text: result })
-      : outputSchemaForCapability(envelope.capability).parse(result);
+    const plainText = typeof result === "string" ? result.trim() : "";
+    const validatedResult =
+      envelope.capability === "publicTurn" || envelope.capability === "answerDirect"
+        ? outputSchemaForCapability(envelope.capability).parse({
+            text: constrainPublicTurn(plainText),
+          })
+        : envelope.capability === "closingComment" || envelope.capability === "synthesis"
+          ? outputSchemaForCapability(envelope.capability).parse({ text: plainText })
+          : outputSchemaForCapability(envelope.capability).parse(result);
 
     return {
       capability: envelope.capability,

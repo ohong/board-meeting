@@ -67,6 +67,7 @@ export type InspectResult = {
   guest: GuestSeat;
   transcript: { speaker: string; text: string }[];
   readoutReady: boolean;
+  lastError: string | null;
 };
 
 type Listener = () => void;
@@ -712,6 +713,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       guest: { ...state.guest },
       transcript: state.transcript.map((e) => ({ speaker: e.speakerName, text: e.text })),
       readoutReady: Boolean(state.readout),
+      lastError: state.lastError,
     };
   }
 

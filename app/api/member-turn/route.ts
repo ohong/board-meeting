@@ -32,6 +32,7 @@ function streamLine(value: unknown): Uint8Array {
 
 function runtimeError(error: unknown) {
   if (error instanceof EveRuntimeContractError) {
+    console.error("Live Eve board runtime contract failed.", error.code, error.message);
     return { code: error.code, error: error.message };
   }
   console.error("Live Eve board runtime call failed.", error);

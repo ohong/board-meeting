@@ -64,6 +64,8 @@ function bootSession(live: boolean) {
     return createMeetingSession({
       runtime: createBrowserRuntime(),
       autoContinue: true,
+      autoTurnGapMs: 800,
+      runtimeDeadlineMs: 60_000,
     });
   }
   return createMeetingSession({

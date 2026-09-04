@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "eve/workflow": ["./node_modules/eve/dist/src/public/workflow/index"]
     }
   },
   "include": [

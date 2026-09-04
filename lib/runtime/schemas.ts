@@ -4,6 +4,7 @@ import { CATALOG } from "../catalog";
 
 export const ADVISER_COUNT = 36;
 export const PUBLIC_TURN_MAX_CHARS = 4_000;
+export const PUBLIC_TURN_MAX_WORDS = 90;
 export const ADVISER_SLUGS = CATALOG.map(({ slug }) => slug);
 const adviserSlugSet = new Set(ADVISER_SLUGS);
 
@@ -59,7 +60,7 @@ export const memberTurnSchema = z
       .min(1)
       .max(PUBLIC_TURN_MAX_CHARS)
       .refine(
-        (text) => text.trim().split(/\s+/u).length <= 90,
+        (text) => text.trim().split(/\s+/u).length <= PUBLIC_TURN_MAX_WORDS,
         "Public turns must not exceed 90 words.",
       ),
     addressedTo: z.string().max(200).optional(),
@@ -68,6 +69,20 @@ export const memberTurnSchema = z
     wantsToRespond: z.string().max(200).optional(),
   })
   .strict();
+
+export function constrainPublicTurn(text: string): string {
+  const words = text.trim().split(/\s+/u).filter(Boolean);
+  if (words.length <= PUBLIC_TURN_MAX_WORDS) return words.join(" ");
+
+  // Prefer a complete sentence once the requested 30-word minimum is met.
+  // The hard boundary remains deterministic when a model ignores its limit.
+  let sentenceEnd = -1;
+  for (let index = 29; index < PUBLIC_TURN_MAX_WORDS; index += 1) {
+    if (/[.!?]["'’”)]?$/u.test(words[index] ?? "")) sentenceEnd = index;
+  }
+  if (sentenceEnd >= 29) return words.slice(0, sentenceEnd + 1).join(" ");
+  return `${words.slice(0, PUBLIC_TURN_MAX_WORDS).join(" ")}…`;
+}
 
 export const publicTurnStreamEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("reset") }).strict(),

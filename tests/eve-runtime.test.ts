@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -13,7 +12,12 @@ import {
   type EveClientLike,
   type EveInvoker,
 } from "../lib/runtime/live";
-import { ADVISER_COUNT, PUBLIC_TURN_MAX_CHARS } from "../lib/runtime/schemas";
+import {
+  ADVISER_COUNT,
+  constrainPublicTurn,
+  PUBLIC_TURN_MAX_CHARS,
+  PUBLIC_TURN_MAX_WORDS,
+} from "../lib/runtime/schemas";
 import type { RuntimeTurnInput } from "../lib/types";
 
 const priorKey = process.env.OPENAI_API_KEY;
@@ -38,16 +42,13 @@ function baseInput(
   };
 }
 
-function routingEnvelopeFrom(message: string) {
-  const encoded = message.match(/^routingEnvelope: (.+)$/m)?.[1];
-  if (!encoded) throw new Error("Missing routing envelope in test invocation.");
-  return {
-    encoded,
-    decoded: JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as {
-      capability: string;
-      message: string;
-      target: string;
-    },
+function workflowRequestFrom(message: string) {
+  const serialized = message.match(/^request: (.+)$/m)?.[1];
+  if (!serialized) throw new Error("Missing workflow request in test invocation.");
+  return JSON.parse(serialized) as {
+    capability: string;
+    message: string;
+    target: string;
   };
 }
 
@@ -56,8 +57,8 @@ function successfulInvoker(
   mutateTarget?: (target: string) => string,
 ): EveInvoker {
   return async ({ message }) => {
-    const { encoded, decoded } = routingEnvelopeFrom(message);
-    const target = mutateTarget?.(decoded.target) ?? decoded.target;
+    const request = workflowRequestFrom(message);
+    const target = mutateTarget?.(request.target) ?? request.target;
     return {
       status: "waiting",
       events: [
@@ -67,8 +68,8 @@ function successfulInvoker(
             actions: [
               {
                 callId: "call_workflow",
-                input: { routingEnvelope: encoded },
-                kind: "workflow-tool-call",
+                input: request,
+                kind: "tool-call",
                 toolName: "board_runtime",
                 workflowId: "workflow_board_runtime",
               },
@@ -87,8 +88,8 @@ function successfulInvoker(
               callId: "call_workflow",
               kind: "tool-result",
               output: {
-                capability: decoded.capability,
-                target: decoded.target,
+                capability: request.capability,
+                target: request.target,
                 result: structuredResult,
               },
               toolName: "board_runtime",
@@ -113,6 +114,15 @@ function eventStream(events: readonly MessageStreamEvent[], onCancel?: () => voi
 }
 
 describe("Eve-native board runtime", () => {
+  it("bounds an overlong model turn at a complete sentence when possible", () => {
+    const firstSentence = Array.from({ length: 35 }, () => "word").join(" ");
+    const text = `${firstSentence}. ${Array.from({ length: 80 }, () => "overflow").join(" ")}`;
+
+    expect(constrainPublicTurn(text)).toBe(`${firstSentence}.`);
+    expect(constrainPublicTurn(Array.from({ length: 120 }, () => "word").join(" ")).split(/\s+/u))
+      .toHaveLength(PUBLIC_TURN_MAX_WORDS);
+  });
+
   it("relays only the selected child message and resets abandoned child steps", async () => {
     const childEvents = [
       {
@@ -139,7 +149,7 @@ describe("Eve-native board runtime", () => {
     const client: EveClientLike = {
       sessions: {
         async create({ message }) {
-          const { encoded, decoded } = routingEnvelopeFrom(message);
+          const request = workflowRequestFrom(message);
           const rootEvents = [
             { type: "reasoning.appended", data: { reasoningDelta: "private root reasoning" } },
             { type: "message.appended", data: { messageDelta: "root narration" } },
@@ -148,8 +158,8 @@ describe("Eve-native board runtime", () => {
               data: {
                 actions: [{
                   callId: "call_workflow",
-                  input: { routingEnvelope: encoded },
-                  kind: "workflow-tool-call",
+                  input: request,
+                  kind: "tool-call",
                   toolName: "board_runtime",
                   workflowId: "workflow_board_runtime",
                 }],
@@ -174,8 +184,8 @@ describe("Eve-native board runtime", () => {
                   callId: "call_workflow",
                   kind: "tool-result",
                   output: {
-                    capability: decoded.capability,
-                    target: decoded.target,
+                    capability: request.capability,
+                    target: request.target,
                     result: { text: "Final answer." },
                   },
                   toolName: "board_runtime",
@@ -215,6 +225,88 @@ describe("Eve-native board runtime", () => {
       .not.toContain("private root reasoning");
   });
 
+  it("accepts a child stream bound by Eve when replay omits invocation metadata", async () => {
+    const childEvents = [
+      { type: "session.started", data: {} },
+      {
+        type: "message.appended",
+        data: {
+          messageDelta: "Bound by the root event.",
+          sequence: 0,
+          stepIndex: 0,
+          turnId: "child_turn",
+        },
+      },
+      {
+        type: "session.waiting",
+        data: { continuationToken: "", wait: "next-user-message" },
+      },
+    ] as unknown as MessageStreamEvent[];
+    const client: EveClientLike = {
+      sessions: {
+        async create({ message }) {
+          const request = workflowRequestFrom(message);
+          return {
+            response: eventStream([
+              {
+                type: "actions.requested",
+                data: {
+                  actions: [{
+                    callId: "call_workflow",
+                    input: request,
+                    kind: "tool-call",
+                    toolName: "board_runtime",
+                  }],
+                },
+              },
+              {
+                type: "subagent.called",
+                data: {
+                  callId: "call_adviser",
+                  childSessionId: "child_session",
+                  name: "daniel-ek",
+                  sessionId: "root_session",
+                  toolName: "daniel-ek",
+                  turnId: "root_turn",
+                },
+              },
+              {
+                type: "action.result",
+                data: {
+                  status: "completed",
+                  result: {
+                    callId: "call_workflow",
+                    kind: "tool-result",
+                    output: {
+                      capability: request.capability,
+                      target: request.target,
+                      result: { text: "Bound by the root event." },
+                    },
+                    toolName: "board_runtime",
+                  },
+                },
+              },
+            ] as unknown as MessageStreamEvent[]),
+          };
+        },
+        attach(sessionId) {
+          expect(sessionId).toBe("child_session");
+          return { stream: () => eventStream(childEvents) };
+        },
+      },
+    };
+    const updates: Array<{ type: string; delta?: string }> = [];
+    const runtime = createLiveRuntime({
+      eveHost: "http://board.test",
+      invokeEve: createEveInvoker(() => client),
+    });
+
+    await expect(
+      runtime.publicTurn(baseInput(), { onStream: (update) => updates.push(update) }),
+    ).resolves.toEqual({ text: "Bound by the root event." });
+    expect(updates).toEqual([{ type: "append", delta: "Bound by the root event." }]);
+  });
+
   it("fails closed without relaying a child event emitted before authentication", async () => {
     const childEvents = [
       {
@@ -242,15 +334,15 @@ describe("Eve-native board runtime", () => {
     const client: EveClientLike = {
       sessions: {
         async create({ message }) {
-          const { encoded, decoded } = routingEnvelopeFrom(message);
+          const request = workflowRequestFrom(message);
           const rootEvents = [
             {
               type: "actions.requested",
               data: {
                 actions: [{
                   callId: "call_workflow",
-                  input: { routingEnvelope: encoded },
-                  kind: "workflow-tool-call",
+                  input: request,
+                  kind: "tool-call",
                   toolName: "board_runtime",
                   workflowId: "workflow_board_runtime",
                 }],
@@ -275,8 +367,8 @@ describe("Eve-native board runtime", () => {
                   callId: "call_workflow",
                   kind: "tool-result",
                   output: {
-                    capability: decoded.capability,
-                    target: decoded.target,
+                    capability: request.capability,
+                    target: request.target,
                     result: { text: "This result must not be accepted." },
                   },
                   toolName: "board_runtime",
@@ -346,15 +438,15 @@ describe("Eve-native board runtime", () => {
     const client: EveClientLike = {
       sessions: {
         async create({ message }) {
-          const { encoded, decoded } = routingEnvelopeFrom(message);
+          const request = workflowRequestFrom(message);
           const rootEvents = [
             {
               type: "actions.requested",
               data: {
                 actions: [{
                   callId: "call_workflow",
-                  input: { routingEnvelope: encoded },
-                  kind: "workflow-tool-call",
+                  input: request,
+                  kind: "tool-call",
                   toolName: "board_runtime",
                   workflowId: "workflow_board_runtime",
                 }],
@@ -379,8 +471,8 @@ describe("Eve-native board runtime", () => {
                   callId: "call_workflow",
                   kind: "tool-result",
                   output: {
-                    capability: decoded.capability,
-                    target: decoded.target,
+                    capability: request.capability,
+                    target: request.target,
                     result: { text: "This valid result must not be accepted." },
                   },
                   toolName: "board_runtime",
@@ -471,6 +563,75 @@ describe("Eve-native board runtime", () => {
     expect(cancelled).toBe(true);
   });
 
+  it("consumes the root completion boundary without cancelling the transport", async () => {
+    let cancelled = false;
+    const events = [
+      {
+        type: "actions.requested",
+        data: {
+          actions: [{
+            callId: "call_workflow",
+            input: {
+              capability: "publicTurn",
+              target: "daniel-ek",
+              message: "Audited request.",
+            },
+            kind: "tool-call",
+            toolName: "board_runtime",
+            workflowId: "workflow_board_runtime",
+          }],
+        },
+      },
+      {
+        type: "subagent.called",
+        data: { name: "daniel-ek", toolName: "daniel-ek" },
+      },
+      {
+        type: "action.result",
+        data: {
+          status: "completed",
+          result: {
+            callId: "call_workflow",
+            kind: "tool-result",
+            output: { text: "Audited result." },
+            toolName: "board_runtime",
+          },
+        },
+      },
+      {
+        type: "message.appended",
+        data: {
+          messageDelta: "ROUTED",
+          sequence: 0,
+          stepIndex: 1,
+          turnId: "root_turn",
+        },
+      },
+      { type: "session.completed", data: {} },
+    ] as unknown as MessageStreamEvent[];
+    const client: EveClientLike = {
+      sessions: {
+        async create() {
+          return { response: eventStream(events, () => { cancelled = true; }) };
+        },
+        attach() {
+          throw new Error("No child relay is needed without a stream callback.");
+        },
+      },
+    };
+
+    const result = await createEveInvoker(() => client)({
+      host: "http://board.test",
+      message: "route once",
+      expectedTarget: "daniel-ek",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.events).toHaveLength(5);
+    expect(result.events.some((event) => event.type === "session.failed")).toBe(false);
+    expect(cancelled).toBe(false);
+  });
+
   it("routes a selected member slug to the exact subagent.called identity", async () => {
     const invocations: string[] = [];
     const delegate = successfulInvoker({ text: "Run the reversible test first." });
@@ -484,7 +645,7 @@ describe("Eve-native board runtime", () => {
       text: "Run the reversible test first.",
     });
     expect(invocations).toHaveLength(1);
-    expect(routingEnvelopeFrom(invocations[0]!).decoded.target).toBe("daniel-ek");
+    expect(workflowRequestFrom(invocations[0]!).target).toBe("daniel-ek");
   });
 
   it("routes synthesis and readout to secretary in separate Eve sessions", async () => {
@@ -504,7 +665,7 @@ describe("Eve-native board runtime", () => {
     ];
     let invocationIndex = 0;
     const invokeEve: EveInvoker = async (input) => {
-      targets.push(routingEnvelopeFrom(input.message).decoded.target);
+      targets.push(workflowRequestFrom(input.message).target);
       return successfulInvoker(results[invocationIndex++]!)(input);
     };
     const runtime = createLiveRuntime({ eveHost: "http://board.test", invokeEve });
@@ -587,7 +748,7 @@ describe("Eve-native board runtime", () => {
     const runtime = createLiveRuntime({
       eveHost: "http://board.test",
       invokeEve: async (input) => {
-        delegatedMessage = routingEnvelopeFrom(input.message).decoded.message;
+        delegatedMessage = workflowRequestFrom(input.message).message;
         return delegate(input);
       },
     });
@@ -619,7 +780,7 @@ describe("Eve-native board runtime", () => {
 
   it("rejects missing or invalid structured workflow output", async () => {
     const missingOutput: EveInvoker = async ({ message }) => {
-      const { encoded, decoded } = routingEnvelopeFrom(message);
+      const request = workflowRequestFrom(message);
       return {
         status: "waiting",
         events: [
@@ -629,8 +790,8 @@ describe("Eve-native board runtime", () => {
               actions: [
                 {
                   callId: "call_workflow",
-                  input: { routingEnvelope: encoded },
-                  kind: "workflow-tool-call",
+                  input: request,
+                  kind: "tool-call",
                   toolName: "board_runtime",
                   workflowId: "workflow_board_runtime",
                 },
@@ -639,7 +800,7 @@ describe("Eve-native board runtime", () => {
           },
           {
             type: "subagent.called",
-            data: { name: decoded.target, toolName: decoded.target },
+            data: { name: request.target, toolName: request.target },
           },
         ] as never,
       };
@@ -750,6 +911,43 @@ describe("static Eve adviser fleet", () => {
         .sort(),
     );
 
+    const boardRuntimeSource = await readFile(path.join(rootTools, "board_runtime.ts"), "utf8");
+    expect(boardRuntimeSource).toContain('import { agent } from "eve/workflow";');
+    expect(boardRuntimeSource).not.toMatch(/await\s+import\s*\(/);
+    expect(boardRuntimeSource).not.toContain('"use step"');
+    expect(boardRuntimeSource).not.toMatch(/node:(buffer|zlib)/);
+
+    const rootAgentSource = await readFile(
+      path.join(process.cwd(), "agent", "agent.ts"),
+      "utf8",
+    );
+    expect(rootAgentSource).toContain('import { openai } from "./openai";');
+    expect(rootAgentSource).toContain('model: openai("gpt-5.6-terra")');
+
+    const openAIProviderSource = await readFile(
+      path.join(process.cwd(), "agent", "openai.ts"),
+      "utf8",
+    );
+    expect(openAIProviderSource).toContain('import { createOpenAI } from "@ai-sdk/openai";');
+    expect(openAIProviderSource).toMatch(/new Agent\(\{ allowH2: false \}\)/);
+    expect(openAIProviderSource).toContain(
+      "export const openai = createOpenAI({ fetch: fetchOverHttp1 });",
+    );
+
+    const secretaryAgentSource = await readFile(
+      path.join(process.cwd(), "agent", "subagents", "secretary", "agent.ts"),
+      "utf8",
+    );
+    expect(secretaryAgentSource).toContain('import { openai } from "../../openai";');
+    expect(secretaryAgentSource).toContain('model: openai("gpt-5.6-luna")');
+
+    const tsconfig = JSON.parse(
+      await readFile(path.join(process.cwd(), "tsconfig.json"), "utf8"),
+    ) as { compilerOptions?: { paths?: Record<string, string[]> } };
+    expect(tsconfig.compilerOptions?.paths?.["eve/workflow"]).toEqual([
+      "./node_modules/eve/dist/src/public/workflow/index",
+    ]);
+
     for (const file of rootFiles) {
       if (file === "board_runtime.ts") continue;
       const source = await readFile(path.join(rootTools, file), "utf8");
@@ -772,12 +970,20 @@ describe("static Eve adviser fleet", () => {
       .sort();
     expect(directories).toEqual(CATALOG.map(({ slug }) => slug).sort());
 
-    const gatewayConfigured: string[] = [];
+    const incorrectlyConfigured: string[] = [];
     for (const slug of directories) {
       const source = await readFile(path.join(subagentsRoot, slug, "agent.ts"), "utf8");
-      if (!/model:\s*openai\(/.test(source)) gatewayConfigured.push(slug);
+      if (
+        !source.includes('import { openai } from "../../openai";') ||
+        !/model:\s*openai\(/.test(source)
+      ) {
+        incorrectlyConfigured.push(slug);
+      }
     }
-    expect(gatewayConfigured, "Every adviser must use @ai-sdk/openai directly").toEqual([]);
+    expect(
+      incorrectlyConfigured,
+      "Every adviser must use the shared direct OpenAI provider",
+    ).toEqual([]);
   });
 
 });

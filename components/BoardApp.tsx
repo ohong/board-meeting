@@ -15,6 +15,7 @@ import { WebMcpBridge } from "./WebMcp";
  */
 export function BoardApp() {
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
+  const [live, setLive] = useState<boolean | null>(null);
   const [webmcpSupported, setWebmcpSupported] = useState<boolean | null>(null);
 
   const [session] = useState<MeetingSession>(() =>
@@ -36,11 +37,15 @@ export function BoardApp() {
     let cancelled = false;
     fetch("/api/runtime-status")
       .then((response) => response.json() as Promise<{ live: boolean }>)
-      .then(({ live }) => {
-        if (!cancelled && !live) setSetupMessage(NO_KEY_MESSAGE);
+      .then(({ live: isLive }) => {
+        if (cancelled) return;
+        setLive(isLive);
+        if (!isLive) setSetupMessage(NO_KEY_MESSAGE);
       })
       .catch(() => {
-        if (!cancelled) setSetupMessage(NO_KEY_MESSAGE);
+        if (cancelled) return;
+        setLive(false);
+        setSetupMessage(NO_KEY_MESSAGE);
       });
     return () => {
       cancelled = true;
@@ -62,11 +67,11 @@ export function BoardApp() {
       ) : null}
 
       {state.phase === "select" ? <SelectBoard session={session} state={state} /> : null}
-      {state.phase === "brief" ? <BriefBoard session={session} state={state} /> : null}
+      {state.phase === "brief" ? <BriefBoard session={session} state={state} live={live} /> : null}
       {state.phase === "meeting" ? (
         <BoardMeeting session={session} state={state} webmcpSupported={webmcpSupported} />
       ) : null}
-      {state.phase === "readout" ? <Readout state={state} /> : null}
+      {state.phase === "readout" ? <Readout session={session} state={state} /> : null}
 
       <WebMcpBridge session={session} onSupportChange={onSupportChange} />
     </div>

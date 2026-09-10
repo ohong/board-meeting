@@ -81,7 +81,7 @@ export function SelectBoard({ session, state }: { session: MeetingSession; state
                   type="button"
                   aria-pressed={selected}
                   onClick={() => session.toggleMember(member.slug)}
-                  className="group flex w-full items-center gap-3.5 border-t px-1 py-3.5 text-left transition-colors"
+                  className="group flex w-full items-start gap-3.5 border-t px-1 py-4 text-left transition-colors"
                   style={{
                     borderTopColor: selected ? "var(--human)" : "var(--rule)",
                     background: selected ? "var(--soft-fill)" : "transparent",
@@ -95,9 +95,11 @@ export function SelectBoard({ session, state }: { session: MeetingSession; state
                     <span className="mt-1 block truncate text-[13px] leading-tight text-[var(--ink-secondary)]">
                       {member.role}
                     </span>
+                    {/* What they bring, so the roster is browsable by judgment, not just by name. */}
+                    <span className="mt-1.5 block text-[13px] leading-snug">{member.lens}</span>
                   </span>
                   <span
-                    className="text-[12px] font-medium"
+                    className="mt-0.5 shrink-0 text-[12px] font-medium"
                     style={{ color: "var(--human)", visibility: selected ? "visible" : "hidden" }}
                   >
                     Seated

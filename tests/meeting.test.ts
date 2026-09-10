@@ -268,3 +268,25 @@ describe("passing", () => {
     expect(last?.speakerId).toBe("lulu-cheng-meservey");
   });
 });
+
+describe("the stand-in on a decision it has no script for", () => {
+  it("says it has nothing to offer rather than claiming synthesis failed", async () => {
+    const session = newSession();
+    session.toggleMember("daniel-ek");
+    session.toggleMember("rick-rubin");
+    session.toggleMember("todd-graves");
+    session.goToBrief();
+    session.setBriefing("Should I move from London to Lisbon next year?");
+    await session.startMeeting();
+    await session.runDiscussion(4);
+    await session.endMeeting();
+
+    const readout = session.getState().readout!;
+    expect(readout.decision).toContain("Lisbon");
+    expect(readout.recommendation).toContain("scripted stand-in");
+    expect(readout.recommendation).toContain("OPENAI_API_KEY");
+    // The synthesis-failure wording would be a lie: nothing failed.
+    expect(readout.recommendation).not.toContain("could not");
+    expect(readout.closingComments).toHaveLength(3);
+  });
+});

@@ -370,6 +370,41 @@
     text-align: left;
   }
 
+  /* ------------------------------------------------------------ meeting grid */
+
+  .meeting-grid {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+  }
+  @media (min-width: 640px) {
+    .meeting-grid {
+      padding: 20px;
+    }
+  }
+  /* The design's target range: room roughly two thirds, minutes at least 400px. */
+  @media (min-width: 1024px) {
+    .meeting-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(380px, 35%);
+      gap: 20px;
+    }
+    .meeting-grid[data-invite="open"] {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 32%) minmax(300px, 320px);
+    }
+  }
+  /* Below 1280 the guest pass would squeeze both other columns, so it stacks under them. */
+  @media (min-width: 1024px) and (max-width: 1279px) {
+    .meeting-grid[data-invite="open"] {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 36%);
+    }
+    .meeting-grid[data-invite="open"] > :last-child {
+      grid-column: 1 / -1;
+    }
+  }
+
   /* -------------------------------------------------------------- the minutes */
 
   .minutes-entry + .minutes-entry {

@@ -8,7 +8,15 @@ import type { MeetingSession, MeetingState } from "@/lib/session";
  * Paper mode, 4/8 for continuity with selection. The decision sheet is the dominant object:
  * an open working surface to think on, not a textarea inside a card.
  */
-export function BriefBoard({ session, state }: { session: MeetingSession; state: MeetingState }) {
+export function BriefBoard({
+  session,
+  state,
+  live,
+}: {
+  session: MeetingSession;
+  state: MeetingState;
+  live: boolean | null;
+}) {
   const [starting, setStarting] = useState(false);
   const ready = session.canStart();
 
@@ -67,6 +75,14 @@ export function BriefBoard({ session, state }: { session: MeetingSession; state:
             Use the pricing decision
           </button>
         </div>
+
+        {live === false ? (
+          <p className="mt-4 border-l-2 border-[var(--human)] pl-3 text-[13.5px] leading-[1.5] text-[var(--ink-secondary)]">
+            No API key is configured, so the advisers are reading from a script. They can only
+            deliberate on the worked example. Your own decision will open the room and the tools,
+            but the board will have nothing useful to say about it.
+          </p>
+        ) : null}
 
         <label className="mt-6 block">
           <span className="sr-only">Your decision brief</span>

@@ -30,7 +30,7 @@ Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 ### Checks
 
 ```bash
-bun run test        # 133 deterministic tests, no API calls
+bun run test        # 136 deterministic tests, no API calls
 bun run typecheck
 bun run lint
 bun run build
@@ -78,8 +78,8 @@ without them.
 
 ## How a meeting runs
 
-1. **Choose your board** — search the frozen roster and seat three to six advisers; the
-   miniature table fills as you go.
+1. **Choose your board** — search the roster by name, company or by the judgment you want
+   in the room ("pricing", "trust", "focus"); the miniature table fills as you seat people.
 2. **Brief your board** — one free-form decision. Links stay plain text; nothing is fetched.
 3. **Board meeting** — every adviser forms a private opening position in parallel, then the
    room opens. Turns stream one at a time. Advisers react, rebut, ask each other for the
@@ -109,6 +109,13 @@ Every tool calls the same session action the human interface calls, so there is 
 transcript. The guest cannot change the roster, edit prior messages, impersonate anyone, or
 end the meeting. **Invite your agent** generates a copyable prompt that names a seated
 adviser and never dictates the guest's display name.
+
+## Screens and widths
+
+The meeting is composed for a laptop: the room takes about two thirds of the width and the
+paper minutes rail the rest. Below that the room becomes a compact roster — the same people,
+states and agenda, without the table geometry — and the page scrolls normally. No viewport
+overflows horizontally.
 
 ## Portraits
 

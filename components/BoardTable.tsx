@@ -63,10 +63,25 @@ export function BoardTable({
   const places = ARRANGEMENTS[members.length] ?? ARRANGEMENTS[3];
 
   return (
-    <div className="room-field relative h-full w-full">
-      <div className="table-top h-[48%] w-[62%]" aria-hidden />
+    <>
+      {/*
+        The spatial table needs room to be legible. Below the desktop range the same
+        participants, states and agenda appear as a compact roster instead: the design asks
+        for the stage to stay complete and horizontally contained, not for a boardroom
+        crushed into a phone.
+      */}
+      <CompactRoom
+        members={members}
+        guest={guest}
+        decision={decision}
+        phaseLabel={phaseLabel}
+        onInspectBrief={onInspectBrief}
+      />
 
-      <div className="agenda-folio w-[min(360px,30%)] px-5 py-4">
+      <div className="room-field relative hidden h-full w-full lg:block">
+        <div className="table-top h-[48%] w-[62%]" aria-hidden />
+
+        <div className="agenda-folio w-[min(360px,30%)] px-5 py-4">
         <p className="text-[11px] font-medium text-[var(--ink-secondary)]">{phaseLabel}</p>
         <p className="editorial mt-1.5 line-clamp-3 text-[17px] leading-[1.25]">{decision}</p>
         <button
@@ -78,8 +93,8 @@ export function BoardTable({
         </button>
       </div>
 
-      {/* A linear roster for assistive technology; the spatial arrangement is decorative. */}
-      <ul className="sr-only">
+        {/* A linear roster for assistive technology; the spatial arrangement is decorative. */}
+        <ul className="sr-only">
         {members.map((member) => (
           <li key={member.slug}>
             {member.name}, {member.role}. {SEAT_STATE[member.status]}.
@@ -89,7 +104,7 @@ export function BoardTable({
         <li>{guest.name ? `${guest.name}, guest agent.` : "Guest agent place, open."}</li>
       </ul>
 
-      <div aria-hidden>
+        <div aria-hidden>
         {members.map((member, index) => (
           <button
             type="button"
@@ -162,6 +177,93 @@ export function BoardTable({
           </span>
         </div>
       </div>
+      </div>
+    </>
+  );
+}
+
+/** The narrow-viewport room: the same people, states and agenda, without the geometry. */
+function CompactRoom({
+  members,
+  guest,
+  decision,
+  phaseLabel,
+  onInspectBrief,
+}: {
+  members: MemberSeat[];
+  guest: GuestSeat;
+  decision: string;
+  phaseLabel: string;
+  onInspectBrief: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col gap-4 lg:hidden">
+      <div className="sheet px-4 py-3.5">
+        <p className="text-[11px] font-medium text-[var(--ink-secondary)]">{phaseLabel}</p>
+        <p className="editorial mt-1.5 text-[17px] leading-[1.25]">{decision}</p>
+        <button
+          type="button"
+          onClick={onInspectBrief}
+          className="mt-2 text-[12px] text-[var(--ink-secondary)] underline decoration-[var(--rule)] underline-offset-4"
+        >
+          Read the full brief
+        </button>
+      </div>
+
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+        {members.map((member) => (
+          <li key={member.slug} className="flex items-center gap-2.5" data-state={member.status}>
+            <Portrait
+              initials={member.initials}
+              slug={member.portrait ? member.slug : undefined}
+              size="sm"
+              label={member.name}
+            />
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] font-medium leading-tight">
+                {member.name}
+              </span>
+              <span className="block truncate text-[11.5px] leading-tight text-[var(--room-secondary)]">
+                {member.status === "ready" && member.reaction
+                  ? REACTION[member.reaction]
+                  : SEAT_STATE[member.status]}
+              </span>
+            </span>
+          </li>
+        ))}
+
+        <li className="flex items-center gap-2.5">
+          <Portrait initials="YOU" size="sm" />
+          <span className="min-w-0">
+            <span className="block text-[13px] font-medium leading-tight">You</span>
+            <span className="block text-[11.5px] leading-tight text-[var(--room-secondary)]">
+              Chair
+            </span>
+          </span>
+        </li>
+
+        <li className="flex items-center gap-2.5">
+          <Portrait
+            initials={guest.name ? initialsFor(guest.name) : ""}
+            size="sm"
+            variant={guest.name ? "guest" : "vacant"}
+          />
+          <span className="min-w-0">
+            <span
+              className="block truncate text-[13px] font-medium leading-tight"
+              style={guest.name ? { color: "var(--guest-room)" } : undefined}
+            >
+              {guest.name ?? "Guest agent"}
+            </span>
+            <span
+              className="block truncate text-[11.5px] leading-tight"
+              style={{ color: guest.name ? "var(--guest-room)" : "var(--room-secondary)" }}
+            >
+              {GUEST_STATE[guest.status]}
+            </span>
+          </span>
+        </li>
+      </ul>
     </div>
   );
 }

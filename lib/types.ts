@@ -34,6 +34,8 @@ export type CatalogMember = {
   initials: string;
   /** True when public/guests/<slug>.webp exists; otherwise the monogram stands in. */
   portrait?: boolean;
+  /** What this adviser brings to a decision, in the chair's language. Shown on their card. */
+  lens: string;
   /** Surfaced first in the roster so the demo trio is easy to find without a hidden list. */
   featured?: boolean;
 };

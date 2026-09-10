@@ -84,3 +84,21 @@ describe("board selection", () => {
     expect(session.getState().members).toHaveLength(3);
   });
 });
+
+describe("browsing the roster by judgment", () => {
+  it("gives every adviser a lens line in the chair's language", () => {
+    for (const member of CATALOG) {
+      expect(member.lens, member.slug).toBeTruthy();
+      expect(member.lens.length, member.slug).toBeGreaterThan(20);
+      expect(member.lens.length, member.slug).toBeLessThan(70);
+      // A lens says what they bring, not who they are; the role line already does that.
+      expect(member.lens, member.slug).not.toContain(member.name);
+    }
+  });
+
+  it("finds advisers by what they would bring, not only by name", () => {
+    expect(searchCatalog("Monday").map((m) => m.slug)).toContain("lulu-cheng-meservey");
+    expect(searchCatalog("cohort").map((m) => m.slug)).toContain("adam-foroughi");
+    expect(searchCatalog("demand").map((m) => m.slug)).toContain("travis-kalanick");
+  });
+});

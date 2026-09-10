@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { formatReadout } from "@/lib/format";
 import { Portrait, initialsFor } from "./LetterMark";
-import type { MeetingState } from "@/lib/session";
+import type { MeetingSession, MeetingState } from "@/lib/session";
 
 /**
  * Paper mode. The first viewport is the board's answer, not a summary of the meeting: one
  * dominant recommendation, then the evidence that supports or contests it.
  */
-export function Readout({ state }: { state: MeetingState }) {
+export function Readout({ session, state }: { session: MeetingSession; state: MeetingState }) {
   const readout = state.readout;
   const [copied, setCopied] = useState(false);
   if (!readout) return null;
@@ -178,12 +178,21 @@ export function Readout({ state }: { state: MeetingState }) {
       </Block>
 
       <footer className="border-t border-[var(--rule)] pt-6 pb-2">
-        <p className="text-[15px] leading-[1.55]">
-          {readout.nextActions[0]
-            ? `Start here: ${readout.nextActions[0]}`
-            : readout.openQuestions[0]
-              ? `Still unresolved: ${readout.openQuestions[0]}`
-              : "The board has left the room."}
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <p className="max-w-[68ch] text-[15px] leading-[1.55]">
+            {readout.nextActions[0]
+              ? `Start here: ${readout.nextActions[0]}`
+              : readout.openQuestions[0]
+                ? `Still unresolved: ${readout.openQuestions[0]}`
+                : "The board has left the room."}
+          </p>
+          {/* Nothing survives a new meeting, so say so before taking this one away. */}
+          <button type="button" onClick={() => session.reset()} className="btn-secondary shrink-0">
+            Hold another meeting
+          </button>
+        </div>
+        <p className="mt-3 text-[12.5px] text-[var(--ink-secondary)]">
+          Copy anything you want to keep first. Nothing here is saved.
         </p>
         {readout.fallback ? (
           <p className="mt-3 text-[13px] text-[var(--ink-secondary)]">

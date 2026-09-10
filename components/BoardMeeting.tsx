@@ -41,16 +41,19 @@ export function BoardMeeting({
   const guestArrived = Boolean(state.guest.name);
 
   return (
-    <div className="room flex h-screen flex-col overflow-hidden">
-      <header className="flex h-[56px] shrink-0 items-center gap-5 border-b border-[var(--room-rule)] px-6">
+    <div className="room flex min-h-screen flex-col lg:h-screen lg:overflow-hidden">
+      <header className="sticky top-0 z-10 flex min-h-[56px] shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--room-rule)] bg-[var(--room-canvas)] px-4 py-2.5 sm:px-6 lg:flex-nowrap">
         <span className="text-[14px] font-medium">Board Meeting</span>
-        <p className="min-w-0 flex-1 truncate text-[14px] text-[var(--room-secondary)]" title={decision}>
+        <p
+          className="order-last w-full min-w-0 truncate text-[13px] text-[var(--room-secondary)] lg:order-none lg:w-auto lg:flex-1 lg:text-[14px]"
+          title={decision}
+        >
           {decision}
         </p>
         <button
           type="button"
           onClick={() => setInvitePinned(!inviteOpen)}
-          className="btn-room shrink-0"
+          className="btn-room ml-auto shrink-0 lg:ml-0"
           aria-expanded={inviteOpen}
         >
           Invite your agent
@@ -72,15 +75,13 @@ export function BoardMeeting({
         <p className="shrink-0 px-6 py-1.5 text-[12.5px] text-[var(--human-room)]">{state.lastError}</p>
       ) : null}
 
-      <div
-        className="grid min-h-0 flex-1 gap-5 p-5"
-        style={{
-          gridTemplateColumns: inviteOpen
-            ? "minmax(0,1fr) minmax(400px,32%) minmax(320px,340px)"
-            : "minmax(0,1fr) minmax(400px,35%)",
-        }}
-      >
-        <main className="relative min-h-0" aria-label="The board room">
+      {/*
+        The room-and-minutes composition holds where it fits. Narrower than that the room
+        stacks above the minutes and the page scrolls, per the design's responsive rules,
+        rather than crushing both into unreadable columns. See .meeting-grid.
+      */}
+      <div className="meeting-grid" data-invite={inviteOpen ? "open" : "closed"}>
+        <main className="relative lg:min-h-0" aria-label="The board room">
           <h1 className="sr-only">Board meeting: {decision}</h1>
           <BoardTable
             members={state.members}
@@ -95,7 +96,10 @@ export function BoardMeeting({
           />
         </main>
 
-        <section className="sheet flex min-h-0 flex-col shadow-[0_18px_40px_-20px_rgba(0,0,0,0.8)]" aria-label="Minutes">
+        <section
+          className="sheet flex min-h-[420px] flex-col shadow-[0_18px_40px_-20px_rgba(0,0,0,0.8)] lg:min-h-0"
+          aria-label="Minutes"
+        >
           <div className="flex shrink-0 items-baseline justify-between border-b border-[var(--rule)] px-6 py-3.5">
             <h2 className="text-[14px] font-medium">Minutes</h2>
             <span className="text-[12.5px] text-[var(--ink-secondary)]">
@@ -126,7 +130,7 @@ export function BoardMeeting({
 
       {briefOpen ? (
         <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-8"
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 p-5 sm:p-8"
           role="dialog"
           aria-label="The full brief"
           onClick={() => setBriefOpen(false)}

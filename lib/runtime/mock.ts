@@ -230,7 +230,15 @@ export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
 
     async readout(input: ReadoutInput): Promise<ExecutiveReadout> {
       if (!isDemoDecision(input.briefing)) {
-        return fallbackReadout(input.briefing, input.transcript, input.closingComments);
+        // Nothing failed here — there is simply no board to synthesise. Say that, rather
+        // than reusing the synthesis-failure memo, which reads like a bug.
+        const base = fallbackReadout(input.briefing, input.transcript, input.closingComments);
+        return {
+          ...base,
+          recommendation:
+            "No recommendation: this meeting ran on the scripted stand-in, which has nothing to say about your decision. Set OPENAI_API_KEY to seat the real board, or try the worked example to see what a full meeting produces.",
+          openQuestions: [],
+        };
       }
       return {
         decision: decisionLine(input.briefing) || EXAMPLE_QUESTION,

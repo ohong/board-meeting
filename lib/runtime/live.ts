@@ -32,10 +32,24 @@ function bareModelId(gatewayId: string): string {
   return gatewayId.replace(/^openai\//, "");
 }
 
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "" });
+/**
+ * Built on first use rather than at module load, so the key and base URL are read when a
+ * request runs. That matters on serverless, and it lets the live path be driven against a
+ * stub server in tests. `OPENAI_BASE_URL` also covers proxies and compatible gateways.
+ */
+let provider: ReturnType<typeof createOpenAI> | undefined;
+let providerKey: string | undefined;
 
 function model(gatewayId: string) {
-  return openai(bareModelId(gatewayId));
+  const key = `${process.env.OPENAI_API_KEY ?? ""}|${process.env.OPENAI_BASE_URL ?? ""}`;
+  if (!provider || providerKey !== key) {
+    provider = createOpenAI({
+      apiKey: process.env.OPENAI_API_KEY ?? "",
+      ...(process.env.OPENAI_BASE_URL ? { baseURL: process.env.OPENAI_BASE_URL } : {}),
+    });
+    providerKey = key;
+  }
+  return provider(bareModelId(gatewayId));
 }
 
 async function complete(
@@ -96,13 +110,26 @@ export function createLiveRuntime(): BoardRuntime {
     },
 
     async publicTurn(input, onDelta) {
+      // streamText reports transport and API errors through onError and then ends the
+      // stream rather than throwing. Without capturing it, a failed call arrives as an
+      // empty turn — which the meeting engine reads as the member choosing to pass, so the
+      // seat would go quiet with no error, no retry and nothing on screen.
+      let streamFailure: unknown;
       const result = streamText({
         model: model(modelFor(input.memberId)),
         system: memberSystemPrompt(input.memberId),
         prompt: publicTurnPrompt(input),
         maxOutputTokens: 400,
+        onError: ({ error }) => {
+          streamFailure = error;
+        },
       });
-      return consumeTurnStream(result.textStream, onDelta);
+
+      const turn = await consumeTurnStream(result.textStream, onDelta);
+      if (streamFailure) {
+        throw streamFailure instanceof Error ? streamFailure : new Error(String(streamFailure));
+      }
+      return turn;
     },
 
     async closingComment(input) {

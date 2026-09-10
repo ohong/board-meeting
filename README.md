@@ -22,7 +22,11 @@ bun dev          # http://localhost:3000 — opens on "Choose your board"
 
 Set `OPENAI_API_KEY` in `.env.local` (or the Vercel project environment). Without one the
 app runs a deterministic stand-in so the room, the orchestration and the WebMCP tools all
-still work — a banner says so. Never commit the key.
+still work — a banner says so, and the stand-in only has a script for the worked example.
+Never commit the key.
+
+`OPENAI_BASE_URL` points the provider at a compatible endpoint (a proxy, a gateway, or the
+stub server the live-runtime tests run against).
 
 Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 `openai/gpt-5.6-terra`. Each model is declared in that agent's own `agent.ts`.
@@ -30,7 +34,7 @@ Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 ### Checks
 
 ```bash
-bun run test        # 136 deterministic tests, no API calls
+bun run test        # 144 deterministic tests, no live API calls
 bun run typecheck
 bun run lint
 bun run build
@@ -41,6 +45,10 @@ bun run personas    # regenerate lib/personas.generated.ts after editing an agen
 bunx playwright install chromium   # once
 bun run rehearse                   # five fresh-session runs of the full demo script
 ```
+
+`tests/live-runtime.test.ts` drives the real live runtime — the real provider, the real
+streaming transport, the real parsing — against a stub OpenAI Responses API, so the live
+code path actually executes without a key.
 
 ## The agents
 

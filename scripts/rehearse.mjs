@@ -93,6 +93,22 @@ for (let run = 1; run <= RUNS; run += 1) {
   check("interim synthesis returned", synthesis.ok === true);
   check("synthesis did not end the meeting", (await page.getByRole("button", { name: "End meeting" }).count()) === 1);
 
+  // With a full meeting on the page, reading back must survive the next streamed chunk.
+  const log = page.locator('[role="log"]');
+  await log.evaluate((el) => { el.scrollTop = 0; });
+  await page.waitForTimeout(1200);
+  const held = await log.evaluate((el) => ({ top: Math.round(el.scrollTop), max: Math.round(el.scrollHeight - el.clientHeight) }));
+  check("the minutes are long enough to read back through", held.max > 200);
+  check("scrolling up is not undone by the next turn", held.top === 0);
+  check("the jump control is offered while reading back", await page.getByRole("button", { name: "Jump to latest" }).isVisible());
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Jump to latest");
+    button?.click();
+  });
+  await page.waitForTimeout(400);
+  const returned = await log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight < 72);
+  check("jumping to latest returns to the foot of the minutes", returned);
+
   const early = JSON.parse(await page.evaluate(() => window.__call("get_board_meeting_readout")));
   check("readout refused before the chair ends it", early.ready === false);
 

@@ -53,7 +53,7 @@ code path actually executes without a key.
 ### Rehearsing the live path
 
 `bun run rehearse` on its own exercises the deterministic stand-in. To put the whole live
-path under the same 22 checks — the API route's SSE encoding, the browser's event-stream
+path under the same 26 checks — the API route's SSE encoding, the browser's event-stream
 reader, the provider, the streaming transport and the control-line parsing — run the
 rehearsal against a stub Responses API that answers in the board's voice:
 

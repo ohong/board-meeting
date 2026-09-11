@@ -18,18 +18,35 @@ export function Minutes({
   members: { slug: string; name: string; initials: string; portrait?: boolean }[];
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const lastHeight = useRef(0);
   const [pinned, setPinned] = useState(true);
 
+  /**
+   * Follow the newest line only if the reader was already at the foot of the minutes.
+   *
+   * Measured from the element rather than from a scroll event: appending content leaves
+   * scrollTop alone, so subtracting the growth since the last render recovers exactly where
+   * the reader stood before this chunk arrived. A scroll event can land after the chunk that
+   * follows it has already rendered, which used to yank a reader who had scrolled up back
+   * down mid-turn.
+   */
   useEffect(() => {
     const element = scroller.current;
-    if (!element || !pinned) return;
-    element.scrollTop = element.scrollHeight;
-  }, [transcript, pinned]);
+    if (!element) return;
+    const grew = Math.max(0, element.scrollHeight - lastHeight.current);
+    const distanceBefore = element.scrollHeight - element.scrollTop - element.clientHeight - grew;
+    if (distanceBefore < 72) {
+      element.scrollTop = element.scrollHeight;
+      setPinned(true);
+    }
+    lastHeight.current = element.scrollHeight;
+  }, [transcript]);
 
   const jumpToLatest = () => {
     const element = scroller.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
+    lastHeight.current = element.scrollHeight;
     setPinned(true);
   };
 
@@ -38,8 +55,8 @@ export function Minutes({
       <div
         ref={scroller}
         onScroll={(event) => {
+          // Only decides whether the jump control is offered; following is measured above.
           const element = event.currentTarget;
-          // Never snap the reader back if they have gone up to re-read something.
           setPinned(element.scrollHeight - element.scrollTop - element.clientHeight < 72);
         }}
         className="h-full overflow-y-auto overflow-x-hidden px-6 py-5"
@@ -118,15 +135,21 @@ export function Minutes({
         })}
       </div>
 
-      {!pinned ? (
-        <button
-          type="button"
-          onClick={jumpToLatest}
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-[var(--radius-control)] border border-[var(--rule)] bg-[var(--paper-sheet)] px-3 py-1.5 text-[12.5px] shadow-sm"
-        >
-          Jump to latest
-        </button>
-      ) : null}
+      {/*
+        Kept mounted and faded out rather than unmounted: a node that disappears between the
+        press and the release swallows the click, and this one sits under the reader's cursor.
+      */}
+      <button
+        type="button"
+        onClick={jumpToLatest}
+        tabIndex={pinned ? -1 : 0}
+        aria-hidden={pinned}
+        className={`absolute bottom-3 left-1/2 -translate-x-1/2 rounded-[var(--radius-control)] border border-[var(--rule)] bg-[var(--paper-sheet)] px-3 py-1.5 text-[12.5px] shadow-sm transition-opacity ${
+          pinned ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+      >
+        Jump to latest
+      </button>
     </div>
   );
 }

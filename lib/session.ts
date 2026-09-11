@@ -644,10 +644,26 @@ export function createMeetingSession(options: SessionOptions = {}) {
     if (guestJoinMs) setTimeout(settle, guestJoinMs);
     else settle();
 
+
     return {
       ok: true,
       message: `Seated as ${display}. You can contribute context, address an adviser by name, and request a synthesis. Only the human chair can end the meeting.`,
     };
+  }
+
+  /**
+   * Returns the guest seat to `status` after the same beat the arrival gets, so a state the
+   * agent passes through is actually seen. Immediate when no beat is configured, as in tests.
+   */
+  function settleGuest(status: GuestSeat["status"]) {
+    const name = state.guest.name;
+    const rest = () => {
+      if (state.guest.name !== name) return;
+      state.guest = { ...state.guest, status };
+      emit();
+    };
+    if (guestJoinMs) setTimeout(rest, guestJoinMs);
+    else rest();
   }
 
   /** The guest may act from the moment it claims the seat, including while it is settling. */
@@ -679,8 +695,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
       addEvent({ kind: "message", speakerId: "guest", speakerName: guest.name, text: trimmed });
       noteAgentActivity(`${guest.name} added context to the record`);
       emit();
-      state.guest = { ...state.guest, status: "joined" };
-      emit();
+      // Held for the same beat as the arrival: set and reverted in one tick, the seat never
+      // shows the agent doing the thing it is doing.
+      settleGuest("joined");
       return {
         ok: true,
         message: `Added to the public record. Every adviser sees it from their next turn. ${state.members.length} advisers are seated; the meeting is in ${state.meetingPhase}.`,
@@ -735,8 +752,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
       // failed turn leaves no event, and the last thing they said an hour ago is not an answer.
       const answered = await speak(member.slug, "answerDirect", trimmed, guest.name);
       mentionQueue = mentionQueue.filter((slug) => slug !== member.slug);
-      state.guest = { ...state.guest, status: "joined" };
-      emit();
+      settleGuest("joined");
 
       const answer = answered
         ? [...state.transcript].reverse().find((event) => event.speakerId === member.slug)
@@ -792,14 +808,6 @@ export function createMeetingSession(options: SessionOptions = {}) {
       emit();
     }
     return { ready: true, message: "The final readout follows.", readout: state.readout };
-  }
-
-  function guestEndMeeting(): ActionResult {
-    return {
-      ok: false,
-      message:
-        "Only the human chair can end this meeting. You can request an interim synthesis instead, and retrieve the readout once the chair has closed the room.",
-    };
   }
 
   // --------------------------------------------------------------- meeting end
@@ -968,7 +976,6 @@ export function createMeetingSession(options: SessionOptions = {}) {
     address,
     requestSynthesis,
     getReadout,
-    guestEndMeeting,
 
     // demo copy
     invitationPrompt: () => invitationPrompt(state.members.map((member) => member.name)),

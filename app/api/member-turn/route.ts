@@ -1,3 +1,4 @@
+import { PERSONA_PACKAGES } from "@/lib/personas";
 import { createLiveRuntime, hasLiveKey } from "@/lib/runtime/live";
 import type { ReadoutInput, RuntimeTurnInput, SynthesisInput, TurnCapability } from "@/lib/types";
 
@@ -6,6 +7,29 @@ export const maxDuration = 60;
 
 const NO_KEY =
   "OPENAI_API_KEY is not set. Add it to the environment to seat live board members. The room falls back to a deterministic mock without one.";
+
+/**
+ * The page is the source of truth, so every request carries its own meeting context (§14.3)
+ * and this endpoint holds no session. That means the only thing standing between a
+ * deployment's key and an arbitrarily large request is what it refuses, so it bounds each
+ * call to something a real board meeting could plausibly be.
+ */
+const LIMITS = {
+  body: 256 * 1024,
+  briefing: 20_000,
+  prompt: 4_000,
+  events: 200,
+  transcript: 120_000,
+};
+
+const CAPABILITIES: TurnCapability[] = [
+  "formOpeningPosition",
+  "publicTurn",
+  "answerDirect",
+  "closingComment",
+  "synthesis",
+  "readout",
+];
 
 type Body = {
   capability: TurnCapability;
@@ -16,6 +40,35 @@ function jsonError(error: string, status: number) {
   return Response.json({ ok: false, error }, { status });
 }
 
+/** Returns the reason this request is refused, or null when it is within bounds. */
+function refuse(body: Body): string | null {
+  if (!body || typeof body !== "object") return "Malformed request body.";
+  if (!CAPABILITIES.includes(body.capability)) return "Unknown capability.";
+
+  const input = body.input as Partial<RuntimeTurnInput>;
+  if (!input || typeof input !== "object") return "Missing meeting context.";
+
+  const needsMember = body.capability !== "synthesis" && body.capability !== "readout";
+  if (needsMember && !PERSONA_PACKAGES[String(input.memberId)]) {
+    return "No board member by that id.";
+  }
+  if (typeof input.briefing === "string" && input.briefing.length > LIMITS.briefing) {
+    return `The briefing is longer than ${LIMITS.briefing} characters.`;
+  }
+  if (typeof input.prompt === "string" && input.prompt.length > LIMITS.prompt) {
+    return `The prompt is longer than ${LIMITS.prompt} characters.`;
+  }
+  if (input.transcript) {
+    if (!Array.isArray(input.transcript)) return "The transcript must be a list of events.";
+    if (input.transcript.length > LIMITS.events) {
+      return `A meeting this long is not supported: ${input.transcript.length} events.`;
+    }
+    const size = input.transcript.reduce((total, event) => total + (event?.text?.length ?? 0), 0);
+    if (size > LIMITS.transcript) return "The transcript is too long to carry.";
+  }
+  return null;
+}
+
 /**
  * One endpoint for every board-agent capability. `publicTurn` answers as a text/event-stream
  * so the room can watch a member speak; the rest answer as JSON. Each request carries the
@@ -24,12 +77,18 @@ function jsonError(error: string, status: number) {
 export async function POST(request: Request) {
   if (!hasLiveKey()) return jsonError(NO_KEY, 503);
 
+  const raw = await request.text();
+  if (raw.length > LIMITS.body) return jsonError("The request is too large.", 413);
+
   let body: Body;
   try {
-    body = (await request.json()) as Body;
+    body = JSON.parse(raw) as Body;
   } catch {
     return jsonError("Malformed request body.", 400);
   }
+
+  const refused = refuse(body);
+  if (refused) return jsonError(refused, 400);
 
   const board = createLiveRuntime();
 

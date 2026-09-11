@@ -178,15 +178,23 @@ describe("the external agent's sequence", () => {
     expect(second.message).toContain("Codex");
   });
 
-  it("cannot end the meeting", async () => {
+  it("is given no way to end the meeting", async () => {
     const session = newSession();
     seatDemoBoard(session);
     await session.startMeeting();
-    session.join("Codex");
+    const tools = toolbox(session);
+    await tools.call("join_board_meeting", { name: "Codex" });
 
-    const attempt = session.guestEndMeeting();
-    expect(attempt.ok).toBe(false);
-    expect(attempt.message).toMatch(/only the human chair/i);
+    // There is no seventh tool, and none of the six closes the room (§11.3).
+    expect(tools.names.some((name) => /end|close|adjourn|finish/i.test(name))).toBe(false);
+    for (const name of tools.names) {
+      if (name === "get_board_meeting_readout") continue;
+      await tools.call(name, { name: "Codex", member: "Daniel Ek", text: "still here" });
+      expect(session.getState().phase).toBe("meeting");
+    }
+
+    const readout = await tools.call("get_board_meeting_readout");
+    expect(readout).toContain("chair has to end the meeting first");
     expect(session.getState().phase).toBe("meeting");
   });
 

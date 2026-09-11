@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "personas": "node scripts/build-personas.mjs",
-    "rehearse": "node scripts/rehearse.mjs"
+    "rehearse": "node scripts/rehearse.mjs",
+    "stub": "node scripts/stub-openai.mjs --port 8787"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.58",

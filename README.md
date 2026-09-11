@@ -50,6 +50,23 @@ bun run rehearse                   # five fresh-session runs of the full demo sc
 streaming transport, the real parsing — against a stub OpenAI Responses API, so the live
 code path actually executes without a key.
 
+### Rehearsing the live path
+
+`bun run rehearse` on its own exercises the deterministic stand-in. To put the whole live
+path under the same 22 checks — the API route's SSE encoding, the browser's event-stream
+reader, the provider, the streaming transport and the control-line parsing — run the
+rehearsal against a stub Responses API that answers in the board's voice:
+
+```bash
+bun run stub                                                   # terminal 1, port 8787
+OPENAI_API_KEY=stub OPENAI_BASE_URL=http://127.0.0.1:8787 bun dev   # terminal 2
+bun run rehearse                                               # terminal 3
+```
+
+`/api/runtime-status` reports `{"live":true}` when the app is on that path. The stub
+scripts three advisers through two turns each, a closing comment, an interim synthesis and
+a readout, so a run covers the same ground as the demo.
+
 ## The agents
 
 Every adviser is authored as an eve subagent:

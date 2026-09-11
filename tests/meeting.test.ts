@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EXAMPLE_BRIEFING, EXAMPLE_QUESTION } from "../lib/example";
+import { createMockRuntime } from "../lib/runtime/mock";
+import type { BoardRuntime } from "../lib/types";
 import { brokenRuntime, flakyRuntime, newSession, seatDemoBoard } from "./helpers";
 
 function messages(session: ReturnType<typeof newSession>) {
@@ -114,6 +116,32 @@ describe("discussion", () => {
     expect(messages(session)).toHaveLength(0);
     expect(session.getState().members.every((member) => member.status !== "speaking")).toBe(true);
     expect(session.getState().lastError).toBeTruthy();
+  });
+
+  it("clears a stale failure notice once someone speaks", async () => {
+    const mock = createMockRuntime();
+    const noPositions: BoardRuntime = {
+      ...mock,
+      formOpeningPosition() {
+        throw new Error("opening position failed");
+      },
+    };
+    const session = newSession({ runtime: noPositions });
+    seatDemoBoard(session);
+    await session.startMeeting();
+    expect(session.getState().lastError).toBeTruthy();
+
+    await session.runDiscussion(1);
+    expect(session.getState().lastError).toBeNull();
+  });
+
+  it("names the connection, not the adviser, when nobody has managed to speak", async () => {
+    const session = newSession({ runtime: brokenRuntime() });
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.takeOneTurn();
+
+    expect(session.getState().lastError).toContain("No adviser could reach the model");
   });
 
   it("streams a turn into a single transcript row", async () => {

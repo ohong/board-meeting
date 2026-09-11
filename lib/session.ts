@@ -100,6 +100,12 @@ export type ActionResult = { ok: boolean; message: string };
 
 type Listener = () => void;
 
+/** "Ek", "Ek and Hansson", "Ek, Hansson and Meservey" — never "Ek and Hansson and Meservey". */
+function listNames(names: string[]): string {
+  if (names.length < 3) return names.join(" and ");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -373,6 +379,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
             setStatus(target.slug, "wants_to_respond");
           }
         }
+        // The room is working again, so a warning from an earlier turn stops being true.
+        state.lastError = null;
         emit();
         return true;
       } catch {
@@ -390,10 +398,14 @@ export function createMeetingSession(options: SessionOptions = {}) {
       try {
         return await run();
       } catch (error) {
-        state.lastError =
-          error instanceof Error && error.message !== "turn failed"
+        // A room where nobody has managed to speak is not a member having a bad turn: say so,
+        // because the chair can act on a connection they cannot act on a silent table.
+        const roomIsSilent = state.members.every((entry) => entry.spokenCount === 0);
+        state.lastError = roomIsSilent
+          ? "No adviser could reach the model. Check the connection or the API key, then start the meeting again."
+          : error instanceof Error && error.message !== "turn failed"
             ? error.message
-            : `${member.name} could not take that turn. The meeting continued without it.`;
+            : `${member.name} could not take that turn. The meeting moved on.`;
         setStatus(slug, "ready");
         emit();
         return false;
@@ -518,9 +530,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
     state.meetingPhase = "discussion";
     systemEvent(
       missing.length
-        ? `Independent positions are closed. ${missing
-            .map((m) => m.name)
-            .join(" and ")} will join the discussion without one. The board is in session.`
+        ? `Independent positions are closed. ${listNames(
+            missing.map((m) => m.name),
+          )} will join the discussion without one. The board is in session.`
         : "Independent positions are closed. The board is in session.",
     );
     emit();

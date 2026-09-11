@@ -16,9 +16,11 @@ export function formatReadout(readout: ExecutiveReadout): string {
     "",
     "BOARD RECOMMENDATION",
     readout.recommendation,
-    readout.divided
-      ? "The board remained divided. That division is preserved above rather than resolved."
-      : "The board was aligned.",
+    readout.fallback
+      ? "This memo records what was said rather than judging whether the board agreed."
+      : readout.divided
+        ? "The board remained divided. That division is preserved above rather than resolved."
+        : "The board was aligned.",
     ...section("OPTIONS CONSIDERED", readout.options),
     ...section("KEY TRADEOFFS", readout.tradeoffs),
     ...section("IMPORTANT ASSUMPTIONS", readout.assumptions),

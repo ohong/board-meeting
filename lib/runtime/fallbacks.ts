@@ -28,9 +28,9 @@ export function localOpeningPosition(slug: string, briefing: string): OpeningPos
   };
 }
 
-function bullets(events: TranscriptEvent[], limit: number): string[] {
+function bullets(events: TranscriptEvent[], limit: number, exclude: Set<string>): string[] {
   return events
-    .filter((event) => event.kind === "message" && !event.failed)
+    .filter((event) => event.kind === "message" && !event.failed && !exclude.has(event.text.trim()))
     .slice(-limit)
     .map((event) => `${event.speakerName}: ${event.text.replace(/\s+/g, " ").trim()}`);
 }
@@ -44,7 +44,9 @@ export function fallbackReadout(
   transcript: TranscriptEvent[],
   closingComments: ClosingComment[],
 ): ExecutiveReadout {
-  const said = bullets(transcript, 12);
+  // Closing comments are public messages too, and they have their own section on the sheet.
+  const closings = new Set(closingComments.map((comment) => comment.comment.trim()));
+  const said = bullets(transcript, 12, closings);
   const questions = transcript
     .filter((event) => event.kind === "message" && event.text.includes("?"))
     .flatMap((event) =>
@@ -67,6 +69,7 @@ export function fallbackReadout(
     nextActions: [],
     closingComments,
     fallback: true,
+    fallbackReason: "synthesis-failed",
     transcriptDigest: said,
   };
 }

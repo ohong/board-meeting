@@ -78,8 +78,15 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
       <section className="grid grid-cols-12 gap-8 border-b border-[var(--rule)] py-10">
         <div className="col-span-12 lg:col-span-7">
           {/* Spec 12.3: a divided board must be stated, not smoothed over. */}
-          <p className="mb-3 text-[13px] font-medium" style={{ color: readout.divided ? "var(--human)" : "var(--ink-secondary)" }}>
-            {readout.divided ? "The board remains divided." : "The board is aligned."}
+          <p
+            className="mb-3 text-[13px] font-medium"
+            style={{ color: readout.divided && !readout.fallback ? "var(--human)" : "var(--ink-secondary)" }}
+          >
+            {readout.fallback
+              ? "Recorded, not interpreted."
+              : readout.divided
+                ? "The board remains divided."
+                : "The board is aligned."}
           </p>
           <p className="editorial text-[clamp(24px,2.6vw,32px)] leading-[1.2]">
             {readout.recommendation}
@@ -206,8 +213,9 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
         </p>
         {readout.fallback ? (
           <p className="mt-3 text-[13px] text-[var(--ink-secondary)]">
-            The secretary could not complete a synthesis, so this memo records what was said
-            rather than interpreting it.
+            {readout.fallbackReason === "stand-in"
+              ? "This meeting ran on the scripted stand-in, so the memo records what was said rather than interpreting it."
+              : "The secretary could not complete a synthesis, so this memo records what was said rather than interpreting it."}
           </p>
         ) : null}
       </footer>

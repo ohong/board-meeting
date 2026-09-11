@@ -96,8 +96,10 @@ export type ExecutiveReadout = {
   openQuestions: string[];
   nextActions: string[];
   closingComments: ClosingComment[];
-  /** Set when synthesis failed twice and the memo was assembled from the transcript. */
+  /** Set when the memo was assembled from the transcript rather than synthesised. */
   fallback?: boolean;
+  /** Why: the secretary failed, or the scripted stand-in had nothing to synthesise. */
+  fallbackReason?: "synthesis-failed" | "stand-in";
   /** Verbatim contributions, shown only on the fallback path so the memo is never blank. */
   transcriptDigest?: string[];
 };

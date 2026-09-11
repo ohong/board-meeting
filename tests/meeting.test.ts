@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EXAMPLE_BRIEFING, EXAMPLE_QUESTION } from "../lib/example";
 import { createMockRuntime } from "../lib/runtime/mock";
 import type { BoardRuntime } from "../lib/types";
-import { brokenRuntime, flakyRuntime, newSession, seatDemoBoard } from "./helpers";
+import { brokenRuntime, DEMO_TRIO, flakyRuntime, newSession, seatDemoBoard } from "./helpers";
 
 function messages(session: ReturnType<typeof newSession>) {
   return session.getState().transcript.filter((event) => event.kind === "message");
@@ -226,9 +226,32 @@ describe("ending the meeting", () => {
 
     const readout = session.getState().readout!;
     expect(readout.fallback).toBe(true);
+    expect(readout.fallbackReason).toBe("synthesis-failed");
     expect(readout.decision).toContain("free tier");
     expect(readout.closingComments).toHaveLength(3);
     expect(session.getState().phase).toBe("readout");
+
+    // Closing comments have their own section; the record must not print them twice.
+    const digest = readout.transcriptDigest ?? [];
+    for (const comment of readout.closingComments) {
+      expect(digest.some((line) => line.includes(comment.comment))).toBe(false);
+    }
+  });
+
+  it("says the stand-in had nothing to synthesise rather than blaming the secretary", async () => {
+    const session = newSession();
+    for (const slug of DEMO_TRIO) session.toggleMember(slug);
+    session.goToBrief();
+    session.setBriefing(
+      "Question: Should we move support from email to live chat?\n\nBriefing: Three people on email, four-hour median first reply.",
+    );
+    await session.startMeeting();
+    await session.runDiscussion(3);
+    await session.endMeeting();
+
+    const readout = session.getState().readout!;
+    expect(readout.fallbackReason).toBe("stand-in");
+    expect(readout.recommendation).toContain("stand-in");
   });
 });
 

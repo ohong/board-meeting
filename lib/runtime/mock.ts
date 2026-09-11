@@ -136,19 +136,91 @@ function hasNewContext(input: RuntimeTurnInput): boolean {
     .some((event) => event.speakerId === "chair" || event.speakerId === "guest");
 }
 
-function genericTurn(input: RuntimeTurnInput): MemberTurn {
+/** Each adviser's catalog lens, as a clause: "Charge for it, and stop running two products". */
+function lensOf(memberId: string): string {
+  const lens = getMember(memberId)?.lens;
+  if (!lens) return "the assumption the whole thing is resting on";
+  return lens.charAt(0).toLowerCase() + lens.slice(1);
+}
+
+/** Who spoke last, so a stand-in turn can answer the room rather than the air. */
+function previousSpeaker(input: RuntimeTurnInput): string | undefined {
+  const messages = input.transcript.filter((event) => event.kind === "message");
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const event = messages[index];
+    if (event.speakerId !== input.memberId && event.speakerId !== "chair") return event.speakerName;
+  }
+  return undefined;
+}
+
+/**
+ * Off the worked example the stand-in has no answers, so it says the one thing it honestly
+ * can: what this adviser looks at. Drawn from their catalog lens, so three seats do not
+ * deliver the same paragraph three times.
+ */
+function genericTurn(input: RuntimeTurnInput, count: number): MemberTurn {
   const decision = decisionLine(input.briefing);
+  const lens = lensOf(input.memberId);
+
   if (input.prompt) {
     return {
-      text: `Directly, then: on "${decision}", I would not answer from principle. Name the one fact that would flip your decision, get it this week, and let it decide. Everything else in this room is preference wearing a suit.`,
+      text: `Directly, then. What I look at is ${lens}, and on "${decision}" it says what it always says: name the one fact that would flip your decision, get it this week, and let that decide. The rest of this room is preference wearing a suit.`,
       addressedTo: input.addressedTo ?? "You",
     };
   }
+
+  if (count === 0) {
+    return {
+      text: `What I look at is ${lens}. On "${decision}", ${pick(OPENING_MOVES, input.memberId)}`,
+    };
+  }
+
+  const previous = previousSpeaker(input);
   return {
-    text: `Taking "${decision}" at face value, I would test the load-bearing assumption before committing. Make the smallest reversible version of this, run it for thirty days, and be explicit about what result would make you stop. Deciding on conviction alone is how a small team spends a year it does not have.`,
+    text: `${pick(PUSH_OPENERS, `${input.memberId}-2`)} This still turns on ${lens}, and until that is settled the rest is preference. ${pick(PUSHBACKS, input.memberId)}`,
+    ...(previous ? { addressedTo: previous } : {}),
     reaction: "concern",
   };
 }
+
+/** Same adviser, same clause, every time: the stand-in is deterministic by design. */
+function pick(lines: string[], memberId: string): string {
+  let hash = 0;
+  for (const character of memberId) hash = (hash * 31 + character.charCodeAt(0)) % 100000;
+  return lines[hash % lines.length];
+}
+
+const OPENING_MOVES = [
+  "find the smallest reversible version you can run in thirty days, and say now what result would make you stop.",
+  "the honest answer is that nobody in this room has the one number that settles it. Get it this week and the decision makes itself.",
+  "I would want to know what you are assuming that you have never checked. Start there, not with the plan.",
+  "the cost of being wrong is not symmetrical, and I have not heard which way it leans. Work that out before you commit.",
+  "do the version you could undo on a Friday. If it survives a month, do the version you could not.",
+];
+
+const CLOSING_TAILS = [
+  "Run the smallest reversible version, and decide now what result would stop you.",
+  "Do not confuse exhaustion with strategy, and do not decide this while tired.",
+  "Whatever you choose, tell the people it lands on before they read about it.",
+  "Get the one number that settles it before the next meeting, not after.",
+  "And be honest about which answer you wanted before you started asking.",
+];
+
+const PUSH_OPENERS = [
+  "I would push on one thing before the room moves on.",
+  "Before anyone signs off on that, one objection.",
+  "I want to slow this down by one step.",
+  "Let me put the uncomfortable version of that.",
+  "I am not there yet, and here is the part that holds me.",
+];
+
+const PUSHBACKS = [
+  "Put a date on the smallest test you can run, and write down in advance what would change your mind.",
+  "Name the person this lands on, and ask them before the room decides for them.",
+  "If the answer is the same in the good year and the bad year, it is not a decision, it is a preference.",
+  "Write the sentence you would say to the people affected. If you cannot say it, you are not ready.",
+  "Decide what you would have to believe for the other option to be right, then go and check it.",
+];
 
 export type MockOptions = {
   /** Pause between streamed chunks. Zero in tests; a human pace in the browser. */
@@ -199,12 +271,12 @@ export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
       } else if (!input.prompt && count === 1 && demo && DEMO_SECOND_TURNS[input.memberId]) {
         turn = DEMO_SECOND_TURNS[input.memberId];
       } else if (!input.prompt && count >= 2 && hasNewContext(input) && demo) {
-        turn = DEMO_CONTEXT_TURNS[input.memberId] ?? genericTurn(input);
+        turn = DEMO_CONTEXT_TURNS[input.memberId] ?? genericTurn(input, count);
       } else if (!input.prompt && count >= 2 && !hasNewContext(input)) {
         // Nothing left to add without repeating itself, so it passes, as a member may.
         turn = { text: "" };
       } else {
-        turn = genericTurn(input);
+        turn = genericTurn(input, count);
       }
       await emit(turn.text, onDelta, chunkDelayMs);
       return turn;
@@ -214,8 +286,8 @@ export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
       if (isDemoDecision(input.briefing) && DEMO_CLOSINGS[input.memberId]) {
         return DEMO_CLOSINGS[input.memberId];
       }
-      const name = getMember(input.memberId)?.name ?? input.memberId;
-      return `${name}: run the smallest reversible version of this, decide what result would stop you, and do not confuse exhaustion with strategy.`;
+      // The readout attributes the comment already, so it does not open with its own name.
+      return `Hold this against ${lensOf(input.memberId)}. ${pick(CLOSING_TAILS, input.memberId)}`;
     },
 
     async synthesis(input: SynthesisInput) {
@@ -238,6 +310,7 @@ export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
           recommendation:
             "No recommendation: this meeting ran on the scripted stand-in, which has nothing to say about your decision. Set OPENAI_API_KEY to seat the real board, or try the worked example to see what a full meeting produces.",
           openQuestions: [],
+          fallbackReason: "stand-in",
         };
       }
       return {

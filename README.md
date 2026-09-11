@@ -192,6 +192,6 @@ human action and guest agent.
 
 ## Demo
 
-Search for **Daniel Ek**, **DHH**, and **Lulu Cheng Meservey**, click **Use example
-decision**, then **Start Board Meeting**. `docs/demo-script.md` has the full presenter
-checklist.
+Search for **Daniel Ek**, **DHH**, and **Lulu Cheng Meservey**, click **Brief your board**,
+then **Use the pricing decision**, then **Start board meeting**. `docs/demo-script.md` has
+the full presenter checklist.

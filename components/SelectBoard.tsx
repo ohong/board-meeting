@@ -127,7 +127,49 @@ function BoardPreview({ session, state }: { session: MeetingSession; state: Meet
         </span>
       </div>
 
-      <div className="mt-4 rounded-[3px] bg-[var(--soft-fill)] px-4 py-5">
+      {/*
+        Below the two-column width the panel sits above the roster, where a column of empty
+        places would push the people themselves off the screen. A single strip of seats says
+        the same thing in one line.
+      */}
+      <ul className="mt-4 flex flex-wrap items-center gap-2.5 lg:hidden">
+        {places.map((_, index) => {
+          const slug = state.selected[index];
+          const member = slug ? session.catalog.find((entry) => entry.slug === slug) : undefined;
+          if (!member) {
+            return (
+              <li key={`seat-${index}`}>
+                <Portrait initials="" size="sm" variant="vacant" />
+              </li>
+            );
+          }
+          return (
+            <li key={member.slug}>
+              <button
+                type="button"
+                onClick={() => session.toggleMember(member.slug)}
+                className="block rounded-full"
+                title={`Remove ${member.name}`}
+              >
+                <Portrait
+                  initials={member.initials}
+                  slug={member.portrait ? member.slug : undefined}
+                  size="sm"
+                />
+                <span className="sr-only">Remove {member.name}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {state.selected.length ? (
+        <p className="mt-2 text-[12px] text-[var(--ink-secondary)] lg:hidden">
+          Tap a portrait to give up the seat.
+        </p>
+      ) : null}
+
+      <div className="mt-4 hidden rounded-[3px] bg-[var(--soft-fill)] px-4 py-5 lg:block">
         <div className="mx-auto mb-4 h-1.5 w-[72%] rounded-full bg-[var(--rule)]" />
         <ul className="space-y-2">
           {places.map((_, index) => {

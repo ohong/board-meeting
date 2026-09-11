@@ -42,33 +42,37 @@ export function BoardMeeting({
 
   return (
     <div className="room flex min-h-screen flex-col lg:h-screen lg:overflow-hidden">
-      <header className="sticky top-0 z-10 flex min-h-[56px] shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--room-rule)] bg-[var(--room-canvas)] px-4 py-2.5 sm:px-6 lg:flex-nowrap">
+      <header className="sticky top-0 z-10 flex min-h-[56px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b sm:gap-x-5 border-[var(--room-rule)] bg-[var(--room-canvas)] px-4 py-2.5 sm:px-6 lg:flex-nowrap">
         <span className="text-[14px] font-medium">Board Meeting</span>
+        {/* The compact room prints the decision in full right below, so the header does not repeat it. */}
         <p
-          className="order-last w-full min-w-0 truncate text-[13px] text-[var(--room-secondary)] lg:order-none lg:w-auto lg:flex-1 lg:text-[14px]"
+          className="hidden min-w-0 flex-1 truncate text-[14px] text-[var(--room-secondary)] lg:block"
           title={decision}
         >
           {decision}
         </p>
-        <button
-          type="button"
-          onClick={() => setInvitePinned(!inviteOpen)}
-          className="btn-room ml-auto shrink-0 lg:ml-0"
-          aria-expanded={inviteOpen}
-        >
-          Invite your agent
-        </button>
-        <button
-          type="button"
-          disabled={ending}
-          onClick={() => {
-            setEnding(true);
-            void session.endMeeting();
-          }}
-          className="btn-room btn-end shrink-0"
-        >
-          {ending ? "Closing…" : "End meeting"}
-        </button>
+        {/* Grouped so the two controls wrap together as a pair rather than one stranding a row. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0 lg:gap-3">
+          <button
+            type="button"
+            onClick={() => setInvitePinned(!inviteOpen)}
+            className="btn-room"
+            aria-expanded={inviteOpen}
+          >
+            Invite your agent
+          </button>
+          <button
+            type="button"
+            disabled={ending}
+            onClick={() => {
+              setEnding(true);
+              void session.endMeeting();
+            }}
+            className="btn-room btn-end"
+          >
+            {ending ? "Closing…" : "End meeting"}
+          </button>
+        </div>
       </header>
 
       {state.lastError ? (
@@ -118,13 +122,15 @@ export function BoardMeeting({
         </section>
 
         {inviteOpen ? (
-          <InvitePanel
-            prompt={session.invitationPrompt()}
-            supported={webmcpSupported}
-            guestName={state.guest.name}
-            activity={state.agentActivity}
-            onClose={() => setInvitePinned(false)}
-          />
+          <div className="invite-slot">
+            <InvitePanel
+              prompt={session.invitationPrompt()}
+              supported={webmcpSupported}
+              guestName={state.guest.name}
+              activity={state.agentActivity}
+              onClose={() => setInvitePinned(false)}
+            />
+          </div>
         ) : null}
       </div>
 

@@ -395,13 +395,45 @@
       grid-template-columns: minmax(0, 1fr) minmax(360px, 32%) minmax(300px, 320px);
     }
   }
-  /* Below 1280 the guest pass would squeeze both other columns, so it stacks under them. */
+  /* Below 1280 a third column would squeeze the other two, so the guest pass floats instead. */
   @media (min-width: 1024px) and (max-width: 1279px) {
     .meeting-grid[data-invite="open"] {
-      grid-template-columns: minmax(0, 1fr) minmax(360px, 36%);
+      grid-template-columns: minmax(0, 1fr) minmax(380px, 35%);
     }
-    .meeting-grid[data-invite="open"] > :last-child {
-      grid-column: 1 / -1;
+  }
+
+  /*
+    Stacked under the minutes, the guest pass would open a screen and a half below the tap
+    that asked for it. Below the two-column width it comes up over the room instead, with
+    the meeting still visible behind it.
+  */
+  .invite-slot {
+    position: fixed;
+    inset: auto 16px 16px;
+    z-index: 30;
+    display: flex;
+    max-height: min(80vh, 640px);
+  }
+  .invite-slot > * {
+    flex: 1;
+    box-shadow: 0 -10px 60px -12px rgba(0, 0, 0, 0.75);
+  }
+  /* Wide enough for a card: it sits over the room and leaves the minutes alone. */
+  @media (min-width: 640px) {
+    .invite-slot {
+      inset: auto auto 20px 20px;
+      width: min(420px, calc(100vw - 40px));
+    }
+  }
+  /* Only at the full three-column width does the guest pass take a column of its own. */
+  @media (min-width: 1280px) {
+    .invite-slot {
+      position: static;
+      width: auto;
+      max-height: none;
+    }
+    .invite-slot > * {
+      box-shadow: none;
     }
   }
 

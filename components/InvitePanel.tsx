@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * The guest pass. Readable prose, not source code; mono is reserved for the short WebMCP
@@ -20,6 +20,15 @@ export function InvitePanel({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  // A half-clipped line reads as a rendering fault, so the invitation fades out while there
+  // is more of it below and prints flush once the reader reaches the end.
+  const [more, setMore] = useState(true);
+  const promptRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = promptRef.current;
+    if (el) setMore(el.scrollHeight > el.clientHeight + 4);
+  }, [prompt]);
 
   return (
     <aside
@@ -42,7 +51,19 @@ export function InvitePanel({
       </p>
 
       <div className="mt-4 rounded-[3px] border border-[var(--rule)] bg-[var(--paper-canvas)] p-3.5">
-        <p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-[13px] leading-[1.55]">
+        <p
+          ref={promptRef}
+          onScroll={() => {
+            const el = promptRef.current;
+            if (el) setMore(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+          }}
+          className="max-h-52 overflow-y-auto whitespace-pre-wrap text-[13px] leading-[1.55]"
+          style={
+            more
+              ? { maskImage: "linear-gradient(to bottom, #000 calc(100% - 26px), transparent)" }
+              : undefined
+          }
+        >
           {prompt}
         </p>
       </div>

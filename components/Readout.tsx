@@ -18,6 +18,15 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
     ? readout.openQuestions[0] ?? readout.tradeoffs[0]
     : readout.tradeoffs[0] ?? readout.openQuestions[0];
 
+  // Whatever is promoted to the masthead is not printed twice, unless dropping it would cost
+  // the sheet a section the spec requires (12.3).
+  const withoutBasis = (items: string[]) => {
+    const rest = items.filter((item) => item !== basis);
+    return rest.length ? rest : items;
+  };
+  const tradeoffs = withoutBasis(readout.tradeoffs);
+  const openQuestions = withoutBasis(readout.openQuestions);
+
   return (
     <main className="mx-auto w-full max-w-[1200px] px-8 py-10 lg:px-12">
       <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[var(--rule)] pb-6">
@@ -98,10 +107,10 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
         </Block>
       ) : null}
 
-      {readout.tradeoffs.length ? (
+      {tradeoffs.length ? (
         <Block title="Key tradeoffs">
           <ul className="divide-y divide-[var(--rule)] border-t border-[var(--rule)]">
-            {readout.tradeoffs.map((item, index) => (
+            {tradeoffs.map((item, index) => (
               <li key={`tradeoff-${index}`} className="py-3.5 text-[15px] leading-[1.5]">
                 {item}
               </li>
@@ -110,10 +119,10 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
         </Block>
       ) : null}
 
-      {readout.assumptions.length || readout.openQuestions.length ? (
+      {readout.assumptions.length || openQuestions.length ? (
         <section className="grid grid-cols-12 gap-8 py-10">
           <Column title="Important assumptions" items={readout.assumptions} />
-          <Column title="Open questions" items={readout.openQuestions} />
+          <Column title="Open questions" items={openQuestions} />
         </section>
       ) : null}
 
@@ -163,11 +172,12 @@ export function Readout({ session, state }: { session: MeetingSession; state: Me
           {readout.closingComments.map((comment) => {
             const member = state.members.find((entry) => entry.slug === comment.memberId);
             return (
-              <figure key={comment.memberId}>
+              // Columns stretch to the tallest quote so every attribution sits on one line.
+              <figure key={comment.memberId} className="flex h-full flex-col">
                 <blockquote className="editorial text-[17px] leading-[1.45]">
                   {comment.comment}
                 </blockquote>
-                <figcaption className="mt-3 flex items-center gap-2">
+                <figcaption className="mt-3 flex items-center gap-2 md:mt-auto md:pt-3">
                   <Portrait initials={member?.initials ?? ""} slug={member?.portrait ? member.slug : undefined} size="xs" label={comment.name} />
                   <span className="text-[13px] font-medium">{comment.name}</span>
                 </figcaption>

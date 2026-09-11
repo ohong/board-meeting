@@ -34,7 +34,7 @@ Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 ### Checks
 
 ```bash
-bun run test        # 146 deterministic tests, no live API calls
+bun run test        # 152 deterministic tests, no live API calls
 bun run typecheck
 bun run lint
 bun run build
@@ -66,6 +66,34 @@ bun run rehearse                                               # terminal 3
 `/api/runtime-status` reports `{"live":true}` when the app is on that path. The stub
 scripts three advisers through two turns each, a closing comment, an interim synthesis and
 a readout, so a run covers the same ground as the demo.
+
+### Local fal.ai image-to-video
+
+Create an **API**-scoped key at [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys), then add it to the repository-root `.env.local`:
+
+```dotenv
+FAL_KEY=your-key-here
+```
+
+Preview and validate a request locally without using the key or network:
+
+```bash
+bun run video:generate -- --image ./starting-frame.png --prompt "Slow first-person push toward a black-and-white boardroom table" --duration 10 --dry-run
+```
+
+Remove `--dry-run` to submit to `minimax/h3-max/image-to-video`. Local PNG, JPG, JPEG, WEBP, GIF, and AVIF files are encoded as data URIs; public HTTPS image URLs also work. Duration is 5–15 seconds, resolution is `480P` or `768P`, and `--end-image` supplies an optional final keyframe.
+
+```bash
+bun run video:generate -- --image ./first.png --end-image ./last.png --prompt "The camera glides between the advisers" --duration 10 --resolution 768P --output ./exports/fal-video/boardroom.mp4
+```
+
+The command prints and saves the request ID before polling. If it stops before the video downloads, use the printed command to resume without submitting or paying for a second generation:
+
+```bash
+bun run video:generate -- --request-id <request-id>
+```
+
+By default, the MP4 and its `.fal.json` request metadata are saved under `exports/fal-video/`. Existing MP4 files are never overwritten. Run `bun run video:generate -- --help` for every option.
 
 ## The agents
 

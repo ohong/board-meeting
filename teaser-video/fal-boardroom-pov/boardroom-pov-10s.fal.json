@@ -1,0 +1,34 @@
+{
+  "requestId": "01a06e57-3de1-7463-b661-bbb3300efffb",
+  "model": "minimax/h3-max/image-to-video",
+  "status": "COMPLETED",
+  "statusUrl": "https://queue.fal.run/minimax/h3-max/requests/01a06e57-3de1-7463-b661-bbb3300efffb/status",
+  "responseUrl": "https://queue.fal.run/minimax/h3-max/requests/01a06e57-3de1-7463-b661-bbb3300efffb",
+  "output": "/Users/ohong/dev/board-meeting/teaser-video/fal-boardroom-pov/boardroom-pov-10s.mp4",
+  "submittedAt": "2026-09-04T21:33:26.447Z",
+  "input": {
+    "image": {
+      "bytes": 2150646,
+      "contentType": "image/png",
+      "path": "/Users/ohong/dev/board-meeting/teaser-video/fal-boardroom-pov/starting-frame.png",
+      "source": "local-file"
+    },
+    "prompt": "A single continuous ten-second cinematic black-and-white shot, strictly first-person POV through the eyes of the sixth participant seated at the near end of this boardroom table. Preserve the five people, their exact facial identities, hairstyles, glasses, clothing, seating positions, and the room from the starting image. All five remain clearly visible and recognizable. The group listens attentively to the viewer with relaxed, natural micro-expressions. The woman in the center gives a small warm nod; the man with glasses briefly glances toward her and returns his gaze to the viewer; the wavy-haired man on the left makes one restrained open-hand gesture above his notebook; the short-haired man on the right leans forward slightly; the older long-bearded man gives a slow thoughtful nod. Stagger these subtle actions naturally across the shot, with realistic blinking and breathing. The viewer makes only a very gentle, slow side-to-side head movement at seated eye level, with subtle natural parallax, keeping the whole group in frame. Keep faces stable, hands anatomically correct, the table and objects fixed, and motion understated and photorealistic. Maintain pure neutral monochrome throughout, soft window light, rich blacks, subtle film grain. No cuts, no scene changes, no additional people, no camera orbit, no third-person view, no exaggerated zoom, no text or logos. No spoken dialogue or music; quiet room ambience only.",
+    "duration": 10,
+    "resolution": "768P",
+    "promptExpansionMode": "balanced",
+    "safetyChecker": true
+  },
+  "completedAt": "2026-09-04T21:33:48.253Z",
+  "bytes": 13918743,
+  "video": {
+    "url": "https://v3b.fal.media/files/b/0aa91f51/QA6eebGCch2WDdv-UM_8h_minimax-h3.mp4",
+    "content_type": "video/mp4",
+    "file_name": "QA6eebGCch2WDdv-UM_8h_minimax-h3.mp4",
+    "file_size": 13918743
+  },
+  "expandedPrompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] Cinematic, black-and-white, first-person POV shot originating precisely from <Picture 1>. From the seated perspective at the near end of the wooden boardroom table, the five colleagues listen attentively under soft natural window light with subtle film grain. The camera executes a gentle, slow Pan Left and Pan Right with small amplitude at slow speed, simulating subtle seated head movement and natural parallax. At 00:02.000, the centered woman in the polka-dot dress gives a warm, affirmative nod. At 00:04.000, the man with glasses turns his gaze briefly toward her before returning his attention forward. At 00:06.000, the wavy-haired man on the left lifts one hand in a restrained, open gesture above his notepad. At 00:07.500, the short-haired man on the right leans forward slightly onto the table. At 00:08.500, the long-bearded man offers a slow, thoughtful nod. All five maintain steady presence with realistic blinking, calm breathing, and stable posture through the end of the shot.\n\noverall_soundscape: Quiet boardroom tone with a gentle HVAC hum, faint fabric rustles from subtle posture shifts, and soft, natural breathing.\n\nnon_diegetic_music: N/A",
+  "timings": {
+    "inference": 8.000955925090238
+  }
+}

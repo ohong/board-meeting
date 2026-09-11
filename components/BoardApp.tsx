@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createMeetingSession, type MeetingSession, type MeetingState } from "@/lib/session";
 import { createDeferredRuntime, NO_KEY_MESSAGE } from "@/lib/runtime/client";
 import { SelectBoard } from "./SelectBoard";
@@ -51,6 +51,18 @@ export function BoardApp() {
       cancelled = true;
     };
   }, []);
+
+  // Each phase replaces the whole screen, which would otherwise drop keyboard focus back to
+  // the top of the document with nothing said about it.
+  const openingPhase = useRef(state.phase);
+  useEffect(() => {
+    if (state.phase === openingPhase.current) return;
+    const region = document.querySelector("main");
+    if (region instanceof HTMLElement) {
+      region.tabIndex = -1;
+      region.focus({ preventScroll: true });
+    }
+  }, [state.phase]);
 
   const onSupportChange = useCallback((supported: boolean) => setWebmcpSupported(supported), []);
 

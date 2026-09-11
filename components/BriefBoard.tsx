@@ -33,7 +33,26 @@ export function BriefBoard({
           </button>
 
           <h2 className="mt-6 text-[13px] font-medium">Your board</h2>
-          <ul className="mt-4 border-t border-[var(--rule)]">
+
+          {/* On one column the full roster would push the question itself off the screen. */}
+          <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 lg:hidden">
+            {state.selected.map((slug) => {
+              const member = session.catalog.find((entry) => entry.slug === slug)!;
+              return (
+                <li key={`chip-${slug}`} className="flex min-w-0 items-center gap-2">
+                  <Portrait
+                    initials={member.initials}
+                    slug={member.portrait ? member.slug : undefined}
+                    size="xs"
+                    label={member.name}
+                  />
+                  <span className="truncate text-[13px]">{member.name}</span>
+                </li>
+              );
+            })}
+          </ul>
+
+          <ul className="mt-4 hidden border-t border-[var(--rule)] lg:block">
             {state.selected.map((slug) => {
               const member = session.catalog.find((entry) => entry.slug === slug)!;
               return (

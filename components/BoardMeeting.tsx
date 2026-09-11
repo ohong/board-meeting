@@ -76,7 +76,9 @@ export function BoardMeeting({
       </header>
 
       {state.lastError ? (
-        <p className="shrink-0 px-6 py-1.5 text-[12.5px] text-[var(--human-room)]">{state.lastError}</p>
+        <p role="status" className="shrink-0 px-6 py-1.5 text-[12.5px] text-[var(--human-room)]">
+          {state.lastError}
+        </p>
       ) : null}
 
       {/*

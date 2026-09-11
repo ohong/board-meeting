@@ -26,10 +26,15 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+const TITLE = "The Best Board Meeting You’ve Ever Had";
+const DESCRIPTION =
+  "Convene a board you could never normally assemble and pressure-test a consequential decision.";
+
 export const metadata: Metadata = {
-  title: "The Best Board Meeting You've Ever Had",
-  description:
-    "Convene a board you could never normally assemble and pressure-test a consequential decision.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION, type: "website" },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

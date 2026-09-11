@@ -111,12 +111,18 @@ export function getMember(slug: string): CatalogMember | undefined {
   return CATALOG.find((m) => m.slug === slug);
 }
 
+/** Below this, only an exact name or alias counts: "@a" must not seat the first A it finds. */
+const MIN_PARTIAL_NAME = 3;
+
 export function matchMemberByName(name: string, slugs: string[]): CatalogMember | undefined {
   const q = name.trim().toLowerCase().replace(/^@/, "");
+  if (!q) return undefined;
   const pool = slugs.map((s) => getMember(s)).filter(Boolean) as CatalogMember[];
-  return (
+  const exact =
     pool.find((m) => m.name.toLowerCase() === q) ||
-    pool.find((m) => m.aliases.some((a) => a.toLowerCase() === q)) ||
+    pool.find((m) => m.aliases.some((a) => a.toLowerCase() === q));
+  if (exact || q.length < MIN_PARTIAL_NAME) return exact;
+  return (
     pool.find((m) => m.name.toLowerCase().includes(q) || q.includes(m.name.toLowerCase())) ||
     pool.find((m) => m.aliases.some((a) => a.toLowerCase().includes(q)))
   );

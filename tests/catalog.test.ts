@@ -102,3 +102,23 @@ describe("browsing the roster by judgment", () => {
     expect(searchCatalog("demand").map((m) => m.slug)).toContain("travis-kalanick");
   });
 });
+
+describe("matching a name to a seat", () => {
+  const seated = ["daniel-ek", "david-heinemeier-hansson", "lulu-cheng-meservey"];
+
+  it("matches a full name, a partial name and a known alias", () => {
+    expect(matchMemberByName("Daniel Ek", seated)?.slug).toBe("daniel-ek");
+    expect(matchMemberByName("DHH", seated)?.slug).toBe("david-heinemeier-hansson");
+    expect(matchMemberByName("@Lulu", seated)?.slug).toBe("lulu-cheng-meservey");
+    expect(matchMemberByName("Ek", seated)?.slug).toBe("daniel-ek");
+  });
+
+  it("refuses a fragment too short to mean anyone in particular", () => {
+    // "a" appears in all three names; answering with the first one is a wrong adviser
+    // pulled out of turn, not a lenient match.
+    expect(matchMemberByName("a", seated)).toBeUndefined();
+    expect(matchMemberByName("@l", seated)).toBeUndefined();
+    expect(matchMemberByName("", seated)).toBeUndefined();
+    expect(matchMemberByName("Elon Musk", seated)).toBeUndefined();
+  });
+});

@@ -32,6 +32,10 @@ export function createDeferredRuntime(onResolved?: (status: RuntimeStatus) => vo
 
   return {
     id: "live",
+    startMeeting() {
+      mock.startMeeting?.();
+      live.startMeeting?.();
+    },
     async formOpeningPosition(input) {
       return (await resolve()).formOpeningPosition(input);
     },

@@ -252,6 +252,10 @@ export function createMockRuntime(options: MockOptions = {}): BoardRuntime {
   return {
     id: "mock",
 
+    startMeeting() {
+      spoken.clear();
+    },
+
     async formOpeningPosition(input) {
       const preset = isDemoDecision(input.briefing) ? DEMO_OPENINGS[input.memberId] : undefined;
       if (preset) return { memberId: input.memberId, ...preset };

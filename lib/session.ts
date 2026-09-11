@@ -202,9 +202,16 @@ export function createMeetingSession(options: SessionOptions = {}) {
     state.agentActivity = [...state.agentActivity, { id: uid("act"), label, at: now() }].slice(-8);
   }
 
-  function setStatus(slug: string, status: SeatStatus, reaction?: ReactionKind) {
+  /**
+   * Pass `reaction` to set or clear the seat's reaction line; omit it to leave it as it is.
+   * Clearing has to be possible: a member who passes keeps "Pushes back" from a turn that is
+   * two exchanges old otherwise.
+   */
+  function setStatus(slug: string, status: SeatStatus, ...reaction: [ReactionKind | undefined] | []) {
     state.members = state.members.map((member) =>
-      member.slug === slug ? { ...member, status, ...(reaction !== undefined ? { reaction } : {}) } : member,
+      member.slug === slug
+        ? { ...member, status, ...(reaction.length ? { reaction: reaction[0] } : {}) }
+        : member,
     );
   }
 
@@ -357,7 +364,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
         if (!turn.text.trim()) {
           dropEvent(live.id);
           passed.add(slug);
-          setStatus(slug, "ready");
+          setStatus(slug, "ready", undefined);
           emit();
           return false;
         }
@@ -413,7 +420,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
           : error instanceof Error && error.message !== "turn failed"
             ? error.message
             : `${member.name} could not take that turn. The meeting moved on.`;
-        setStatus(slug, "ready");
+        setStatus(slug, "ready", undefined);
         emit();
         return false;
       }
@@ -491,6 +498,7 @@ export function createMeetingSession(options: SessionOptions = {}) {
     }
     ended = false;
     autoTurnsUsed = 0;
+    runtime.startMeeting?.();
     mentionQueue = [];
     floorQueue = [];
     lastSpeaker = null;
@@ -723,17 +731,21 @@ export function createMeetingSession(options: SessionOptions = {}) {
       noteAgentActivity(`${guest.name} put a question to ${member.name}`);
       emit();
 
-      await speak(member.slug, "answerDirect", trimmed, guest.name);
+      // Whether they actually answered, rather than whether they have ever spoken: a passed or
+      // failed turn leaves no event, and the last thing they said an hour ago is not an answer.
+      const answered = await speak(member.slug, "answerDirect", trimmed, guest.name);
       mentionQueue = mentionQueue.filter((slug) => slug !== member.slug);
       state.guest = { ...state.guest, status: "joined" };
       emit();
 
-      const answer = [...state.transcript].reverse().find((event) => event.speakerId === member.slug);
+      const answer = answered
+        ? [...state.transcript].reverse().find((event) => event.speakerId === member.slug)
+        : undefined;
       return {
         ok: true,
         message: answer
           ? `${member.name} answered: ${answer.text}`
-          : `${member.name} could not answer that turn.`,
+          : `${member.name} did not answer that turn. The question stands on the record and they can still take it up.`,
       };
     });
     wake();
@@ -933,7 +945,10 @@ export function createMeetingSession(options: SessionOptions = {}) {
     setComposing(value: boolean) {
       state.composing = value;
       emit();
-      if (!value) wake(1);
+      // Putting the cursor in the box, or taking it out, is not something the board can
+      // respond to: it unpauses a room that was mid-flow, and never revives one that has
+      // said its piece or grants a turn the budget did not have.
+      if (!value && autoContinue && !state.awaitingChair) void pump();
     },
     /** Steps the room by hand. Tests use this instead of the automatic pump. */
     takeOneTurn: () => queued(() => takeOneTurn()),

@@ -151,4 +151,10 @@ export type BoardRuntime = {
   closingComment(input: RuntimeTurnInput): Promise<string>;
   synthesis(input: SynthesisInput): Promise<string>;
   readout(input: ReadoutInput): Promise<ExecutiveReadout>;
+  /**
+   * Called when a meeting starts. A runtime that keeps per-meeting state of its own — the
+   * stand-in tracks how often each member has spoken — clears it here, so the second meeting
+   * on one page load is not the first one's leftovers.
+   */
+  startMeeting?(): void;
 };

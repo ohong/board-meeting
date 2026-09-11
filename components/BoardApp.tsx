@@ -54,9 +54,10 @@ export function BoardApp() {
 
   // Each phase replaces the whole screen, which would otherwise drop keyboard focus back to
   // the top of the document with nothing said about it.
-  const openingPhase = useRef(state.phase);
+  const lastPhase = useRef(state.phase);
   useEffect(() => {
-    if (state.phase === openingPhase.current) return;
+    if (state.phase === lastPhase.current) return;
+    lastPhase.current = state.phase;
     const region = document.querySelector("main");
     if (region instanceof HTMLElement) {
       region.tabIndex = -1;

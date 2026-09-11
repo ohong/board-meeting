@@ -341,3 +341,93 @@ describe("the stand-in on a decision it has no script for", () => {
     expect(readout.closingComments).toHaveLength(3);
   });
 });
+
+describe("defects a review of this branch found", () => {
+  it("runs a second meeting on the same page as a meeting, not as leftovers", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.runDiscussion(6);
+    const first = messages(session).length;
+    expect(first).toBeGreaterThan(0);
+
+    session.reset();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.runDiscussion(6);
+    expect(messages(session).length).toBeGreaterThan(0);
+  });
+
+  it("tells the guest an adviser did not answer, rather than quoting an older statement", async () => {
+    let turns = 0;
+    const mock = createMockRuntime();
+    const oneTurnThenSilence: BoardRuntime = {
+      ...mock,
+      publicTurn(input, onDelta) {
+        turns += 1;
+        if (turns > 3) throw new Error("the model is unreachable");
+        return mock.publicTurn(input, onDelta);
+      },
+    };
+    const session = newSession({ runtime: oneTurnThenSilence });
+    seatDemoBoard(session);
+    await session.startMeeting();
+    await session.runDiscussion(3);
+    session.join("Codex");
+
+    const asked = await session.address("Daniel Ek", "Does that change your view?");
+    expect(asked.ok).toBe(true);
+    expect(asked.message).toContain("did not answer");
+    expect(asked.message).not.toContain("free tier");
+  });
+
+  it("does not treat putting the cursor in the composer as something to answer", async () => {
+    const session = newSession({ autoContinue: true, turnGapMs: 0 });
+    seatDemoBoard(session);
+    await session.startMeeting();
+    for (let i = 0; i < 200 && !session.getState().awaitingChair; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(session.getState().awaitingChair).toBe(true);
+    const said = messages(session).length;
+
+    // The room saying "I am waiting for you" must not blink off because a cursor moved.
+    let revived = false;
+    const unsubscribe = session.subscribe(() => {
+      if (!session.getState().awaitingChair) revived = true;
+    });
+    session.setComposing(true);
+    session.setComposing(false);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    unsubscribe();
+
+    expect(revived).toBe(false);
+    expect(session.getState().awaitingChair).toBe(true);
+    expect(messages(session)).toHaveLength(said);
+  });
+
+  it("clears the reaction line when a member passes", async () => {
+    let turns = 0;
+    const mock = createMockRuntime();
+    const speakThenPass: BoardRuntime = {
+      ...mock,
+      async publicTurn(input, onDelta) {
+        turns += 1;
+        if (turns > 1) return { text: "" };
+        return { ...(await mock.publicTurn(input, onDelta)), reaction: "disagree" };
+      },
+    };
+    const session = newSession({ runtime: speakThenPass });
+    seatDemoBoard(session);
+    await session.startMeeting();
+
+    await session.sendUserMessage("@Daniel Ek what would change your mind?");
+    const spoke = session.getState().members.find((m) => m.slug === "daniel-ek")!;
+    expect(spoke.reaction).toBe("disagree");
+
+    await session.sendUserMessage("@Daniel Ek anything else?");
+    const passed = session.getState().members.find((m) => m.slug === "daniel-ek")!;
+    expect(passed.reaction).toBeUndefined();
+    expect(passed.status).toBe("ready");
+  });
+});

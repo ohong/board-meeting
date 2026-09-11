@@ -27,6 +27,13 @@ export const MAX_BOARD = 6;
  */
 const AUTO_TURN_BUDGET = 12;
 
+/**
+ * What an external agent may put into the record in one call. Everything a guest writes is
+ * carried in every later prompt, so an unbounded paste costs the whole room its latency and
+ * its context. Generous for the thing the tool is for, and the refusal says the limit.
+ */
+const MAX_GUEST_TEXT = 4000;
+
 export type SessionOptions = {
   runtime?: BoardRuntime;
   /** Whether the room keeps talking on its own. Off in tests so turns can be stepped. */
@@ -651,6 +658,12 @@ export function createMeetingSession(options: SessionOptions = {}) {
     if (!guest.ok) return guest;
     const trimmed = text.trim();
     if (!trimmed) return { ok: false, message: "Nothing to contribute." };
+    if (trimmed.length > MAX_GUEST_TEXT) {
+      return {
+        ok: false,
+        message: `That is ${trimmed.length} characters. Keep a contribution under ${MAX_GUEST_TEXT} and send the part this board actually needs.`,
+      };
+    }
 
     // Queued behind any turn currently streaming, then applied immediately after it.
     const result = await queued(async () => {
@@ -683,6 +696,12 @@ export function createMeetingSession(options: SessionOptions = {}) {
     }
     const trimmed = text.trim();
     if (!trimmed) return { ok: false, message: "Ask them something." };
+    if (trimmed.length > MAX_GUEST_TEXT) {
+      return {
+        ok: false,
+        message: `That is ${trimmed.length} characters. Keep a question under ${MAX_GUEST_TEXT} so they can answer it.`,
+      };
+    }
     if (state.meetingPhase === "opening") {
       return {
         ok: false,

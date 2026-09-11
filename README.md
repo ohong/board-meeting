@@ -34,7 +34,7 @@ Board turns run on `openai/gpt-5.6-luna` for latency; the secretary runs on
 ### Checks
 
 ```bash
-bun run test        # 153 deterministic tests, no live API calls
+bun run test        # 155 deterministic tests, no live API calls
 bun run typecheck
 bun run lint
 bun run build

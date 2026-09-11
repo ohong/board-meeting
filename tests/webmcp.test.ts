@@ -37,6 +37,42 @@ describe("site tools", () => {
     expect(toolbox(newSession()).names).toEqual(TOOL_NAMES);
   });
 
+  it("answers in its own vocabulary when a handler throws", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    const tools = boardTools(session);
+    const inspect = tools.find((tool) => tool.name === "inspect_board_meeting")!;
+    // The session is the thing that could throw; stub it at the boundary the tool calls.
+    const broken = { ...session, inspect() { throw new Error("session exploded"); } };
+    const guardedInspect = boardTools(broken as unknown as typeof session).find(
+      (tool) => tool.name === "inspect_board_meeting",
+    )!;
+
+    const healthy = JSON.parse((await inspect.execute({})).content[0].text);
+    expect(healthy.chair).toContain("chair");
+
+    const failed = JSON.parse((await guardedInspect.execute({})).content[0].text);
+    expect(failed.ok).toBe(false);
+    expect(failed.message).toContain("session exploded");
+    expect(failed.message).toContain("The meeting is unaffected");
+  });
+
+  it("refuses a contribution too long to carry in every later prompt", async () => {
+    const session = newSession();
+    seatDemoBoard(session);
+    await session.startMeeting();
+    const tools = toolbox(session);
+    await tools.call("join_board_meeting", { name: "Codex" });
+
+    const long = JSON.parse(await tools.call("contribute_to_board_meeting", { text: "x".repeat(4001) }));
+    expect(long.ok).toBe(false);
+    expect(long.message).toContain("4000");
+
+    const fine = JSON.parse(await tools.call("contribute_to_board_meeting", { text: "x".repeat(4000) }));
+    expect(fine.ok).toBe(true);
+  });
+
   it("reports an unsupported browser without throwing", async () => {
     const result = await registerBoardTools(newSession());
     expect(result.supported).toBe(false);

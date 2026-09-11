@@ -44,12 +44,30 @@ function getModelContext(): ModelContext | undefined {
 }
 
 /**
+ * A handler that threw would reach the agent as a transport failure with nothing it can act
+ * on, so every tool answers in its own vocabulary instead, and says the meeting still stands.
+ */
+function guarded(tool: ToolDescriptor): ToolDescriptor {
+  return {
+    ...tool,
+    execute: async (args) => {
+      try {
+        return await tool.execute(args ?? {});
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return json({ ok: false, message: `${tool.name} failed: ${reason}. The meeting is unaffected.` });
+      }
+    },
+  };
+}
+
+/**
  * The six site tools. Each one calls exactly the session action the human interface calls,
  * so there is one transcript and one source of truth. Results are written for the agent
  * reading them: they say what changed and what is now possible.
  */
 export function boardTools(session: MeetingSession): ToolDescriptor[] {
-  return [
+  const tools: ToolDescriptor[] = [
     {
       name: "inspect_board_meeting",
       description:
@@ -77,10 +95,12 @@ export function boardTools(session: MeetingSession): ToolDescriptor[] {
     {
       name: "contribute_to_board_meeting",
       description:
-        "Add context or a statement to the public meeting record, attributed to you. Every seated adviser sees it from their next turn. Use this for context you already hold that the board is missing.",
+        "Add context or a statement to the public meeting record, attributed to you. Every seated adviser sees it from their next turn. Use this for context you already hold that the board is missing. Under 4000 characters.",
       inputSchema: {
         type: "object",
-        properties: { text: { type: "string", description: "What you want the board to know." } },
+        properties: {
+          text: { type: "string", description: "What you want the board to know, under 4000 characters." },
+        },
         required: ["text"],
         additionalProperties: false,
       },
@@ -94,7 +114,7 @@ export function boardTools(session: MeetingSession): ToolDescriptor[] {
         type: "object",
         properties: {
           member: { type: "string", description: "The adviser's name, as shown on their seat." },
-          text: { type: "string", description: "The question or statement for them." },
+          text: { type: "string", description: "The question or statement for them. Under 4000 characters." },
         },
         required: ["member", "text"],
         additionalProperties: false,
@@ -120,6 +140,7 @@ export function boardTools(session: MeetingSession): ToolDescriptor[] {
       },
     },
   ];
+  return tools.map(guarded);
 }
 
 export type RegistrationResult = { supported: boolean; toolNames: string[] };

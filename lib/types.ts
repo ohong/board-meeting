@@ -8,12 +8,10 @@ export type MeetingPhase =
   | "closed";
 
 export type SeatStatus =
-  | "idle"
   | "thinking"
   | "ready"
   | "speaking"
   | "wants_to_respond"
-  | "reacting"
   | "reconnecting";
 
 export type GuestStatus =
@@ -24,28 +22,25 @@ export type GuestStatus =
   | "contributing"
   | "asking";
 
-export type ReactionKind = "agree" | "concern" | "disagree" | "want_to_respond";
+export type ReactionKind = "agree" | "concern" | "disagree";
 
 export type CatalogMember = {
   slug: string;
   name: string;
   aliases: string[];
   role: string;
+  /** Short organisation name, engraved on the nameplate at the table. */
+  house: string;
   initials: string;
+  /** True when public/guests/<slug>.webp exists; otherwise the monogram stands in. */
+  portrait?: boolean;
+  /** What this adviser brings to a decision, in the chair's language. Shown on their card. */
+  lens: string;
+  /** Surfaced first in the roster so the demo trio is easy to find without a hidden list. */
   featured?: boolean;
 };
 
-export type Participant = {
-  id: string;
-  slug?: string;
-  name: string;
-  role: string;
-  initials: string;
-  kind: "chair" | "member" | "guest";
-  status: SeatStatus | GuestStatus;
-};
-
-export type TranscriptKind = "message" | "system" | "reaction";
+export type TranscriptKind = "message" | "system";
 
 export type TranscriptEvent = {
   id: string;
@@ -53,8 +48,13 @@ export type TranscriptEvent = {
   speakerId: string;
   speakerName: string;
   text: string;
+  /** Name of the participant this contribution is directed at, if any. */
   addressedTo?: string;
   reaction?: ReactionKind;
+  /** True while the text is still streaming in. */
+  streaming?: boolean;
+  /** Set when a turn ended badly, so the row can be marked instead of silently truncated. */
+  failed?: boolean;
   createdAt: number;
 };
 
@@ -66,12 +66,18 @@ export type OpeningPosition = {
   question: string;
 };
 
-export type MemberTurn = {
-  text: string;
+/** Orchestration metadata a member emits alongside their spoken turn. */
+export type TurnDirectives = {
+  /** Who the member is speaking to: a member name, the chair ("You"), or the guest. */
   addressedTo?: string;
+  /** A visible reaction to what was just said. */
   reaction?: ReactionKind;
-  reactionFrom?: string;
+  /** The member this speaker wants to hear from next — a request for the floor on their behalf. */
   wantsToRespond?: string;
+};
+
+export type MemberTurn = TurnDirectives & {
+  text: string;
 };
 
 export type ClosingComment = {
@@ -90,6 +96,12 @@ export type ExecutiveReadout = {
   openQuestions: string[];
   nextActions: string[];
   closingComments: ClosingComment[];
+  /** Set when the memo was assembled from the transcript rather than synthesised. */
+  fallback?: boolean;
+  /** Why: the secretary failed, or the scripted stand-in had nothing to synthesise. */
+  fallbackReason?: "synthesis-failed" | "stand-in";
+  /** Verbatim contributions, shown only on the fallback path so the memo is never blank. */
+  transcriptDigest?: string[];
 };
 
 export type TurnCapability =
@@ -106,24 +118,43 @@ export type RuntimeTurnInput = {
   memberName: string;
   briefing: string;
   phase: MeetingPhase;
+  /** The public transcript. Never contains another member's private opening position. */
   transcript: TranscriptEvent[];
   privatePosition?: OpeningPosition;
   ownPriorStatements: string[];
+  /** Present on answerDirect: who asked, and what they asked. */
   addressedTo?: string;
   prompt?: string;
+  boardNames: string[];
+};
+
+export type SynthesisInput = Omit<RuntimeTurnInput, "memberId" | "memberName">;
+
+export type ReadoutInput = {
+  briefing: string;
+  transcript: TranscriptEvent[];
+  closingComments: ClosingComment[];
   boardNames: string[];
 };
 
 export type BoardRuntime = {
   id: "mock" | "live";
   formOpeningPosition(input: RuntimeTurnInput): Promise<OpeningPosition>;
-  publicTurn(input: RuntimeTurnInput): Promise<MemberTurn>;
+  /**
+   * Streams one public turn. `onDelta` receives text as it arrives; the resolved value
+   * carries the full text plus the orchestration directives the member emitted.
+   */
+  publicTurn(
+    input: RuntimeTurnInput,
+    onDelta?: (delta: string) => void,
+  ): Promise<MemberTurn>;
   closingComment(input: RuntimeTurnInput): Promise<string>;
-  synthesis(input: Omit<RuntimeTurnInput, "memberId" | "memberName">): Promise<string>;
-  readout(input: {
-    briefing: string;
-    transcript: TranscriptEvent[];
-    closingComments: ClosingComment[];
-    boardNames: string[];
-  }): Promise<ExecutiveReadout>;
+  synthesis(input: SynthesisInput): Promise<string>;
+  readout(input: ReadoutInput): Promise<ExecutiveReadout>;
+  /**
+   * Called when a meeting starts. A runtime that keeps per-meeting state of its own — the
+   * stand-in tracks how often each member has spoken — clears it here, so the second meeting
+   * on one page load is not the first one's leftovers.
+   */
+  startMeeting?(): void;
 };

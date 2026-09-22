@@ -9,6 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "personas": "node scripts/build-personas.mjs",
+    "rehearse": "node scripts/rehearse.mjs",
+    "stub": "node scripts/stub-openai.mjs --port 8787",
     "video:generate": "bun --env-file=.env.local scripts/fal-image-to-video.mjs"
   },
   "dependencies": {
@@ -27,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.0"

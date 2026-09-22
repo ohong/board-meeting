@@ -1,4 +1,4 @@
-import { PERSONA_PACKAGES } from "@/lib/personas";
+import { PERSONA_PACKAGES, SECRETARY_SLUG } from "@/lib/personas";
 import { createLiveRuntime, hasLiveKey } from "@/lib/runtime/live";
 import type { ReadoutInput, RuntimeTurnInput, SynthesisInput, TurnCapability } from "@/lib/types";
 
@@ -49,7 +49,9 @@ function refuse(body: Body): string | null {
   if (!input || typeof input !== "object") return "Missing meeting context.";
 
   const needsMember = body.capability !== "synthesis" && body.capability !== "readout";
-  if (needsMember && !PERSONA_PACKAGES[String(input.memberId)]) {
+  const memberId = String(input.memberId);
+  // Own keys only: "constructor" and "toString" are on every object but nobody's adviser.
+  if (needsMember && (memberId === SECRETARY_SLUG || !Object.hasOwn(PERSONA_PACKAGES, memberId))) {
     return "No board member by that id.";
   }
   if (typeof input.briefing === "string" && input.briefing.length > LIMITS.briefing) {
@@ -77,8 +79,13 @@ function refuse(body: Body): string | null {
 export async function POST(request: Request) {
   if (!hasLiveKey()) return jsonError(NO_KEY, 503);
 
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > LIMITS.body) return jsonError("The request is too large.", 413);
+
   const raw = await request.text();
-  if (raw.length > LIMITS.body) return jsonError("The request is too large.", 413);
+  if (new TextEncoder().encode(raw).byteLength > LIMITS.body) {
+    return jsonError("The request is too large.", 413);
+  }
 
   let body: Body;
   try {

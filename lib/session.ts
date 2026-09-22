@@ -128,6 +128,8 @@ export function createMeetingSession(options: SessionOptions = {}) {
   const now = options.now ?? (() => Date.now());
   const turnGapMs = options.turnGapMs ?? 0;
   const guestJoinMs = options.guestJoinMs ?? 0;
+  /** Counts guest-seat settles so a stale timer cannot undo the state that replaced it. */
+  let guestSettle = 0;
   const sleep = options.sleep ?? defaultSleep;
   const listeners = new Set<Listener>();
 
@@ -637,7 +639,9 @@ export function createMeetingSession(options: SessionOptions = {}) {
 
     const settle = () => {
       if (state.guest.name !== display) return;
-      state.guest = { name: display, status: "joined" };
+      // The arrival is announced either way; the seat only comes to rest if the agent has
+      // not already started doing something the room is showing.
+      if (state.guest.status === "joining") state.guest = { name: display, status: "joined" };
       systemEvent(`${display} joined the meeting through this page's site tools and took the guest seat.`);
       emit();
     };
@@ -657,8 +661,11 @@ export function createMeetingSession(options: SessionOptions = {}) {
    */
   function settleGuest(status: GuestSeat["status"]) {
     const name = state.guest.name;
+    // Only the most recent settle may land: an earlier one would return the seat to rest in
+    // the middle of the action that followed it.
+    const token = (guestSettle += 1);
     const rest = () => {
-      if (state.guest.name !== name) return;
+      if (state.guest.name !== name || token !== guestSettle) return;
       state.guest = { ...state.guest, status };
       emit();
     };

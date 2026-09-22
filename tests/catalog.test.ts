@@ -113,6 +113,13 @@ describe("matching a name to a seat", () => {
     expect(matchMemberByName("Ek", seated)?.slug).toBe("daniel-ek");
   });
 
+  it("reaches a short first name that is a whole word", () => {
+    const table = ["ed-catmull", "daniel-ek", "sam-altman"];
+    expect(matchMemberByName("Ed", table)?.slug).toBe("ed-catmull");
+    expect(matchMemberByName("@Ed", table)?.slug).toBe("ed-catmull");
+    expect(matchMemberByName("Sam", table)?.slug).toBe("sam-altman");
+  });
+
   it("refuses a fragment too short to mean anyone in particular", () => {
     // "a" appears in all three names; answering with the first one is a wrong adviser
     // pulled out of turn, not a lenient match.

@@ -111,19 +111,26 @@ export function getMember(slug: string): CatalogMember | undefined {
   return CATALOG.find((m) => m.slug === slug);
 }
 
-/** Below this, only an exact name or alias counts: "@a" must not seat the first A it finds. */
+/**
+ * Below this, a loose substring is not enough on its own: "@a" appears in most names and
+ * must not pull whoever holds the first seat. A whole word still counts at any length, so
+ * "@Ed" reaches Ed Catmull and "@Ek" reaches Daniel Ek.
+ */
 const MIN_PARTIAL_NAME = 3;
+
+const words = (value: string) => value.toLowerCase().split(/\s+/).filter(Boolean);
 
 export function matchMemberByName(name: string, slugs: string[]): CatalogMember | undefined {
   const q = name.trim().toLowerCase().replace(/^@/, "");
   if (!q) return undefined;
   const pool = slugs.map((s) => getMember(s)).filter(Boolean) as CatalogMember[];
-  const exact =
-    pool.find((m) => m.name.toLowerCase() === q) ||
-    pool.find((m) => m.aliases.some((a) => a.toLowerCase() === q));
-  if (exact || q.length < MIN_PARTIAL_NAME) return exact;
   return (
-    pool.find((m) => m.name.toLowerCase().includes(q) || q.includes(m.name.toLowerCase())) ||
-    pool.find((m) => m.aliases.some((a) => a.toLowerCase().includes(q)))
+    pool.find((m) => m.name.toLowerCase() === q) ||
+    pool.find((m) => m.aliases.some((a) => a.toLowerCase() === q)) ||
+    pool.find((m) => words(m.name).includes(q)) ||
+    (q.length < MIN_PARTIAL_NAME
+      ? undefined
+      : pool.find((m) => m.name.toLowerCase().includes(q) || q.includes(m.name.toLowerCase())) ||
+        pool.find((m) => m.aliases.some((a) => a.toLowerCase().includes(q))))
   );
 }
